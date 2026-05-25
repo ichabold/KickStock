@@ -5,6 +5,9 @@ import { useGameStore, fmt, pctOf, buildMatchesForCurrentDay } from '@/stores/ga
 import { CALENDAR, NATIONS, GROUPS } from '@kickstock/constants';
 import { buildGroupStandingsUI } from '@kickstock/game-engine';
 import TradeModal from '@/components/shared/TradeModal';
+import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
+import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
+import MatchAnimation from '@/components/mobile/MatchAnimation';
 import type { Nation, TradeMode, StoredMatchResult } from '@kickstock/types';
 
 const gN = (id: string) => NATIONS.find(n => n.id === id);
@@ -25,7 +28,9 @@ function Spark({ history, up }: { history: number[]; up: boolean }) {
 }
 
 // ─── StockTile ─────────────────────────────────────────────────────────────────
-function StockTile({ nation, onBuy, onSell }: { nation: Nation; onBuy: () => void; onSell: () => void }) {
+function StockTile({ nation, onBuy, onSell, onCardClick }: {
+  nation: Nation; onBuy: () => void; onSell: () => void; onCardClick?: () => void;
+}) {
   const prices     = useGameStore(s => s.prices);
   const history    = useGameStore(s => s.priceHistory[nation.id] ?? []);
   const portfolio  = useGameStore(s => s.portfolio);
@@ -38,10 +43,14 @@ function StockTile({ nation, onBuy, onSell }: { nation: Nation; onBuy: () => voi
   const up     = price >= nation.p;
 
   return (
-    <div className={`stile${held > 0 ? ' held' : ''}${isElim ? ' elim' : ''}`}>
+    <div
+      className={`stile${held > 0 ? ' held' : ''}${isElim ? ' elim' : ''}`}
+      onClick={onCardClick}
+      style={{ cursor: onCardClick ? 'pointer' : undefined }}
+    >
       <div className="st-top">
         <span className="st-flag">{nation.flag}</span>
-        <span className="st-name">{nation.name}</span>
+        <span className="st-name">{nation.name.toUpperCase()}</span>
         {held > 0 && <span className="st-held">×{held}</span>}
       </div>
       <div className="st-badges">
@@ -56,7 +65,7 @@ function StockTile({ nation, onBuy, onSell }: { nation: Nation; onBuy: () => voi
       <Spark history={history} up={up}/>
       {isElim
         ? <div className="bdis">💀 ÉLIMINÉ · 1 KC</div>
-        : <div className="st-acts">
+        : <div className="st-acts" onClick={e => e.stopPropagation()}>
             <button className="bbuy" onClick={onBuy}>▲ BUY</button>
             <button className="bsell" onClick={onSell} disabled={held === 0}>▼ SELL</button>
           </div>
@@ -65,13 +74,35 @@ function StockTile({ nation, onBuy, onSell }: { nation: Nation; onBuy: () => voi
   );
 }
 
+// ─── Shared: clickable team name ───────────────────────────────────────────────
+function TeamName({ id, color, onNationClick }: { id: string; color?: string; onNationClick: (id: string) => void }) {
+  const n = gN(id);
+  return (
+    <button
+      onClick={() => onNationClick(id)}
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+        color: color ?? 'inherit', fontFamily: 'inherit', fontSize: 'inherit',
+        fontWeight: 'inherit', textAlign: 'left',
+      }}
+    >
+      {n?.flag} {n?.name?.toUpperCase()}
+    </button>
+  );
+}
+
 // ─── HomeView ─────────────────────────────────────────────────────────────────
-function HomeView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void }) {
+function HomeView({ onTrade, onNationClick, onMatchClick }: {
+  onTrade: (n: Nation, m: TradeMode) => void;
+  onNationClick: (id: string) => void;
+  onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
+}) {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
   const curDay       = CALENDAR[dayIndex];
   const prevResults  = matchResults[dayIndex - 1] ?? [];
+  const prevDay      = CALENDAR[dayIndex - 1];
 
   const todayMatches = useMemo(() => curDay ? buildMatchesForCurrentDay(state) : [], [curDay, state]);
   const todayNations = useMemo(() => {
@@ -85,19 +116,24 @@ function HomeView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void }) {
       <div className="home-l">
         {prevResults.length > 0 && (
           <>
-            <div className="day-hdr"><span className="dot" style={{background:'#555'}}/>JOURNÉE PRÉCÉDENTE · {CALENDAR[dayIndex - 1]?.label}</div>
+            <div className="day-hdr"><span className="dot" style={{background:'#555'}}/>JOURNÉE PRÉCÉDENTE · {prevDay?.label}</div>
             <div className="matches-scroll">
               {prevResults.map((r, i) => {
-                const nA = gN(r.a), nB = gN(r.b);
                 const winA = r.res === 'A', winB = r.res === 'B';
                 return (
                   <div key={i} className="mrow past">
                     <div className="mteams">
-                      <span style={{color: winA ? 'var(--gold)' : winB ? 'var(--mu)' : undefined}}>{nA?.flag} {nA?.name}</span>
+                      <TeamName id={r.a} color={winA ? 'var(--gold)' : winB ? 'var(--mu)' : undefined} onNationClick={onNationClick}/>
                       <span className="vs"> vs </span>
-                      <span style={{color: winB ? 'var(--gold)' : winA ? 'var(--mu)' : undefined}}>{nB?.flag} {nB?.name}</span>
+                      <TeamName id={r.b} color={winB ? 'var(--gold)' : winA ? 'var(--mu)' : undefined} onNationClick={onNationClick}/>
                     </div>
-                    <div className="mscore">{r.scoreA}–{r.scoreB}{r.penWinner ? ' P' : r.etRes ? ' AET' : ''}</div>
+                    <button
+                      className="mscore"
+                      style={{background:'none',border:'none',cursor:'pointer',color:'inherit',fontFamily:'inherit',fontWeight:'inherit',fontSize:'inherit'}}
+                      onClick={() => onMatchClick(r, prevDay?.label ?? '')}
+                    >
+                      {r.scoreA}–{r.scoreB}{r.penWinner ? ' P' : r.etRes ? ' AET' : ''}
+                    </button>
                     <div className="mbadge done">FT</div>
                   </div>
                 );
@@ -111,7 +147,11 @@ function HomeView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void }) {
             <div className="matches-scroll">
               {todayMatches.length > 0 ? todayMatches.map((m, i) => (
                 <div key={i} className="mrow">
-                  <div className="mteams">{gN(m.a)?.flag} {gN(m.a)?.name} <span className="vs">vs</span> {gN(m.b)?.flag} {gN(m.b)?.name}</div>
+                  <div className="mteams">
+                    <TeamName id={m.a} onNationClick={onNationClick}/>
+                    <span className="vs"> vs </span>
+                    <TeamName id={m.b} onNationClick={onNationClick}/>
+                  </div>
                   {m.venue && <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>}
                   <div className="mbadge soon">À venir</div>
                 </div>
@@ -125,9 +165,12 @@ function HomeView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void }) {
         <div className="hr2">ACTIONS · MATCHS DU JOUR</div>
         {todayNations.length > 0
           ? <div className="tiles-grid">
-              {todayNations.map(n => <StockTile key={n.id} nation={n} onBuy={() => onTrade(n, 'buy')} onSell={() => onTrade(n, 'sell')}/>)}
+              {todayNations.map(n => <StockTile key={n.id} nation={n}
+                onBuy={() => onTrade(n, 'buy')} onSell={() => onTrade(n, 'sell')}
+                onCardClick={() => onNationClick(n.id)}
+              />)}
             </div>
-          : <div style={{padding: 40, textAlign: 'center', color: 'var(--di)', fontSize: 12}}>Aucun match aujourd'hui ou phase KO</div>
+          : <div style={{padding: 40, textAlign: 'center', color: 'var(--di)', fontSize: 12}}>Aucun match aujourd&apos;hui ou phase KO</div>
         }
       </div>
     </div>
@@ -135,7 +178,10 @@ function HomeView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void }) {
 }
 
 // ─── MarketView ───────────────────────────────────────────────────────────────
-function MarketView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void }) {
+function MarketView({ onTrade, onNationClick }: {
+  onTrade: (n: Nation, m: TradeMode) => void;
+  onNationClick: (id: string) => void;
+}) {
   const [filter, setFilter] = useState('');
   const [group, setGroup]   = useState('ALL');
 
@@ -156,7 +202,10 @@ function MarketView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void })
       </div>
       <div className="mkt-grid-wrap">
         <div className="mkt-grid">
-          {filtered.map(n => <StockTile key={n.id} nation={n} onBuy={() => onTrade(n, 'buy')} onSell={() => onTrade(n, 'sell')}/>)}
+          {filtered.map(n => <StockTile key={n.id} nation={n}
+            onBuy={() => onTrade(n, 'buy')} onSell={() => onTrade(n, 'sell')}
+            onCardClick={() => onNationClick(n.id)}
+          />)}
         </div>
       </div>
     </div>
@@ -164,7 +213,10 @@ function MarketView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void })
 }
 
 // ─── ScheduleView ─────────────────────────────────────────────────────────────
-function ScheduleView() {
+function ScheduleView({ onNationClick, onMatchClick }: {
+  onNationClick: (id: string) => void;
+  onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
+}) {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
@@ -192,20 +244,27 @@ function ScheduleView() {
                   const sA = flipped ? res!.scoreB : res?.scoreA;
                   const sB = flipped ? res!.scoreA : res?.scoreB;
                   const resA = flipped ? (res?.res === 'A' ? 'B' : res?.res === 'B' ? 'A' : 'draw') : res?.res;
+                  const canonResult: StoredMatchResult | undefined = flipped
+                    ? { ...res!, a: m.a, b: m.b, scoreA: res!.scoreB, scoreB: res!.scoreA,
+                        res: res!.res === 'A' ? 'B' : res!.res === 'B' ? 'A' : 'draw',
+                        pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
+                    : res;
                   return (
                     <div key={mi} className={`mrow${isCur ? ' cur' : isPast ? ' past' : ''}`}>
                       <div className="mtime">J·{di+1}</div>
                       <div className="mteams">
-                        <span style={{color: res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined}}>
-                          {gN(m.a)?.flag} {gN(m.a)?.name}
-                        </span>
+                        <TeamName id={m.a} color={res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
                         <span className="vs"> vs </span>
-                        <span style={{color: res ? (resA === 'B' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined}}>
-                          {gN(m.b)?.flag} {gN(m.b)?.name}
-                        </span>
+                        <TeamName id={m.b} color={res ? (resA === 'B' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
                       </div>
-                      {res ? (
-                        <div className="mscore">{sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}</div>
+                      {res && canonResult ? (
+                        <button
+                          className="mscore"
+                          style={{background:'none',border:'none',cursor:'pointer',color:'inherit',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:13}}
+                          onClick={() => onMatchClick(canonResult, day.label)}
+                        >
+                          {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
+                        </button>
                       ) : m.venue ? (
                         <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>
                       ) : null}
@@ -235,7 +294,6 @@ function ScheduleView() {
               {phaseDays.map((day, pdi) => {
                 const di = CALENDAR.indexOf(day);
                 const played  = matchResults[di];
-                const isPast  = di < dayIndex;
                 const isCur   = di === dayIndex;
                 const displayMatches = day.matches.length > 0
                   ? day.matches
@@ -254,16 +312,22 @@ function ScheduleView() {
                       const sA = flipped ? res!.scoreB : res?.scoreA;
                       const sB = flipped ? res!.scoreA : res?.scoreB;
                       const resA = flipped ? (res?.res === 'A' ? 'B' : res?.res === 'B' ? 'A' : 'draw') : res?.res;
+                      const canonResult: StoredMatchResult | undefined = flipped
+                        ? { ...res!, a: m.a, b: m.b, scoreA: res!.scoreB, scoreB: res!.scoreA,
+                            res: res!.res === 'A' ? 'B' : res!.res === 'B' ? 'A' : 'draw',
+                            pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
+                        : res;
                       return (
                         <div key={mi} className="ko-teams">
-                          <span style={{color: res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined}}>
-                            {gN(m.a)?.flag} {gN(m.a)?.name}
-                          </span>
-                          {res ? <span className="ko-vs" style={{fontFamily:'JetBrains Mono',fontWeight:700}}>{sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}</span>
-                               : <span className="ko-vs">vs</span>}
-                          <span style={{color: res ? (resA === 'B' ? 'var(--gold)' : 'var(--mu)') : undefined}}>
-                            {gN(m.b)?.flag} {gN(m.b)?.name}
-                          </span>
+                          <TeamName id={m.a} color={res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
+                          {res && canonResult
+                            ? <button className="ko-vs" style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)'}}
+                                onClick={() => onMatchClick(canonResult, day.label)}>
+                                {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
+                              </button>
+                            : <span className="ko-vs">vs</span>
+                          }
+                          <TeamName id={m.b} color={res ? (resA === 'B' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
                         </div>
                       );
                     }) : (
@@ -285,7 +349,10 @@ function ScheduleView() {
 }
 
 // ─── PortfolioView ────────────────────────────────────────────────────────────
-function PortfolioView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void }) {
+function PortfolioView({ onTrade, onNationClick }: {
+  onTrade: (n: Nation, m: TradeMode) => void;
+  onNationClick: (id: string) => void;
+}) {
   const cash              = useGameStore(s => s.cash);
   const prices            = useGameStore(s => s.prices);
   const portfolio         = useGameStore(s => s.portfolio);
@@ -339,11 +406,13 @@ function PortfolioView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void
         {holdings.length === 0
           ? <div style={{textAlign:'center',padding:40,color:'var(--di)',fontSize:12}}>Aucune position ouverte</div>
           : holdings.map(h => (
-              <div key={h.id} className="pos-row" style={{opacity: h.isElim ? 0.5 : 1}} onClick={() => !h.isElim && h.n && onTrade(h.n, 'sell')}>
+              <div key={h.id} className="pos-row" style={{opacity: h.isElim ? 0.5 : 1, cursor: 'pointer'}}
+                onClick={() => onNationClick(h.id)}
+              >
                 <div className="pos-flag">{h.n?.flag}</div>
                 <div className="pos-info">
                   <div className="pos-name">
-                    {h.n?.name}
+                    {h.n?.name?.toUpperCase()}
                     {h.isElim && <span style={{fontSize:9,color:'var(--loss)',marginLeft:5}}>💀</span>}
                   </div>
                   <div className="pos-qty">
@@ -387,7 +456,11 @@ function PortfolioView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void
       <div className="port-r">
         <div className="port-hdr">MARCHÉ · VOS NATIONS</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}}>
-          {holdings.map(h => h.n && <StockTile key={h.id} nation={h.n} onBuy={() => h.n && onTrade(h.n, 'buy')} onSell={() => h.n && onTrade(h.n, 'sell')}/>)}
+          {holdings.map(h => h.n && <StockTile key={h.id} nation={h.n}
+            onBuy={() => h.n && onTrade(h.n, 'buy')}
+            onSell={() => h.n && onTrade(h.n, 'sell')}
+            onCardClick={() => onNationClick(h.id)}
+          />)}
         </div>
         {holdings.length === 0 && <div style={{textAlign:'center',padding:60,color:'var(--di)',fontSize:12}}>Achetez des actions dans la vue MARKET</div>}
       </div>
@@ -396,13 +469,17 @@ function PortfolioView({ onTrade }: { onTrade: (n: Nation, m: TradeMode) => void
 }
 
 // ─── StandingsView ────────────────────────────────────────────────────────────
-function StandingsView() {
+function StandingsView({ onNationClick, onMatchClick }: {
+  onNationClick: (id: string) => void;
+  onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
+}) {
   const prices       = useGameStore(s => s.prices);
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
   const dayIndex     = useGameStore(s => s.dayIndex);
   const r32Pool      = useGameStore(s => s.r32Pool);
   const portfolio    = useGameStore(s => s.portfolio);
+  const champion     = useGameStore(s => s.champion);
 
   const standings = useMemo(
     () => buildGroupStandingsUI(matchResults, prices, eliminated),
@@ -412,7 +489,7 @@ function StandingsView() {
   const isKO = dayIndex > 17 || !CALENDAR[dayIndex] || CALENDAR[dayIndex]?.phase !== 'Groups';
 
   const koResults = useMemo(() => {
-    const r: Record<string, StoredMatchResult[]> = { R32: [], R16: [], QF: [], SF: [], Final: [] };
+    const r: Record<string, StoredMatchResult[]> = { R32: [], R16: [], QF: [], SF: [], Final: [], '3rd': [] };
     for (const [diStr, res] of Object.entries(matchResults)) {
       const day = CALENDAR[Number(diStr)];
       if (!day?.isKO) continue;
@@ -422,7 +499,11 @@ function StandingsView() {
     return r;
   }, [matchResults]);
 
-  const champion = useGameStore(s => s.champion);
+  const koPhases = ['R32', 'R16', 'QF', 'SF', 'Final', '3rd'] as const;
+  const koLabels: Record<string,string> = {
+    R32: 'HUITIÈMES · R32', R16: 'SEIZIÈMES · R16', QF: 'QUARTS DE FINALE',
+    SF: 'DEMI-FINALES', Final: '🏆 FINALE', '3rd': '🥉 PETITE FINALE',
+  };
 
   return (
     <div className="std-wrap">
@@ -432,28 +513,39 @@ function StandingsView() {
           {champion && (
             <div style={{background:'rgba(255,219,0,.06)',border:'1px solid var(--gold-dk)',borderRadius:10,padding:'16px',marginBottom:12,textAlign:'center'}}>
               <div style={{fontSize:48}}>{gN(champion)?.flag}</div>
-              <div style={{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:4,color:'var(--gold)'}}>{gN(champion)?.name} — CHAMPION 🏆</div>
+              <button
+                style={{background:'none',border:'none',cursor:'pointer',padding:0}}
+                onClick={() => onNationClick(champion)}
+              >
+                <div style={{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:4,color:'var(--gold)'}}>
+                  {gN(champion)?.name?.toUpperCase()} — CHAMPION 🏆
+                </div>
+              </button>
             </div>
           )}
-          {(['R32','R16','QF','SF','Final'] as const).map(phase => {
+          {koPhases.map(phase => {
             const res = koResults[phase];
             if (!res?.length) return null;
-            const labels: Record<string,string> = { R32:'HUITIÈMES · R32', R16:'SEIZIÈMES · R16', QF:'QUARTS DE FINALE', SF:'DEMI-FINALES', Final:'🏆 FINALE' };
             return (
               <div key={phase} style={{marginBottom:12}}>
-                <div style={{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:3,color:'var(--gold)',marginBottom:6}}>{labels[phase]}</div>
+                <div style={{fontFamily:'Bebas Neue',fontSize:15,letterSpacing:3,color:'var(--gold)',marginBottom:6}}>{koLabels[phase]}</div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:6}}>
                   {res.map((r, i) => {
-                    const nA = gN(r.a), nB = gN(r.b);
+                    const dayEntry = Object.entries(matchResults).find(([, results]) =>
+                      results.some(x => x.a === r.a && x.b === r.b)
+                    );
+                    const dayLabel = dayEntry ? CALENDAR[Number(dayEntry[0])]?.label ?? '' : '';
                     return (
                       <div key={i} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:7,padding:'8px 12px'}}>
                         <div style={{display:'flex',justifyContent:'space-between',fontSize:12,fontWeight:700,color:r.res==='A'?'var(--gold)':'var(--mu)'}}>
-                          <span>{nA?.flag} {nA?.name}</span>
-                          <span style={{fontFamily:'JetBrains Mono'}}>{r.scoreA}</span>
+                          <TeamName id={r.a} color={r.res==='A'?'var(--gold)':'var(--mu)'} onNationClick={onNationClick}/>
+                          <button style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'inherit'}}
+                            onClick={() => onMatchClick(r, dayLabel)}>{r.scoreA}</button>
                         </div>
                         <div style={{display:'flex',justifyContent:'space-between',fontSize:12,fontWeight:700,color:r.res==='B'?'var(--gold)':'var(--mu)'}}>
-                          <span>{nB?.flag} {nB?.name}</span>
-                          <span style={{fontFamily:'JetBrains Mono'}}>{r.scoreB}</span>
+                          <TeamName id={r.b} color={r.res==='B'?'var(--gold)':'var(--mu)'} onNationClick={onNationClick}/>
+                          <button style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'inherit'}}
+                            onClick={() => onMatchClick(r, dayLabel)}>{r.scoreB}</button>
                         </div>
                         {r.penWinner && <div style={{fontSize:8,color:'var(--mu)',marginTop:2}}>Pens {r.penA}–{r.penB}</div>}
                         {r.etRes && !r.penWinner && <div style={{fontSize:8,color:'var(--gold)',marginTop:2}}>⚡ AET</div>}
@@ -495,7 +587,12 @@ function StandingsView() {
                       <td>
                         <div className="nm">
                           <span className="fl">{t.flag}</span>
-                          {t.name}
+                          <button
+                            style={{background:'none',border:'none',cursor:'pointer',color:'inherit',fontFamily:'inherit',fontSize:'inherit',fontWeight:'inherit',padding:0}}
+                            onClick={() => onNationClick(t.id)}
+                          >
+                            {t.name?.toUpperCase()}
+                          </button>
                           {held && !t.elim && <span style={{fontSize:8,color:'var(--gain)',marginLeft:4}}>●</span>}
                         </div>
                       </td>
@@ -520,7 +617,10 @@ function StandingsView() {
 }
 
 // ─── BracketView ──────────────────────────────────────────────────────────────
-function BracketView() {
+function BracketView({ onNationClick, onMatchClick }: {
+  onNationClick: (id: string) => void;
+  onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
+}) {
   const matchResults = useGameStore(s => s.matchResults);
   const dayIndex     = useGameStore(s => s.dayIndex);
   const state        = useGameStore(s => s);
@@ -570,17 +670,24 @@ function BracketView() {
                   const sA = flipped ? res!.scoreB : res?.scoreA;
                   const sB = flipped ? res!.scoreA : res?.scoreB;
                   const resA = flipped ? (res?.res === 'A' ? 'B' : res?.res === 'B' ? 'A' : 'draw') : res?.res;
+                  const canonResult: StoredMatchResult | undefined = flipped
+                    ? { ...res!, a: m.a, b: m.b, scoreA: res!.scoreB, scoreB: res!.scoreA,
+                        res: res!.res === 'A' ? 'B' : res!.res === 'B' ? 'A' : 'draw',
+                        pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
+                    : res;
                   return (
                     <div key={`${pdi}-${mi}`} className={`bkt-m${!played ? ' upcoming' : ''}`}
                       style={isFinal ? {background:'rgba(255,219,0,.03)',borderColor:'rgba(255,219,0,.35)'} : {}}>
                       <div className="bkt-meta">{day.label}</div>
                       <div className="bkt-t" style={{color: res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined}}>
-                        {gN(m.a)?.flag} {gN(m.a)?.name}
-                        {res && <span style={{fontFamily:'JetBrains Mono',marginLeft:6,fontSize:14,fontWeight:700}}>{sA}</span>}
+                        <TeamName id={m.a} color={res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
+                        {res && <button style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',marginLeft:6,fontSize:14,fontWeight:700,color:'var(--gold)'}}
+                          onClick={() => canonResult && onMatchClick(canonResult, day.label)}>{sA}</button>}
                       </div>
                       <div className="bkt-t" style={{color: res ? (resA === 'B' ? 'var(--gold)' : 'var(--mu)') : undefined}}>
-                        {gN(m.b)?.flag} {gN(m.b)?.name}
-                        {res && <span style={{fontFamily:'JetBrains Mono',marginLeft:6,fontSize:14,fontWeight:700}}>{sB}</span>}
+                        <TeamName id={m.b} color={res ? (resA === 'B' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
+                        {res && <button style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',marginLeft:6,fontSize:14,fontWeight:700,color:'var(--gold)'}}
+                          onClick={() => canonResult && onMatchClick(canonResult, day.label)}>{sB}</button>}
                       </div>
                       {res?.penWinner && <div style={{fontSize:8,color:'var(--mu)',marginTop:2}}>Pens {res.penA}–{res.penB}</div>}
                       {res?.etRes && !res.penWinner && <div style={{fontSize:8,color:'var(--gold)',marginTop:2}}>AET</div>}
@@ -638,48 +745,6 @@ function RankingView() {
   );
 }
 
-// ─── ResultOverlay ────────────────────────────────────────────────────────────
-function ResultOverlay({ results, onClose }: { results: StoredMatchResult[]; onClose: () => void }) {
-  const divResults = results.filter(r => r.divCash > 0);
-  return (
-    <div className="res-overlay" onClick={onClose}>
-      <div className="res-box" onClick={e => e.stopPropagation()}>
-        <div className="res-title">RÉSULTATS</div>
-        <div className="res-matches">
-          {results.map((r, i) => {
-            const nA = gN(r.a), nB = gN(r.b);
-            return (
-              <div key={i} className={`res-match${r.isUpset ? ' upset' : ''}`}>
-                <span style={{color: r.res === 'A' ? 'var(--gold)' : 'var(--mu)'}}>{nA?.flag} {nA?.name}</span>
-                <span className="res-score">
-                  {r.scoreA}–{r.scoreB}
-                  {r.penWinner && <span style={{fontSize:10,color:'var(--mu)'}}> ({r.penA}–{r.penB} P)</span>}
-                  {r.etRes && !r.penWinner && <span style={{fontSize:10,color:'var(--gold)'}}> AET</span>}
-                </span>
-                <span style={{color: r.res === 'B' ? 'var(--gold)' : 'var(--mu)'}}>{nB?.flag} {nB?.name}</span>
-                {r.elimId && <span className="res-elim">💀 {gN(r.elimId)?.name} éliminé</span>}
-                {r.isUpset && <span className="res-upbadge">🚀 UPSET!</span>}
-              </div>
-            );
-          })}
-        </div>
-        {divResults.length > 0 && (
-          <div className="res-divs">
-            <div className="res-divtitle">🎁 DIVIDENDES REÇUS</div>
-            {divResults.map((r, i) => (
-              <div key={i} className="res-divrow">
-                <span>{gN(r.winnerId ?? r.a)?.flag} {gN(r.winnerId ?? r.a)?.name}</span>
-                <span className="res-divamt">+{fmt(r.divCash)} KC</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <button className="res-close" onClick={onClose}>VOIR LE MARCHÉ →</button>
-      </div>
-    </div>
-  );
-}
-
 // ─── TutorialOverlay ──────────────────────────────────────────────────────────
 const TUT_STEPS = [
   { title: 'Bienvenue sur KickStock !', text: 'Investissez dans les équipes nationales comme des actions. Plus une équipe performe, plus son prix monte.', icon: '⚽' },
@@ -715,10 +780,14 @@ function TutorialOverlay({ onClose }: { onClose: () => void }) {
 type ViewId = 'home' | 'schedule' | 'market' | 'portfolio' | 'standings' | 'bracket' | 'ranking';
 
 export default function BrowserShell() {
-  const [view, setView]     = useState<ViewId>('home');
-  const [modal, setModal]   = useState<{nation: Nation; mode: TradeMode} | null>(null);
-  const [simResults, setSimResults] = useState<StoredMatchResult[] | null>(null);
-  const [showTut, setShowTut] = useState(false);
+  const [view,         setView]         = useState<ViewId>('home');
+  const [modal,        setModal]        = useState<{nation: Nation; mode: TradeMode} | null>(null);
+  const [simResults,   setSimResults]   = useState<StoredMatchResult[] | null>(null);
+  const [showAnim,     setShowAnim]     = useState(false);
+  const [animResults,  setAnimResults]  = useState<StoredMatchResult[]>([]);
+  const [nationId,     setNationId]     = useState<string | null>(null);
+  const [matchDetail,  setMatchDetail]  = useState<{ result: StoredMatchResult; dayLabel: string } | null>(null);
+  const [showTut,      setShowTut]      = useState(false);
 
   useEffect(() => { useGameStore.persist.rehydrate(); }, []);
 
@@ -747,6 +816,19 @@ export default function BrowserShell() {
   ];
 
   function doTrade(n: Nation, m: TradeMode) { setModal({nation: n, mode: m}); }
+  function onNationClick(id: string) { setNationId(id); }
+  function onMatchClick(r: StoredMatchResult, dayLabel: string) { setMatchDetail({ result: r, dayLabel }); }
+
+  function simulate() {
+    const r = useGameStore.getState().advanceDay();
+    if (!r) return;
+    if (r.results.length > 0) {
+      setAnimResults(r.results);
+      setShowAnim(true);
+    } else {
+      setView('market');
+    }
+  }
 
   return (
     <div className="ks-browser">
@@ -786,13 +868,10 @@ export default function BrowserShell() {
           <div className="tb-r">
             {champion && (
               <div style={{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--gold)',background:'rgba(255,219,0,.1)',border:'1px solid var(--gold-dk)',padding:'4px 10px',borderRadius:5}}>
-                🏆 {gN(champion)?.flag} {gN(champion)?.name}
+                🏆 {gN(champion)?.flag} {gN(champion)?.name?.toUpperCase()}
               </div>
             )}
-            <button className="sim-inline-btn" onClick={() => {
-              const r = useGameStore.getState().advanceDay();
-              if (r) { setSimResults(r.results); setView('market'); }
-            }}>
+            <button className="sim-inline-btn" onClick={simulate}>
               {day ? `⚡ ${day.label}` : '🔄 NOUVEAU JEU'}
             </button>
             {!day && <button className="reset-btn" onClick={resetGame}>🔄 RESET</button>}
@@ -812,20 +891,82 @@ export default function BrowserShell() {
 
         {/* CONTENT */}
         <div className="ks-content">
-          {view === 'home'      && <HomeView      onTrade={doTrade}/>}
-          {view === 'schedule'  && <ScheduleView  />}
-          {view === 'market'    && <MarketView    onTrade={doTrade}/>}
-          {view === 'portfolio' && <PortfolioView onTrade={doTrade}/>}
-          {view === 'standings' && <StandingsView />}
-          {view === 'bracket'   && <BracketView   />}
+          {view === 'home'      && <HomeView      onTrade={doTrade} onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
+          {view === 'schedule'  && <ScheduleView  onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
+          {view === 'market'    && <MarketView    onTrade={doTrade} onNationClick={onNationClick}/>}
+          {view === 'portfolio' && <PortfolioView onTrade={doTrade} onNationClick={onNationClick}/>}
+          {view === 'standings' && <StandingsView onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
+          {view === 'bracket'   && <BracketView   onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
           {view === 'ranking'   && <RankingView   />}
         </div>
       </div>
 
-      {/* OVERLAYS */}
-      {modal      && <TradeModal nation={modal.nation} initMode={modal.mode} onClose={() => setModal(null)}/>}
-      {simResults && <ResultOverlay results={simResults} onClose={() => setSimResults(null)}/>}
-      {showTut    && <TutorialOverlay onClose={() => setShowTut(false)}/>}
+      {/* OVERLAYS — order matters: MatchAnimation on top */}
+      {showAnim && (
+        <MatchAnimation
+          results={animResults}
+          portfolio={portfolio}
+          prices={prices}
+          onDone={() => {
+            setShowAnim(false);
+            setSimResults(animResults);
+            setView('market');
+          }}
+        />
+      )}
+      {modal       && <TradeModal nation={modal.nation} initMode={modal.mode} onClose={() => setModal(null)}/>}
+      {simResults  && !showAnim && (
+        <div className="res-overlay" onClick={() => setSimResults(null)}>
+          <div className="res-box" onClick={e => e.stopPropagation()}>
+            <div className="res-title">RÉSULTATS</div>
+            <div className="res-matches">
+              {simResults.map((r, i) => (
+                <div key={i} className={`res-match${r.isUpset ? ' upset' : ''}`}>
+                  <button style={{background:'none',border:'none',cursor:'pointer',color:r.res==='A'?'var(--gold)':'var(--mu)',fontFamily:'inherit',fontSize:'inherit'}}
+                    onClick={() => { setSimResults(null); onNationClick(r.a); }}>{gN(r.a)?.flag} {gN(r.a)?.name?.toUpperCase()}</button>
+                  <button className="res-score" style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'inherit'}}
+                    onClick={() => { setSimResults(null); onMatchClick(r, ''); }}>
+                    {r.scoreA}–{r.scoreB}
+                    {r.penWinner && <span style={{fontSize:10,color:'var(--mu)'}}> ({r.penA}–{r.penB} P)</span>}
+                    {r.etRes && !r.penWinner && <span style={{fontSize:10,color:'var(--gold)'}}> AET</span>}
+                  </button>
+                  <button style={{background:'none',border:'none',cursor:'pointer',color:r.res==='B'?'var(--gold)':'var(--mu)',fontFamily:'inherit',fontSize:'inherit'}}
+                    onClick={() => { setSimResults(null); onNationClick(r.b); }}>{gN(r.b)?.flag} {gN(r.b)?.name?.toUpperCase()}</button>
+                  {r.elimId && <span className="res-elim">💀 {gN(r.elimId)?.name?.toUpperCase()} éliminé</span>}
+                  {r.isUpset && <span className="res-upbadge">🚀 UPSET!</span>}
+                </div>
+              ))}
+            </div>
+            {simResults.filter(r => r.divCash > 0).length > 0 && (
+              <div className="res-divs">
+                <div className="res-divtitle">🎁 DIVIDENDES REÇUS</div>
+                {simResults.filter(r => r.divCash > 0).map((r, i) => (
+                  <div key={i} className="res-divrow">
+                    <span>{gN(r.winnerId ?? r.a)?.flag} {gN(r.winnerId ?? r.a)?.name?.toUpperCase()}</span>
+                    <span className="res-divamt">+{fmt(r.divCash)} KC</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button className="res-close" onClick={() => setSimResults(null)}>VOIR LE MARCHÉ →</button>
+          </div>
+        </div>
+      )}
+      {matchDetail && (
+        <MatchDetailOverlay
+          result={matchDetail.result}
+          dayLabel={matchDetail.dayLabel}
+          onClose={() => setMatchDetail(null)}
+          onNationClick={id => { setMatchDetail(null); setNationId(id); }}
+        />
+      )}
+      {nationId && (
+        <NationDetailOverlay
+          nationId={nationId}
+          onClose={() => setNationId(null)}
+        />
+      )}
+      {showTut && <TutorialOverlay onClose={() => setShowTut(false)}/>}
     </div>
   );
 }
