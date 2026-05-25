@@ -5,11 +5,13 @@ import { NATIONS } from '@kickstock/constants';
 import { fmt, pctOf } from '@kickstock/game-engine';
 import { useGameStore } from '@/stores/gameStore';
 import TradeModal from '@/components/shared/TradeModal';
+import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import type { Nation, TradeMode } from '@kickstock/types';
 import styles from './PortfolioTab.module.css';
 
 export default function PortfolioTab() {
-  const [modal, setModal] = useState<{ nation: Nation; mode: TradeMode } | null>(null);
+  const [modal,    setModal]    = useState<{ nation: Nation; mode: TradeMode } | null>(null);
+  const [nationId, setNationId] = useState<string | null>(null);
 
   const cash              = useGameStore(s => s.cash);
   const prices            = useGameStore(s => s.prices);
@@ -102,13 +104,13 @@ export default function PortfolioTab() {
             <div
               key={h.id}
               className={`${styles.holding} ${h.isElim ? styles.holdElim : ''}`}
-              onClick={() => !h.isElim && h.nation && setModal({ nation: h.nation, mode: 'sell' })}
+              onClick={() => setNationId(h.id)}
             >
               <div className={styles.holdTop}>
                 <span className={styles.holdFlag}>{h.nation?.flag}</span>
                 <div className={styles.holdInfo}>
                   <div className={styles.holdName}>
-                    {h.nation?.name}
+                    {h.nation?.name?.toUpperCase()}
                     {h.isElim && <span className={styles.elimBadge}>💀 ÉLIMINÉ</span>}
                   </div>
                   <div className={styles.holdSub}>
@@ -130,9 +132,7 @@ export default function PortfolioTab() {
                   </div>
                 </div>
               </div>
-              {!h.isElim && (
-                <div className={styles.sellHint}>Appuyer pour vendre →</div>
-              )}
+              <div className={styles.sellHint}>Appuyer pour détails →</div>
             </div>
           ))}
         </div>
@@ -163,6 +163,14 @@ export default function PortfolioTab() {
           nation={modal.nation}
           initMode={modal.mode}
           onClose={() => setModal(null)}
+        />
+      )}
+
+      {/* ── Nation detail ────────────────────────────────────────────────── */}
+      {nationId && (
+        <NationDetailOverlay
+          nationId={nationId}
+          onClose={() => setNationId(null)}
         />
       )}
     </div>

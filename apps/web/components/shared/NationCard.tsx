@@ -9,6 +9,7 @@ interface Props {
   nation: Nation;
   onBuy: () => void;
   onSell: () => void;
+  onCardClick?: () => void;
   flash?: 'fu' | 'fd' | '';
 }
 
@@ -31,7 +32,7 @@ function Sparkline({ history, color }: { history: number[]; color: string }) {
   );
 }
 
-export default function NationCard({ nation, onBuy, onSell, flash }: Props) {
+export default function NationCard({ nation, onBuy, onSell, onCardClick, flash }: Props) {
   const prices     = useGameStore(s => s.prices);
   const history    = useGameStore(s => s.priceHistory[nation.id] ?? []);
   const portfolio  = useGameStore(s => s.portfolio);
@@ -52,11 +53,11 @@ export default function NationCard({ nation, onBuy, onSell, flash }: Props) {
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={cardClass}>
+    <div className={cardClass} onClick={onCardClick} style={{ cursor: onCardClick ? 'pointer' : undefined }}>
       <div className={styles.top}>
         <span className={styles.flag}>{nation.flag}</span>
         <div className={styles.info}>
-          <div className={styles.name}>{nation.name}</div>
+          <div className={styles.name}>{nation.name?.toUpperCase()}</div>
           <div className={styles.sub}>{nation.conf} · Grp {nation.group}</div>
         </div>
         {held > 0 && <span className={`${styles.badge} ${styles.badgeHeld}`}>{held}x</span>}
@@ -84,7 +85,7 @@ export default function NationCard({ nation, onBuy, onSell, flash }: Props) {
       <Sparkline history={history} color={up ? 'var(--gain)' : 'var(--loss)'} />
 
       {!isElim && (
-        <div className={styles.btns}>
+        <div className={styles.btns} onClick={e => e.stopPropagation()}>
           <button className={styles.buy} onClick={onBuy} disabled={isElim}>BUY</button>
           <button className={styles.sell} onClick={onSell} disabled={held === 0}>SELL</button>
         </div>

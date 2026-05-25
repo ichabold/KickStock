@@ -1,0 +1,120 @@
+@keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.90);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn .15s ease-out;
+}
+
+.sheet {
+  background: var(--s1);
+  border: 1px solid var(--border-hi);
+  border-radius: 20px;
+  padding: 0;
+  width: 100%;
+  max-width: 400px;
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  animation: slideUp .2s ease-out;
+}
+.sheet::-webkit-scrollbar { display: none; }
+
+/* ── Top bar ── */
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.dayLabel { font-size: 9px; color: var(--muted); letter-spacing: 1.5px; font-weight: 700; }
+.closeBtn {
+  background: none; border: none; color: var(--muted);
+  font-size: 16px; cursor: pointer; padding: 0; line-height: 1;
+}
+
+/* ── Score hero ── */
+.scoreHero {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 14px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.teamSide  { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.teamFlag  { font-size: 28px; line-height: 1; }
+.teamName  {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  line-height: 1.2;
+  text-align: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.teamName:hover { color: var(--gold); text-decoration: underline; }
+.teamWin  { color: var(--gold); }
+.teamLoss { color: var(--muted); }
+
+.scoreCenter { text-align: center; }
+.scoreFinal {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  line-height: 1;
+}
+.scoreTag {
+  font-size: 9px;
+  letter-spacing: 1px;
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+/* ── Goals ── */
+.goalsSection { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.goalsTitle   { font-size: 8px; letter-spacing: 1.5px; color: var(--dim); font-weight: 700; margin-bottom: 8px; }
+.goalsCols    { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.goalsColA, .goalsColB { display: flex; flex-direction: column; gap: 2px; }
+
+.goalRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+}
+.goalRowRight { flex-direction: row-reverse; }
+.goalMin  { font-size: 9px; font-family: var(--font-mono); min-width: 24px; font-weight: 400; }
+.goalBall { font-size: 9px; color: var(--muted); }
+.goalName { font-size: 10px; }
+
+.noGoals { text-align: center; color: var(--dim); font-size: 10px; padding: 12px 0; }
+
+/* ── Price impact ── */
+.impactRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+.impactBox    { text-align: center; }
+.impactLbl    { font-size: 8px; color: var(--dim); letter-spacing: 1px; margin-bottom: 2px; }
+.impactPct    { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+.impactPrice  { font-size: 9px; color: var(--muted); margin-top: 1px; font-family: var(--font-mono); }
+
+/* ── Venue ── */
+.venue { font-size: 9px; color: #2a2a2a; text-align: center; padding: 6px 14px 12px; }

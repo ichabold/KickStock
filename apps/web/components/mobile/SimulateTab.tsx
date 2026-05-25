@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CALENDAR, NATIONS } from '@kickstock/constants';
 import { useGameStore, fmt, buildMatchesForCurrentDay } from '@/stores/gameStore';
 import type { StoredMatchResult } from '@kickstock/types';
+import MatchAnimation from './MatchAnimation';
 import styles from './PlayButton.module.css';
 
 const gN = (id: string) => NATIONS.find(n => n.id === id);
@@ -12,9 +13,11 @@ interface Props {
   onDone: () => void;
 }
 
+type View = 'pre' | 'animating' | 'done';
+
 export default function SimulateTab({ onDone }: Props) {
-  const [results, setResults]   = useState<StoredMatchResult[] | null>(null);
-  const [loading, setLoading]   = useState(false);
+  const [view,    setView]    = useState<View>('pre');
+  const [results, setResults] = useState<StoredMatchResult[]>([]);
 
   const dayIndex   = useGameStore(s => s.dayIndex);
   const advanceDay = useGameStore(s => s.advanceDay);
@@ -26,20 +29,10 @@ export default function SimulateTab({ onDone }: Props) {
   const day     = CALENDAR[dayIndex];
   const matches = day ? buildMatchesForCurrentDay(state) : [];
 
-  // Exposure for today's matches
-  const exposure = matches.reduce((acc, m) => {
-    return acc + (portfolio[m.a] ?? 0) * (prices[m.a] ?? 0)
-               + (portfolio[m.b] ?? 0) * (prices[m.b] ?? 0);
-  }, 0);
-
-  function play() {
-    setLoading(true);
-    setTimeout(() => {
-      const res = advanceDay();
-      setResults(res ? res.results : []);
-      setLoading(false);
-    }, 300);
-  }
+  const exposure = matches.reduce((acc, m) =>
+    acc + (portfolio[m.a] ?? 0) * (prices[m.a] ?? 0)
+        + (portfolio[m.b] ?? 0) * (prices[m.b] ?? 0),
+  0);
 
   // ── Tournament finished ────────────────────────────────────────────────────
   if (!day) {
@@ -52,29 +45,42 @@ export default function SimulateTab({ onDone }: Props) {
     );
   }
 
-  // ── Results view ──────────────────────────────────────────────────────────
-  if (results !== null) {
-    const divResults = results.filter(r => r.divCash > 0);
+  // ── Match animation ────────────────────────────────────────────────────────
+  if (view === 'animating') {
+    return (
+      <MatchAnimation
+        results={results}
+        portfolio={portfolio}
+        prices={prices}
+        onDone={() => setView('done')}
+      />
+    );
+  }
 
+  // ── Post-simulate results ──────────────────────────────────────────────────
+  if (view === 'done') {
+    const divResults = results.filter(r => r.divCash > 0);
     return (
       <div className={styles.wrap}>
         <div className={styles.resultsTitle}>{day.label}</div>
         <div className={styles.results}>
-          {results.map(r => {
+          {results.map((r, i) => {
             const nA = gN(r.a);
             const nB = gN(r.b);
             return (
-              <div key={`${r.a}-${r.b}`} className={`${styles.result} ${r.isUpset ? styles.upset : ''}`}>
-                <span className={styles.rTeam}>{nA?.flag} {nA?.name}</span>
+              <div key={i} className={`${styles.result} ${r.isUpset ? styles.upset : ''}`}>
+                <span className={styles.rTeam} style={{ color: r.res === 'A' ? 'var(--gold)' : 'var(--muted)' }}>
+                  {nA?.flag} {nA?.name?.toUpperCase()}
+                </span>
                 <span className={styles.rScore}>
-                  {r.scoreA} — {r.scoreB}
+                  {r.scoreA}–{r.scoreB}
                   {r.penWinner && <span className={styles.rExtra}> ({r.penA}–{r.penB} P)</span>}
                   {r.etRes && !r.penWinner && <span className={styles.rExtra}> AET</span>}
                 </span>
-                <span className={styles.rTeam}>{nB?.flag} {nB?.name}</span>
-                {r.elimId && (
-                  <span className={styles.elimNote}>💀 {gN(r.elimId)?.name} éliminé</span>
-                )}
+                <span className={styles.rTeam} style={{ color: r.res === 'B' ? 'var(--gold)' : 'var(--muted)' }}>
+                  {nB?.flag} {nB?.name?.toUpperCase()}
+                </span>
+                {r.elimId && <span className={styles.elimNote}>💀 {gN(r.elimId)?.name?.toUpperCase()} ÉLIMINÉ</span>}
                 {r.isUpset && <span className={styles.upsetNote}>🚀 UPSET!</span>}
               </div>
             );
@@ -84,23 +90,33 @@ export default function SimulateTab({ onDone }: Props) {
         {divResults.length > 0 && (
           <div className={styles.divSection}>
             <div className={styles.divTitle}>🎁 DIVIDENDES REÇUS</div>
-            {divResults.map(r => (
-              <div key={r.a + r.b} className={styles.divRow}>
-                <span>{gN(r.winnerId ?? r.a)?.flag} {gN(r.winnerId ?? r.a)?.name}</span>
+            {divResults.map((r, i) => (
+              <div key={i} className={styles.divRow}>
+                <span>{gN(r.winnerId ?? r.a)?.flag} {gN(r.winnerId ?? r.a)?.name?.toUpperCase()}</span>
                 <span className={styles.divAmount}>+{fmt(r.divCash)} KC</span>
               </div>
             ))}
           </div>
         )}
 
-        <button className={styles.doneBtn} onClick={() => { setResults(null); onDone(); }}>
+        <button className={styles.doneBtn} onClick={() => { setView('pre'); onDone(); }}>
           VOIR LE CALENDRIER →
         </button>
       </div>
     );
   }
 
-  // ── Pre-simulate view ─────────────────────────────────────────────────────
+  // ── Pre-simulate view ──────────────────────────────────────────────────────
+  function play() {
+    const res = advanceDay();
+    if (res && res.results.length > 0) {
+      setResults(res.results);
+      setView('animating');
+    } else {
+      setView('pre');
+    }
+  }
+
   return (
     <div className={styles.wrap}>
       <div className={styles.dayLabel}>{day.label}</div>
@@ -123,9 +139,9 @@ export default function SimulateTab({ onDone }: Props) {
             return (
               <div key={i} className={`${styles.matchPreview} ${hasA || hasB ? styles.exposed : ''}`}>
                 <span className={styles.mpFlag}>{nA?.flag}</span>
-                <span className={styles.mpName}>{nA?.name}</span>
+                <span className={styles.mpName}>{nA?.name?.toUpperCase()}</span>
                 <span className={styles.mpVs}>VS</span>
-                <span className={styles.mpName}>{nB?.name}</span>
+                <span className={styles.mpName}>{nB?.name?.toUpperCase()}</span>
                 <span className={styles.mpFlag}>{nB?.flag}</span>
                 {m.venue && <span className={styles.mpVenue}>📍 {m.venue}</span>}
               </div>
@@ -136,8 +152,8 @@ export default function SimulateTab({ onDone }: Props) {
         <div className={styles.matchCount}>Phase KO — matchs à venir</div>
       )}
 
-      <button className={styles.playBtn} onClick={play} disabled={loading}>
-        {loading ? '⏳ SIMULATION…' : '⚡ SIMULER CE JOUR'}
+      <button className={styles.playBtn} onClick={play}>
+        ⚡ SIMULER CE JOUR
       </button>
     </div>
   );

@@ -4,18 +4,20 @@ import { useState, useMemo } from 'react';
 import { NATIONS, GROUPS } from '@kickstock/constants';
 import NationCard from '@/components/shared/NationCard';
 import TradeModal from '@/components/shared/TradeModal';
+import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import type { Nation, TradeMode, SortBy } from '@kickstock/types';
 import { useGameStore } from '@/stores/gameStore';
 import styles from './MarketTab.module.css';
 
 export default function MarketTab() {
-  const [filter, setFilter] = useState('');
-  const [group, setGroup]   = useState('ALL');
-  const [sortBy, setSortBy] = useState<SortBy>('default');
-  const [modal, setModal]   = useState<{ nation: Nation; mode: TradeMode } | null>(null);
+  const [filter,   setFilter]   = useState('');
+  const [group,    setGroup]    = useState('ALL');
+  const [sortBy,   setSortBy]   = useState<SortBy>('default');
+  const [modal,    setModal]    = useState<{ nation: Nation; mode: TradeMode } | null>(null);
+  const [nationId, setNationId] = useState<string | null>(null);
 
-  const prices    = useGameStore(s => s.prices);
-  const portfolio = useGameStore(s => s.portfolio);
+  const prices     = useGameStore(s => s.prices);
+  const portfolio  = useGameStore(s => s.portfolio);
   const eliminated = useGameStore(s => s.eliminated);
 
   const SORTS: { id: SortBy; label: string }[] = [
@@ -47,44 +49,47 @@ export default function MarketTab() {
   }, [filter, group, sortBy, prices, portfolio]);
 
   return (
-    <div>
-      <div className={styles.filters}>
-        <input
-          className={styles.search}
-          placeholder="Rechercher…"
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-        />
-        <div className={styles.groups}>
-          {GROUPS.map(g => (
+    <>
+      <div>
+        <div className={styles.filters}>
+          <input
+            className={styles.search}
+            placeholder="Rechercher…"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+          />
+          <div className={styles.groups}>
+            {GROUPS.map(g => (
+              <button
+                key={g}
+                className={`${styles.gp} ${group === g ? styles.gpOn : ''}`}
+                onClick={() => setGroup(g)}
+              >{g}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.sortRow}>
+          {SORTS.map(s => (
             <button
-              key={g}
-              className={`${styles.gp} ${group === g ? styles.gpOn : ''}`}
-              onClick={() => setGroup(g)}
-            >{g}</button>
+              key={s.id}
+              className={`${styles.sortBtn} ${sortBy === s.id ? styles.sortBtnOn : ''}`}
+              onClick={() => setSortBy(s.id)}
+            >{s.label}</button>
           ))}
         </div>
-      </div>
 
-      <div className={styles.sortRow}>
-        {SORTS.map(s => (
-          <button
-            key={s.id}
-            className={`${styles.sortBtn} ${sortBy === s.id ? styles.sortBtnOn : ''}`}
-            onClick={() => setSortBy(s.id)}
-          >{s.label}</button>
-        ))}
-      </div>
-
-      <div className={styles.grid}>
-        {filtered.map(n => (
-          <NationCard
-            key={n.id}
-            nation={n}
-            onBuy={() => setModal({ nation: n, mode: 'buy' })}
-            onSell={() => setModal({ nation: n, mode: 'sell' })}
-          />
-        ))}
+        <div className={styles.grid}>
+          {filtered.map(n => (
+            <NationCard
+              key={n.id}
+              nation={n}
+              onBuy={() => setModal({ nation: n, mode: 'buy' })}
+              onSell={() => setModal({ nation: n, mode: 'sell' })}
+              onCardClick={() => setNationId(n.id)}
+            />
+          ))}
+        </div>
       </div>
 
       {modal && (
@@ -94,6 +99,13 @@ export default function MarketTab() {
           onClose={() => setModal(null)}
         />
       )}
-    </div>
+
+      {nationId && (
+        <NationDetailOverlay
+          nationId={nationId}
+          onClose={() => setNationId(null)}
+        />
+      )}
+    </>
   );
 }
