@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useGameStore, fmt } from '@/stores/gameStore';
 import Ticker from '@/components/shared/Ticker';
+import AuthWidget from '@/components/shared/AuthWidget';
 import MarketTab from './MarketTab';
 import ScheduleTab from './ScheduleTab';
 import PortfolioTab from './PortfolioTab';
@@ -56,6 +57,9 @@ export default function MobileShell() {
               {fmt(totVal)}
             </div>
           </div>
+        </div>
+        <div className={styles.authArea}>
+          <AuthWidget compact />
         </div>
       </header>
 

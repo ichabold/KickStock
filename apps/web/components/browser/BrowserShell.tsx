@@ -8,6 +8,9 @@ import TradeModal from '@/components/shared/TradeModal';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
 import MatchAnimation from '@/components/mobile/MatchAnimation';
+import AuthWidget from '@/components/shared/AuthWidget';
+import { useLeaderboard } from '@/hooks/useLeaderboard';
+import { useAuth } from '@/hooks/useAuth';
 import type { Nation, TradeMode, StoredMatchResult } from '@kickstock/types';
 
 const gN = (id: string) => NATIONS.find(n => n.id === id);
@@ -706,28 +709,107 @@ function BracketView({ onNationClick, onMatchClick }: {
 
 // ─── RankingView ──────────────────────────────────────────────────────────────
 function RankingView() {
+  const { entries, loading, refresh } = useLeaderboard(50);
+  const { user, profile } = useAuth();
   const cash      = useGameStore(s => s.cash);
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
+  const myBest    = useGameStore(s => s.bestScore);
 
-  const portVal  = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
-  const myTotal  = cash + portVal;
+  const portVal = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
+  const myTotal = cash + portVal;
 
-  const mockRanking = [
-    { name: 'GoldenBoot', country: '🇫🇷', positions: 12, total: 18420 },
-    { name: 'MarketKing', country: '🇪🇸', positions: 9,  total: 16300 },
-    { name: 'Toi',        country: '🌍',  positions: Object.values(portfolio).filter(q => q > 0).length, total: myTotal, isMe: true },
-    { name: 'Klopp_Fan',  country: '🇩🇪', positions: 7,  total: 13200 },
-    { name: 'Messi_Out',  country: '🇦🇷', positions: 5,  total: 11800 },
-  ].sort((a, b) => b.total - a.total);
+  const myRank = user ? entries.findIndex(e => e.id === user.id) + 1 : null;
 
   return (
     <div className="rnk-wrap">
-      <div className="rnk-tabs">
-        <button className="rtab on">ALL</button>
-        <button className="rtab">BY COUNTRY</button>
-        <button className="rtab" style={{opacity:.5,cursor:'not-allowed'}} title="Phase 3">FRIENDS</button>
+      {/* My score card */}
+      <div style={{background:'rgba(255,219,0,.04)',border:'1px solid var(--gold-dk)',borderRadius:9,padding:'12px 16px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div>
+          <div style={{fontSize:9,letterSpacing:2,color:'var(--dim)',fontWeight:700,marginBottom:3}}>MON SCORE EN COURS</div>
+          <div style={{fontFamily:'var(--font-mono)',fontSize:20,fontWeight:700,color:'var(--gold)'}}>{fmt(myTotal)} KC</div>
+          {myBest && <div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>Meilleur : {fmt(myBest)} KC</div>}
+        </div>
+        {!user
+          ? <a href="/login" style={{background:'rgba(255,219,0,.12)',border:'1px solid var(--gold-dk)',color:'var(--gold)',padding:'6px 14px',borderRadius:6,fontSize:11,fontWeight:700,letterSpacing:1,textDecoration:'none'}}>
+              ⚽ SE CONNECTER
+            </a>
+          : myRank
+            ? <div style={{fontFamily:'var(--font-display)',fontSize:32,letterSpacing:2,color:'var(--gold)'}}>#{myRank}</div>
+            : <div style={{fontSize:10,color:'var(--dim)'}}>Finissez une partie pour apparaître</div>
+        }
       </div>
+
+      <div className="rnk-tabs">
+        <button className="rtab on">MEILLEURS SCORES</button>
+        <button className="rtab" style={{opacity:.5,cursor:'not-allowed'}} title="Phase 3">COMPÉTITION LIVE</button>
+      </div>
+
+      {loading && <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:11}}>Chargement…</div>}
+
+      {!loading && entries.length === 0 && (
+        <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:12}}>
+          <div style={{fontSize:32,marginBottom:8}}>🏆</div>
+          <div>Aucun score enregistré.</div>
+          <div style={{marginTop:4,color:'#333',fontSize:10}}>Connecte-toi et joue une partie pour apparaître ici.</div>
+        </div>
+      )}
+
+      <div className="rnk-list">
+        {entries.map((p, i) => {
+          const isMe = user?.id === p.id;
+          return (
+            <div key={p.id} className={`rnk-row${isMe ? ' me' : ''}`}>
+              <div className={`rnk-rank${i < 3 ? ' top' : ''}`}>{i+1}</div>
+              <div className="rnk-av" style={isMe ? {background:'var(--gold)',color:'#000'} : {}}>
+                {p.username[0].toUpperCase()}
+              </div>
+              <div className="rnk-info">
+                <div className="rnk-name">{p.username}{isMe ? ' 👤' : ''}</div>
+                <div className="rnk-sub">{p.country ?? '🌍'}</div>
+              </div>
+              <div className="rnk-val">{fmt(p.best_score)} KC</div>
+            </div>
+          );
+        })}
+
+        {/* Guest row if not logged in */}
+        {!user && (
+          <div className="rnk-row" style={{opacity:.5,borderStyle:'dashed'}}>
+            <div className="rnk-rank">?</div>
+            <div className="rnk-av">?</div>
+            <div className="rnk-info">
+              <div className="rnk-name">Vous</div>
+              <div className="rnk-sub">Connectez-vous pour apparaître</div>
+            </div>
+            <div className="rnk-val">{fmt(myTotal)} KC</div>
+          </div>
+        )}
+      </div>
+
+      <div style={{textAlign:'center',marginTop:12}}>
+        <button onClick={refresh} style={{background:'none',border:'1px solid #222',color:'#444',padding:'5px 14px',borderRadius:5,fontSize:9,letterSpacing:1,cursor:'pointer',fontFamily:'var(--font-body)'}}>
+          ↻ ACTUALISER
+        </button>
+        <div style={{fontSize:8,color:'#333',marginTop:6}}>Mise à jour auto toutes les 30s</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── RankingView (old mock — kept for reference) ──────────────────────────────
+function _OldRankingView() {
+  const cash      = useGameStore(s => s.cash);
+  const prices    = useGameStore(s => s.prices);
+  const portfolio = useGameStore(s => s.portfolio);
+  const portVal  = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
+  const myTotal  = portVal + cash;
+  const mockRanking = [
+    { name: 'GoldenBoot', country: '🇫🇷', positions: 12, total: 18420 },
+    { name: 'Toi',        country: '🌍',  positions: 0,  total: myTotal, isMe: true },
+  ].sort((a, b) => b.total - a.total);
+  return (
+    <div className="rnk-wrap">
       <div className="rnk-list">
         {mockRanking.map((p, i) => (
           <div key={p.name} className={`rnk-row${p.isMe ? ' me' : ''}`}>
@@ -735,7 +817,7 @@ function RankingView() {
             <div className="rnk-av">{p.name[0]}</div>
             <div className="rnk-info">
               <div className="rnk-name">{p.name}</div>
-              <div className="rnk-sub">{p.country} · {p.positions} positions</div>
+              <div className="rnk-sub">{p.country}</div>
             </div>
             <div className="rnk-val">{fmt(p.total)} KC</div>
           </div>
@@ -743,7 +825,7 @@ function RankingView() {
       </div>
     </div>
   );
-}
+} // end _OldRankingView
 
 // ─── TutorialOverlay ──────────────────────────────────────────────────────────
 const TUT_STEPS = [
@@ -850,7 +932,9 @@ export default function BrowserShell() {
           <button className="ni-sm" onClick={() => setShowTut(true)}>
             <span style={{fontSize:16}}>❓</span><span>HELP</span>
           </button>
-          <div className="av-btn" title="Mon profil">JR</div>
+          <div style={{padding: '8px 0'}}>
+            <AuthWidget />
+          </div>
         </div>
       </nav>
 

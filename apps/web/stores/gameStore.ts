@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { syncBestScore } from '@/hooks/useAuth';
 import {
   initState, applyResult, calcTax, simulate,
   genScore, genGoals, buildR32Pool, buildMatchesForDay,
@@ -313,6 +314,11 @@ export const useGameStore = create<GameStore>()(
         const newBest = s.bestScore === null
           ? totalVal
           : Math.max(s.bestScore, totalVal);
+
+        // Sync best score to Supabase (fire-and-forget, silent if not logged in)
+        if (newBest > (s.bestScore ?? 0)) {
+          syncBestScore(newBest).catch(() => {});
+        }
 
         set({
           prices,

@@ -32,6 +32,8 @@
 .statLbl { font-size: 8px; letter-spacing: 2px; color: var(--dim); font-weight: 700; margin-bottom: 2px; }
 .statVal { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
 
+.authArea { margin-left: 8px; flex-shrink: 0; }
+
 .statusBar {
   padding: 4px 12px;
   background: var(--s2);
