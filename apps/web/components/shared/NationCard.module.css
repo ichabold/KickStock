@@ -1,0 +1,101 @@
+.card {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  border-radius: 11px;
+  padding: 11px 10px 9px;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color .15s, transform .1s;
+}
+
+.card:not(.elim):hover { border-color: var(--border-hi); transform: translateY(-1px); }
+.card:not(.elim):active { transform: scale(.98); }
+.card.held  { border-left-color: var(--gain-dk); background: rgba(0,255,135,0.03); }
+.card.elim  { border-left-color: var(--loss-dk); opacity: 0.6; cursor: default; }
+
+.flashUp { animation: flashUp .4s ease-out; }
+.flashDn { animation: flashDn .4s ease-out; }
+
+.top {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+
+.flag { font-size: 21px; line-height: 1; flex-shrink: 0; }
+
+.info { min-width: 0; flex: 1; }
+.name { font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub  { font-size: 8px; color: var(--dim); margin-top: 1px; }
+
+.badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  position: absolute;
+  top: 8px;
+  right: 7px;
+}
+.badgeHeld { background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-dk); }
+.badgeDead { background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss-dk); }
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.price { font-family: var(--font-mono); font-size: 20px; font-weight: 700; line-height: 1; }
+.kc    { font-size: 9px; color: var(--dim); }
+.ch    { font-family: var(--font-mono); font-size: 10px; font-weight: 700; margin-left: auto; }
+.up    { color: var(--gain); }
+.dn    { color: var(--loss); }
+
+.strBar  { height: 3px; background: var(--ghost); border-radius: 99px; overflow: hidden; margin-bottom: 7px; }
+.strFill { height: 100%; border-radius: 99px; transition: width .3s; }
+
+.spark { width: 100%; height: 22px; margin-bottom: 5px; }
+
+.btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.buy, .sell {
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+}
+.buy  { background: var(--gain-bg); border-color: var(--gain-dk); color: var(--gain); }
+.sell { background: var(--loss-bg); border-color: var(--loss-dk); color: var(--loss); }
+.buy:hover  { background: rgba(0,255,135,0.15); }
+.sell:hover { background: rgba(255,59,92,0.16); }
+.buy:disabled, .sell:disabled { opacity: 0.25; cursor: not-allowed; }
+
+.elimOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8,0,0,0.82);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  gap: 3px;
+  pointer-events: none;
+}
+.elimText { font-size: 9px; color: var(--loss); font-weight: 700; letter-spacing: 1px; }

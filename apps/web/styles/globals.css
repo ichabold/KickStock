@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&family=Inter+Tight:wght@400;500;600;700&display=swap');
+@import './browser.css';
+
+/* ─── CSS CUSTOM PROPERTIES ─────────────────────────────────────────────── */
+:root {
+  --bg:       #0A0A0A;
+  --s1:       #111111;
+  --s2:       #181818;
+  --text:     #FFFFFF;
+  --muted:    #888888;
+  --dim:      #444444;
+  --ghost:    #1A1A1A;
+  --border:   #1E1E1E;
+  --border-hi:#2E2E2E;
+  --gold:     #FFDB00;
+  --gold-dk:  #B89800;
+  --gain:     #00FF87;
+  --gain-bg:  rgba(0,255,135,0.07);
+  --gain-dk:  #00662F;
+  --loss:     #FF3B5C;
+  --loss-bg:  rgba(255,59,92,0.08);
+  --loss-dk:  #7A1B2C;
+  --upset:    #FF8800;
+
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+  --font-body:    'Inter Tight', sans-serif;
+}
+
+/* ─── RESET ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#__next, main {
+  height: 100%;
+}
+
+button {
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+input {
+  font-family: var(--font-body);
+}
+
+/* ─── SCROLLBAR ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ─── ANIMATIONS ─────────────────────────────────────────────────────────── */
+@keyframes flashUp {
+  0%   { background: rgba(0,255,135,0.22); }
+  100% { background: var(--s1); }
+}
+@keyframes flashDn {
+  0%   { background: rgba(255,59,92,0.2); }
+  100% { background: var(--s1); }
+}
+@keyframes tick {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

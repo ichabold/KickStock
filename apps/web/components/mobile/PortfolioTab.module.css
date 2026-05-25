@@ -1,0 +1,64 @@
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.summaryItem {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.totalItem { grid-column: span 3; }
+.summaryLbl { font-size: 8px; letter-spacing: 2px; color: var(--dim); font-weight: 700; margin-bottom: 4px; }
+.summaryVal { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+.gold { color: var(--gold); }
+
+.best {
+  background: rgba(255,219,0,0.06);
+  border: 1px solid var(--gold-dk);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--dim);
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.holdings { display: flex; flex-direction: column; gap: 6px; }
+.holding {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gain-dk);
+  border-radius: 8px;
+  padding: 12px;
+}
+.holdTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.holdFlag { font-size: 24px; }
+.holdInfo { flex: 1; }
+.holdName { font-weight: 700; font-size: 13px; }
+.holdSub  { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.holdRight { text-align: right; }
+.holdValue { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+.holdPl    { font-family: var(--font-mono); font-size: 10px; margin-top: 2px; }
+.gain { color: var(--gain); }
+.loss { color: var(--loss); }
