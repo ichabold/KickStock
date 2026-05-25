@@ -363,7 +363,6 @@ function PortfolioView({ onTrade, onNationClick }: {
   const eliminated        = useGameStore(s => s.eliminated);
   const txLog             = useGameStore(s => s.txLog);
   const bestScore         = useGameStore(s => s.bestScore);
-  const liquidateEliminated = useGameStore(s => s.liquidateEliminated);
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)
@@ -402,9 +401,9 @@ function PortfolioView({ onTrade, onNationClick }: {
           </div>
         )}
         {hasElimHeld && (
-          <button onClick={liquidateEliminated} style={{width:'100%',padding:'8px',background:'rgba(255,60,60,.08)',border:'1px solid var(--loss-dk)',borderRadius:6,color:'var(--loss)',fontSize:11,fontWeight:700,letterSpacing:1,marginBottom:10}}>
-            💀 LIQUIDER LES ÉLIMINÉS · 1 KC/action
-          </button>
+          <div style={{width:'100%',padding:'8px',background:'rgba(255,60,60,.08)',border:'1px solid var(--loss-dk)',borderRadius:6,color:'var(--loss)',fontSize:11,fontWeight:700,letterSpacing:1,marginBottom:10,textAlign:'center'}}>
+            💀 Nations éliminées — liquidation automatique
+          </div>
         )}
         {holdings.length === 0
           ? <div style={{textAlign:'center',padding:40,color:'var(--di)',fontSize:12}}>Aucune position ouverte</div>
@@ -871,7 +870,10 @@ export default function BrowserShell() {
   const [matchDetail,  setMatchDetail]  = useState<{ result: StoredMatchResult; dayLabel: string } | null>(null);
   const [showTut,      setShowTut]      = useState(false);
 
-  useEffect(() => { useGameStore.persist.rehydrate(); }, []);
+  useEffect(() => {
+    useGameStore.getState().startSync();
+    return () => useGameStore.getState().stopSync();
+  }, []);
 
   const cash      = useGameStore(s => s.cash);
   const prices    = useGameStore(s => s.prices);
@@ -901,8 +903,8 @@ export default function BrowserShell() {
   function onNationClick(id: string) { setNationId(id); }
   function onMatchClick(r: StoredMatchResult, dayLabel: string) { setMatchDetail({ result: r, dayLabel }); }
 
-  function simulate() {
-    const r = useGameStore.getState().advanceDay();
+  async function simulate() {
+    const r = await useGameStore.getState().advanceDay();
     if (!r) return;
     if (r.results.length > 0) {
       setAnimResults(r.results);

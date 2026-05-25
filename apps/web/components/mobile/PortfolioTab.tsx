@@ -20,7 +20,6 @@ export default function PortfolioTab() {
   const eliminated        = useGameStore(s => s.eliminated);
   const txLog             = useGameStore(s => s.txLog);
   const bestScore         = useGameStore(s => s.bestScore);
-  const liquidateEliminated = useGameStore(s => s.liquidateEliminated);
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)
@@ -82,11 +81,11 @@ export default function PortfolioTab() {
         <div className={styles.best}>🏆 MEILLEUR SCORE: {fmt(bestScore)} KC</div>
       )}
 
-      {/* ── Liquidate eliminated ─────────────────────────────────────────── */}
+      {/* ── Eliminated notice (liquidation is automatic server-side) ──────── */}
       {hasElimHeld && (
-        <button className={styles.liquidateBtn} onClick={liquidateEliminated}>
-          💀 LIQUIDER LES ÉLIMINÉS · 1 KC/action
-        </button>
+        <div className={styles.liquidateBtn} style={{ cursor: 'default' }}>
+          💀 Nations éliminées — liquidation automatique
+        </div>
       )}
 
       {/* ── Holdings ─────────────────────────────────────────────────────── */}

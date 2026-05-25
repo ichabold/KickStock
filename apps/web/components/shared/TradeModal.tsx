@@ -62,8 +62,8 @@ export default function TradeModal({ nation, initMode, onClose }: Props) {
 
   function switchMode(m: TradeMode) { setMode(m); setQty(1); setError(''); }
 
-  function confirm() {
-    const err = trade(mode, nation.id, safeQty);
+  async function confirm() {
+    const err = await trade(mode, nation.id, safeQty);
     if (err) { setError(err); return; }
     onClose();
   }

@@ -25,7 +25,8 @@ export default function MobileShell() {
   const [tab, setTab] = useState<TabId>('schedule');
 
   useEffect(() => {
-    useGameStore.persist.rehydrate();
+    useGameStore.getState().startSync();
+    return () => useGameStore.getState().stopSync();
   }, []);
 
   const cash      = useGameStore(s => s.cash);

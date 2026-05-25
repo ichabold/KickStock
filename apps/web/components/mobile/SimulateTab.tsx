@@ -107,8 +107,8 @@ export default function SimulateTab({ onDone }: Props) {
   }
 
   // ── Pre-simulate view ──────────────────────────────────────────────────────
-  function play() {
-    const res = advanceDay();
+  async function play() {
+    const res = await advanceDay();
     if (res && res.results.length > 0) {
       setResults(res.results);
       setView('animating');

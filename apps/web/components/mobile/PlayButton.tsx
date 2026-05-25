@@ -26,13 +26,11 @@ export default function PlayButton({ onDone }: Props) {
 
   const day = CALENDAR[dayIndex];
 
-  function play() {
+  async function play() {
     setLoading(true);
-    setTimeout(() => {
-      const res = advanceDay();
-      if (res) setResults(res.results);
-      setLoading(false);
-    }, 300);
+    const res = await advanceDay();
+    if (res) setResults(res.results);
+    setLoading(false);
   }
 
   if (!day) {
