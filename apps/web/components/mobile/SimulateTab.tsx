@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CALENDAR, NATIONS } from '@kickstock/constants';
 import { useGameStore, fmt, buildMatchesForCurrentDay } from '@/stores/gameStore';
+import { SimulateButton } from '@/components/mechanics';
 import type { StoredMatchResult } from '@kickstock/types';
 import MatchAnimation from './MatchAnimation';
 import styles from './PlayButton.module.css';
@@ -19,12 +20,11 @@ export default function SimulateTab({ onDone }: Props) {
   const [view,    setView]    = useState<View>('pre');
   const [results, setResults] = useState<StoredMatchResult[]>([]);
 
-  const dayIndex   = useGameStore(s => s.dayIndex);
-  const advanceDay = useGameStore(s => s.advanceDay);
-  const resetGame  = useGameStore(s => s.resetGame);
-  const prices     = useGameStore(s => s.prices);
-  const portfolio  = useGameStore(s => s.portfolio);
-  const state      = useGameStore(s => s);
+  const dayIndex  = useGameStore(s => s.dayIndex);
+  const resetGame = useGameStore(s => s.resetGame);
+  const prices    = useGameStore(s => s.prices);
+  const portfolio = useGameStore(s => s.portfolio);
+  const state     = useGameStore(s => s);
 
   const day     = CALENDAR[dayIndex];
   const matches = day ? buildMatchesForCurrentDay(state) : [];
@@ -107,16 +107,6 @@ export default function SimulateTab({ onDone }: Props) {
   }
 
   // ── Pre-simulate view ──────────────────────────────────────────────────────
-  async function play() {
-    const res = await advanceDay();
-    if (res && res.results.length > 0) {
-      setResults(res.results);
-      setView('animating');
-    } else {
-      setView('pre');
-    }
-  }
-
   return (
     <div className={styles.wrap}>
       <div className={styles.dayLabel}>{day.label}</div>
@@ -152,9 +142,13 @@ export default function SimulateTab({ onDone }: Props) {
         <div className={styles.matchCount}>Phase KO — matchs à venir</div>
       )}
 
-      <button className={styles.playBtn} onClick={play}>
-        ⚡ SIMULER CE JOUR
-      </button>
+      {/* SimulateButton — mechanic atom, same advanceDay() logic as BrowserShell topbar */}
+      <SimulateButton
+        className={styles.playBtn}
+        label="⚡ SIMULER CE JOUR"
+        onResults={res => { setResults(res); setView('animating'); }}
+        onNoResults={() => setView('pre')}
+      />
     </div>
   );
 }

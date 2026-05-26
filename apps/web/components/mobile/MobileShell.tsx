@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useGameStore, fmt } from '@/stores/gameStore';
+import { useValidateMechanics } from '@/hooks/useValidateMechanics';
+import { usePortfolioTotals } from '@/components/mechanics';
 import Ticker from '@/components/shared/Ticker';
 import AuthWidget from '@/components/shared/AuthWidget';
 import MarketTab from './MarketTab';
@@ -29,18 +31,26 @@ export default function MobileShell() {
     return () => useGameStore.getState().stopSync();
   }, []);
 
-  const cash      = useGameStore(s => s.cash);
-  const prices    = useGameStore(s => s.prices);
-  const portfolio = useGameStore(s => s.portfolio);
-  const dayIndex  = useGameStore(s => s.dayIndex);
-  const champion  = useGameStore(s => s.champion);
+  // Pattern 3 — validate at mount that this shell covers all required mechanics
+  useValidateMechanics({
+    canViewNationPrice: true,
+    canBuy:             true,
+    canSell:            true,
+    canViewPortfolio:   true,
+    canViewCash:        true,
+    canViewPnL:         true,
+    canSimulate:        true,
+    canViewStandings:   true,
+    canViewSchedule:    true,
+  }, 'MobileShell');
 
-  const portVal = Object.entries(portfolio).reduce(
-    (a, [id, q]) => a + q * (prices[id] ?? 0), 0,
-  );
-  const totVal = cash + portVal;
-  const pl     = totVal - 10000;
-  const day    = CALENDAR[dayIndex];
+  // usePortfolioTotals — mechanic hook, same formula as BrowserShell topbar
+  const { cash, totalVal: totVal, pl } = usePortfolioTotals();
+
+  const dayIndex = useGameStore(s => s.dayIndex);
+  const champion = useGameStore(s => s.champion);
+
+  const day = CALENDAR[dayIndex];
 
   return (
     <div className={styles.shell}>

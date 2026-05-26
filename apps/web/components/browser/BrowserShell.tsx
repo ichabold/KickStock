@@ -9,6 +9,8 @@ import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
 import MatchAnimation from '@/components/mobile/MatchAnimation';
 import AuthWidget from '@/components/shared/AuthWidget';
+import { PriceDisplay, TradeActions, SimulateButton, usePortfolioTotals } from '@/components/mechanics';
+import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useAuth } from '@/hooks/useAuth';
 import type { Nation, TradeMode, StoredMatchResult } from '@kickstock/types';
@@ -34,16 +36,12 @@ function Spark({ history, up }: { history: number[]; up: boolean }) {
 function StockTile({ nation, onBuy, onSell, onCardClick }: {
   nation: Nation; onBuy: () => void; onSell: () => void; onCardClick?: () => void;
 }) {
-  const prices     = useGameStore(s => s.prices);
-  const history    = useGameStore(s => s.priceHistory[nation.id] ?? []);
-  const portfolio  = useGameStore(s => s.portfolio);
-  const eliminated = useGameStore(s => s.eliminated);
-
-  const price  = prices[nation.id] ?? nation.p;
-  const held   = portfolio[nation.id] ?? 0;
-  const isElim = eliminated.includes(nation.id);
-  const pct    = ((price - nation.p) / nation.p * 100).toFixed(1);
-  const up     = price >= nation.p;
+  const history  = useGameStore(s => s.priceHistory[nation.id] ?? []);
+  const held     = useGameStore(s => s.portfolio[nation.id] ?? 0);
+  const isElim   = useGameStore(s => s.eliminated.includes(nation.id));
+  // price + up needed locally for Sparkline gradient colour
+  const price    = useGameStore(s => s.prices[nation.id] ?? nation.p);
+  const up       = price >= nation.p;
 
   return (
     <div
@@ -60,18 +58,32 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
         <span className="bdg g">GR.{nation.group}</span>
         <span className="bdg c">{nation.conf}</span>
       </div>
-      <div className="st-pr">
-        <span className="st-price">{Math.round(price)}</span>
-        <span className="st-kc">KC</span>
-        <span className={`st-pct ${up ? 'up' : 'dn'}`}>{up ? '▲+' : '▼'}{Math.abs(Number(pct))}%</span>
-      </div>
+
+      {/* PriceDisplay — mechanic atom, same formula as NationCard */}
+      <PriceDisplay
+        nation={nation}
+        wrapClassName="st-pr"
+        priceClassName="st-price"
+        kcClassName="st-kc"
+        changeUpClassName="st-pct up"
+        changeDnClassName="st-pct dn"
+      />
+
       <Spark history={history} up={up}/>
+
       {isElim
         ? <div className="bdis">💀 ÉLIMINÉ · 1 KC</div>
-        : <div className="st-acts" onClick={e => e.stopPropagation()}>
-            <button className="bbuy" onClick={onBuy}>▲ BUY</button>
-            <button className="bsell" onClick={onSell} disabled={held === 0}>▼ SELL</button>
-          </div>
+        : /* TradeActions — mechanic atom, same disabled logic as NationCard */
+          <TradeActions
+            nation={nation}
+            onBuy={onBuy}
+            onSell={onSell}
+            wrapClassName="st-acts"
+            buyClassName="bbuy"
+            sellClassName="bsell"
+            buyLabel="▲ BUY"
+            sellLabel="▼ SELL"
+          />
       }
     </div>
   );
@@ -356,13 +368,14 @@ function PortfolioView({ onTrade, onNationClick }: {
   onTrade: (n: Nation, m: TradeMode) => void;
   onNationClick: (id: string) => void;
 }) {
-  const cash              = useGameStore(s => s.cash);
-  const prices            = useGameStore(s => s.prices);
-  const portfolio         = useGameStore(s => s.portfolio);
-  const avgCost           = useGameStore(s => s.avgCost);
-  const eliminated        = useGameStore(s => s.eliminated);
-  const txLog             = useGameStore(s => s.txLog);
-  const bestScore         = useGameStore(s => s.bestScore);
+  // usePortfolioTotals — mechanic hook, same formula as MobileShell PortfolioTab
+  const { cash, portVal, invested, totalVal: totalValue, pl: totalPl, bestScore } = usePortfolioTotals();
+
+  const prices    = useGameStore(s => s.prices);
+  const portfolio = useGameStore(s => s.portfolio);
+  const avgCost   = useGameStore(s => s.avgCost);
+  const eliminated = useGameStore(s => s.eliminated);
+  const txLog     = useGameStore(s => s.txLog);
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)
@@ -379,10 +392,6 @@ function PortfolioView({ onTrade, onNationClick }: {
     })
     .sort((a, b) => b.value - a.value);
 
-  const portVal   = holdings.reduce((a, h) => a + h.value, 0);
-  const invested  = holdings.reduce((a, h) => a + h.invested, 0);
-  const totalValue = cash + portVal;
-  const totalPl   = portVal - invested;
   const hasElimHeld = holdings.some(h => h.isElim);
 
   return (
@@ -875,20 +884,31 @@ export default function BrowserShell() {
     return () => useGameStore.getState().stopSync();
   }, []);
 
-  const cash      = useGameStore(s => s.cash);
+  // Pattern 3 — validate at mount that this shell covers all required mechanics
+  useValidateMechanics({
+    canViewNationPrice: true,
+    canBuy:             true,
+    canSell:            true,
+    canViewPortfolio:   true,
+    canViewCash:        true,
+    canViewPnL:         true,
+    canSimulate:        true,
+    canViewStandings:   true,
+    canViewSchedule:    true,
+  }, 'BrowserShell');
+
+  // usePortfolioTotals — mechanic hook, same formula as MobileShell
+  const { cash, totalVal: totVal, pl, positions } = usePortfolioTotals();
+
+  // Still needed for MatchAnimation props and the Ticker price display
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
-  const avgCost   = useGameStore(s => s.avgCost);
+
   const dayIndex  = useGameStore(s => s.dayIndex);
   const resetGame = useGameStore(s => s.resetGame);
   const champion  = useGameStore(s => s.champion);
 
-  const portVal   = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
-  const invested  = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (avgCost[id] ?? 0), 0);
-  const totVal    = cash + portVal;
-  const pl        = portVal - invested;
-  const positions = Object.values(portfolio).filter(q => q > 0).length;
-  const day       = CALENDAR[dayIndex];
+  const day = CALENDAR[dayIndex];
 
   const SIDEBAR_MAIN: { id: ViewId; icon: string; label: string }[] = [
     { id: 'home',       icon: '🏠', label: 'HOME'    },
@@ -902,17 +922,6 @@ export default function BrowserShell() {
   function doTrade(n: Nation, m: TradeMode) { setModal({nation: n, mode: m}); }
   function onNationClick(id: string) { setNationId(id); }
   function onMatchClick(r: StoredMatchResult, dayLabel: string) { setMatchDetail({ result: r, dayLabel }); }
-
-  async function simulate() {
-    const r = await useGameStore.getState().advanceDay();
-    if (!r) return;
-    if (r.results.length > 0) {
-      setAnimResults(r.results);
-      setShowAnim(true);
-    } else {
-      setView('market');
-    }
-  }
 
   return (
     <div className="ks-browser">
@@ -957,9 +966,12 @@ export default function BrowserShell() {
                 🏆 {gN(champion)?.flag} {gN(champion)?.name?.toUpperCase()}
               </div>
             )}
-            <button className="sim-inline-btn" onClick={simulate}>
-              {day ? `⚡ ${day.label}` : '🔄 NOUVEAU JEU'}
-            </button>
+            {/* SimulateButton — mechanic atom, same advanceDay() logic as SimulateTab */}
+            <SimulateButton
+              className="sim-inline-btn"
+              onResults={results => { setAnimResults(results); setShowAnim(true); }}
+              onNoResults={() => setView('market')}
+            />
             {!day && <button className="reset-btn" onClick={resetGame}>🔄 RESET</button>}
           </div>
         </header>

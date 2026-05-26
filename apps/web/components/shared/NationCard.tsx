@@ -3,6 +3,8 @@
 import { useMemo } from 'react';
 import type { Nation } from '@kickstock/types';
 import { useGameStore } from '@/stores/gameStore';
+import { PriceDisplay } from '@/components/mechanics/PriceDisplay';
+import { TradeActions }  from '@/components/mechanics/TradeActions';
 import styles from './NationCard.module.css';
 
 interface Props {
@@ -64,13 +66,15 @@ export default function NationCard({ nation, onBuy, onSell, onCardClick, flash }
         {isElim && <span className={`${styles.badge} ${styles.badgeDead}`}>OUT</span>}
       </div>
 
-      <div className={styles.priceRow}>
-        <span className={styles.price}>{Math.round(price)}</span>
-        <span className={styles.kc}>KC</span>
-        <span className={`${styles.ch} ${up ? styles.up : styles.dn}`}>
-          {up ? '▲' : '▼'} {Math.abs(Number(pct))}%
-        </span>
-      </div>
+      {/* PriceDisplay — mechanic atom, shared with BrowserShell */}
+      <PriceDisplay
+        nation={nation}
+        wrapClassName={styles.priceRow}
+        priceClassName={styles.price}
+        kcClassName={styles.kc}
+        changeUpClassName={`${styles.ch} ${styles.up}`}
+        changeDnClassName={`${styles.ch} ${styles.dn}`}
+      />
 
       <div className={styles.strBar}>
         <div
@@ -84,12 +88,15 @@ export default function NationCard({ nation, onBuy, onSell, onCardClick, flash }
 
       <Sparkline history={history} color={up ? 'var(--gain)' : 'var(--loss)'} />
 
-      {!isElim && (
-        <div className={styles.btns} onClick={e => e.stopPropagation()}>
-          <button className={styles.buy} onClick={onBuy} disabled={isElim}>BUY</button>
-          <button className={styles.sell} onClick={onSell} disabled={held === 0}>SELL</button>
-        </div>
-      )}
+      {/* TradeActions — mechanic atom, shared with BrowserShell */}
+      <TradeActions
+        nation={nation}
+        onBuy={onBuy}
+        onSell={onSell}
+        wrapClassName={styles.btns}
+        buyClassName={styles.buy}
+        sellClassName={styles.sell}
+      />
 
       {isElim && (
         <div className={styles.elimOverlay}>

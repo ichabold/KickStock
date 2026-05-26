@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { NATIONS } from '@kickstock/constants';
 import { fmt, pctOf } from '@kickstock/game-engine';
 import { useGameStore } from '@/stores/gameStore';
+import { usePortfolioTotals } from '@/components/mechanics';
 import TradeModal from '@/components/shared/TradeModal';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import type { Nation, TradeMode } from '@kickstock/types';
@@ -13,13 +14,14 @@ export default function PortfolioTab() {
   const [modal,    setModal]    = useState<{ nation: Nation; mode: TradeMode } | null>(null);
   const [nationId, setNationId] = useState<string | null>(null);
 
-  const cash              = useGameStore(s => s.cash);
-  const prices            = useGameStore(s => s.prices);
-  const portfolio         = useGameStore(s => s.portfolio);
-  const avgCost           = useGameStore(s => s.avgCost);
-  const eliminated        = useGameStore(s => s.eliminated);
-  const txLog             = useGameStore(s => s.txLog);
-  const bestScore         = useGameStore(s => s.bestScore);
+  // usePortfolioTotals — mechanic hook, same formula as BrowserShell PortfolioView
+  const { cash, portVal, invested, totalVal: totVal, pl: totalPL, plPct: totalPLPct, bestScore } = usePortfolioTotals();
+
+  const prices    = useGameStore(s => s.prices);
+  const portfolio = useGameStore(s => s.portfolio);
+  const avgCost   = useGameStore(s => s.avgCost);
+  const eliminated = useGameStore(s => s.eliminated);
+  const txLog     = useGameStore(s => s.txLog);
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)
@@ -35,12 +37,6 @@ export default function PortfolioTab() {
       return { id, nation, qty, price, avg, value, invested, pl, chPct, isElim };
     })
     .sort((a, b) => b.value - a.value);
-
-  const portVal   = holdings.reduce((a, h) => a + h.value, 0);
-  const invested  = holdings.reduce((a, h) => a + h.invested, 0);
-  const totVal    = cash + portVal;
-  const totalPL   = portVal - invested;
-  const totalPLPct = invested > 0 ? pctOf(portVal, invested) : 0;
 
   const hasElimHeld = holdings.some(h => h.isElim);
 

@@ -128,3 +128,54 @@ export interface TradePayload {
 export type LayoutType = 'mobile' | 'browser';
 export type TabId = 'schedule' | 'standings' | 'simulate' | 'market' | 'portfolio';
 export type SortBy = 'default' | 'price_asc' | 'price_desc' | 'change' | 'held';
+
+// ─── MECHANICS CONTRACT ───────────────────────────────────────────────────────
+/**
+ * Capabilities that every valid KickStock shell must expose.
+ * Both MobileShell and BrowserShell must satisfy this contract to guarantee
+ * that mobile and browser players can play together in the same game.
+ *
+ * Usage: call useValidateMechanics() at the top of each shell in development.
+ *
+ * Rule: if a mechanic is listed here, it must exist on BOTH shells.
+ *       Browser-only extras (charts, history, advanced stats) are NOT listed here
+ *       — they are intentional enrichments, not core mechanics.
+ */
+export interface MechanicsContract {
+  // ── Trading ────────────────────────────────────────────────────────────────
+  /** Player can view the current price of any nation */
+  canViewNationPrice:  boolean;
+  /** Player can initiate a buy order */
+  canBuy:              boolean;
+  /** Player can initiate a sell order */
+  canSell:             boolean;
+
+  // ── Portfolio ──────────────────────────────────────────────────────────────
+  /** Player can view their holdings */
+  canViewPortfolio:    boolean;
+  /** Player can view their cash balance */
+  canViewCash:         boolean;
+  /** Player can view their unrealised P&L */
+  canViewPnL:          boolean;
+
+  // ── Tournament ─────────────────────────────────────────────────────────────
+  /** Player can trigger day simulation */
+  canSimulate:         boolean;
+  /** Player can view group standings */
+  canViewStandings:    boolean;
+  /** Player can view the match schedule */
+  canViewSchedule:     boolean;
+}
+
+/** All mechanics must be true — used as the validation target. */
+export const REQUIRED_MECHANICS: MechanicsContract = {
+  canViewNationPrice: true,
+  canBuy:             true,
+  canSell:            true,
+  canViewPortfolio:   true,
+  canViewCash:        true,
+  canViewPnL:         true,
+  canSimulate:        true,
+  canViewStandings:   true,
+  canViewSchedule:    true,
+};
