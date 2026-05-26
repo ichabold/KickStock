@@ -9,6 +9,8 @@ import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
 import MatchAnimation from '@/components/mobile/MatchAnimation';
 import AuthWidget from '@/components/shared/AuthWidget';
+import GuestModal from '@/components/auth/GuestModal';
+import { getPseudo } from '@/lib/pseudo';
 import { PriceDisplay, TradeActions, SimulateButton, usePortfolioTotals } from '@/components/mechanics';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
@@ -724,10 +726,22 @@ function RankingView() {
   const portfolio = useGameStore(s => s.portfolio);
   const myBest    = useGameStore(s => s.bestScore);
 
+  const [guestPseudo, setGuestPseudo] = useState<string | null>(null);
+  useEffect(() => {
+    setGuestPseudo(getPseudo());
+    function onSaved() { setGuestPseudo(getPseudo()); }
+    window.addEventListener('kickstock:pseudo-saved', onSaved);
+    return () => window.removeEventListener('kickstock:pseudo-saved', onSaved);
+  }, []);
+
   const portVal = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
   const myTotal = cash + portVal;
 
-  const myRank = user ? entries.findIndex(e => e.id === user.id) + 1 : null;
+  const myRank = profile
+    ? entries.findIndex(e => e.username === profile.username) + 1
+    : guestPseudo
+      ? entries.findIndex(e => e.username === guestPseudo) + 1
+      : null;
 
   return (
     <div className="rnk-wrap">
@@ -738,7 +752,7 @@ function RankingView() {
           <div style={{fontFamily:'var(--font-mono)',fontSize:20,fontWeight:700,color:'var(--gold)'}}>{fmt(myTotal)} KC</div>
           {myBest && <div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>Meilleur : {fmt(myBest)} KC</div>}
         </div>
-        {!user
+        {!user && !guestPseudo
           ? <a href="/login" style={{background:'rgba(255,219,0,.12)',border:'1px solid var(--gold-dk)',color:'var(--gold)',padding:'6px 14px',borderRadius:6,fontSize:11,fontWeight:700,letterSpacing:1,textDecoration:'none'}}>
               ⚽ SE CONNECTER
             </a>
@@ -765,15 +779,21 @@ function RankingView() {
 
       <div className="rnk-list">
         {entries.map((p, i) => {
-          const isMe = user?.id === p.id;
+          const isMe = (!!profile && p.username === profile.username)
+                    || (!!guestPseudo && p.username === guestPseudo);
           return (
-            <div key={p.id} className={`rnk-row${isMe ? ' me' : ''}`}>
+            <div key={`${p.username}-${i}`} className={`rnk-row${isMe ? ' me' : ''}`}>
               <div className={`rnk-rank${i < 3 ? ' top' : ''}`}>{i+1}</div>
               <div className="rnk-av" style={isMe ? {background:'var(--gold)',color:'#000'} : {}}>
                 {p.username[0].toUpperCase()}
               </div>
               <div className="rnk-info">
-                <div className="rnk-name">{p.username}{isMe ? ' 👤' : ''}</div>
+                <div className="rnk-name">
+                  {p.username}{isMe ? ' 👤' : ''}
+                  {p.user_type === 'guest' && (
+                    <span style={{marginLeft:5,fontSize:7,letterSpacing:1,color:'var(--muted)',fontFamily:'var(--font-display)'}}>GUEST</span>
+                  )}
+                </div>
                 <div className="rnk-sub">{p.country ?? '🌍'}</div>
               </div>
               <div className="rnk-val">{fmt(p.best_score)} KC</div>
@@ -924,6 +944,8 @@ export default function BrowserShell() {
   function onMatchClick(r: StoredMatchResult, dayLabel: string) { setMatchDetail({ result: r, dayLabel }); }
 
   return (
+    <>
+    <GuestModal onDone={() => {}} />
     <div className="ks-browser">
       {/* SIDEBAR */}
       <nav className="sb">
@@ -1066,5 +1088,6 @@ export default function BrowserShell() {
       )}
       {showTut && <TutorialOverlay onClose={() => setShowTut(false)}/>}
     </div>
+    </>
   );
 }

@@ -6,6 +6,7 @@ import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { usePortfolioTotals } from '@/components/mechanics';
 import Ticker from '@/components/shared/Ticker';
 import AuthWidget from '@/components/shared/AuthWidget';
+import GuestModal from '@/components/auth/GuestModal';
 import MarketTab from './MarketTab';
 import ScheduleTab from './ScheduleTab';
 import PortfolioTab from './PortfolioTab';
@@ -101,6 +102,8 @@ export default function MobileShell() {
         {tab === 'market'    && <MarketTab />}
         {tab === 'portfolio' && <PortfolioTab />}
       </main>
+
+      <GuestModal onDone={() => {}} />
 
       {/* BOTTOM NAV */}
       <nav className={styles.nav}>

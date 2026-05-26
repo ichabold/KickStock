@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export interface LeaderboardEntry {
-  id: string;
   username: string;
   country: string | null;
+  user_type: 'registered' | 'guest';
   best_score: number;
   updated_at: string;
 }
@@ -21,7 +21,7 @@ export function useLeaderboard(limit = 20) {
     setLoading(true);
     const { data } = await supabase
       .from('leaderboard')
-      .select('id, username, country, best_score, updated_at')
+      .select('username, country, user_type, best_score, updated_at')
       .limit(limit);
 
     setEntries((data as LeaderboardEntry[]) ?? []);
@@ -30,7 +30,6 @@ export function useLeaderboard(limit = 20) {
 
   useEffect(() => {
     fetch();
-    // Refresh every 30s
     const interval = setInterval(fetch, 30_000);
     return () => clearInterval(interval);
   }, [fetch]);
