@@ -631,6 +631,33 @@ function StandingsView({ onNationClick, onMatchClick }: {
   );
 }
 
+// ─── BracketView constants ────────────────────────────────────────────────────
+
+const R32_SLICES: Record<string, [number, number]> = {
+  r32_28: [0, 4],   r32_29: [4, 10],  r32_30: [10, 16],
+  r32_1:  [16, 22], r32_2:  [22, 26], r32_3:  [26, 32],
+};
+
+// Seeding labels for 16 R32 matches (M1–M16), matching buildR32Pool order
+const R32_SEEDING_LABELS: [string, string][] = [
+  ['1er Gr. A', '3e (C/E/F/H/I)'],
+  ['1er Gr. B', '3e (E/F/G/I/J)'],
+  ['2e Gr. A',  '2e Gr. B'],
+  ['1er Gr. C', '2e Gr. F'],
+  ['1er Gr. D', '3e (B/E/F/I/J)'],
+  ['1er Gr. E', '3e (A/B/C/D/F)'],
+  ['2e Gr. C',  '1er Gr. F'],
+  ['2e Gr. D',  '2e Gr. G'],
+  ['2e Gr. E',  '2e Gr. I'],
+  ['1er Gr. G', '3e (A/E/H/I/J)'],
+  ['1er Gr. H', '2e Gr. J'],
+  ['2e Gr. K',  '2e Gr. L'],
+  ['1er Gr. I', '3e (C/D/F/G/H)'],
+  ['1er Gr. J', '2e Gr. H'],
+  ['1er Gr. K', '3e (D/E/I/J/L)'],
+  ['1er Gr. L', '3e (E/H/I/J/K)'],
+];
+
 // ─── BracketView ──────────────────────────────────────────────────────────────
 function BracketView({ onNationClick, onMatchClick }: {
   onNationClick: (id: string) => void;
@@ -638,6 +665,7 @@ function BracketView({ onNationClick, onMatchClick }: {
 }) {
   const matchResults = useGameStore(s => s.matchResults);
   const dayIndex     = useGameStore(s => s.dayIndex);
+  const r32Pool      = useGameStore(s => s.r32Pool);
   const state        = useGameStore(s => s);
 
   const phases = [
@@ -670,6 +698,39 @@ function BracketView({ onNationClick, onMatchClick }: {
                       : [];
 
                 if (displayMatches.length === 0) {
+                  // R32: show actual teams (if group stage done) or seeding labels
+                  if (phase.key === 'R32' && day.dynamic) {
+                    const slice = R32_SLICES[day.dynamic];
+                    if (slice) {
+                      const [s, e] = slice;
+                      if (r32Pool.length >= e) {
+                        // Group stage complete — show actual qualified teams
+                        const poolPairs: Array<{a: string; b: string}> = [];
+                        for (let i = s; i < e; i += 2) {
+                          if (r32Pool[i] && r32Pool[i + 1]) poolPairs.push({ a: r32Pool[i], b: r32Pool[i + 1] });
+                        }
+                        return poolPairs.map((m, mi) => (
+                          <div key={`${pdi}-${mi}`} className="bkt-m upcoming">
+                            <div className="bkt-meta">{day.label}{isCur ? ' ▶' : ''}</div>
+                            <div className="bkt-t"><TeamName id={m.a} onNationClick={onNationClick}/></div>
+                            <div className="bkt-t"><TeamName id={m.b} onNationClick={onNationClick}/></div>
+                          </div>
+                        ));
+                      }
+                      // Group stage still in progress — show seeding labels
+                      const seedPairs: [string, string][] = [];
+                      for (let i = s; i < e; i += 2) {
+                        seedPairs.push(R32_SEEDING_LABELS[i / 2] ?? ['?', '?']);
+                      }
+                      return seedPairs.map(([la, lb], mi) => (
+                        <div key={`${pdi}-${mi}`} className="bkt-m upcoming">
+                          <div className="bkt-meta">{day.label}</div>
+                          <div className="bkt-t"><span className="tbd">{la}</span></div>
+                          <div className="bkt-t"><span className="tbd">{lb}</span></div>
+                        </div>
+                      ));
+                    }
+                  }
                   return (
                     <div key={pdi} className="bkt-m upcoming" style={isFinal ? {background:'rgba(255,219,0,.03)',borderColor:'rgba(255,219,0,.35)'} : {}}>
                       <div className="bkt-meta">{day.label}{isCur ? ' ▶' : ''}</div>

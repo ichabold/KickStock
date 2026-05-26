@@ -71,20 +71,11 @@ export default function AuthWidget({ compact = false }: Props) {
       );
     }
 
+    // Desktop: avatar only, panel on click
     return (
-      <div ref={panelRef} style={{ position: 'relative' }}>
-        <button onClick={() => setPanelOpen(v => !v)} style={s.avatarBtn}>
-          <Avatar initial={initial} size={30} url={avatarUrl} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
-              {name}
-            </div>
-            {bestScore !== null && (
-              <div style={{ fontSize: 9, color: 'var(--gold)', fontFamily: 'var(--font-mono)' }}>
-                🏆 {fmt(bestScore)} KC
-              </div>
-            )}
-          </div>
+      <div ref={panelRef}>
+        <button onClick={() => setPanelOpen(v => !v)} style={s.sidebarAvatarBtn}>
+          <Avatar initial={initial} size={34} url={avatarUrl} />
         </button>
 
         {panelOpen && (
@@ -119,18 +110,12 @@ export default function AuthWidget({ compact = false }: Props) {
       );
     }
 
+    // Desktop: avatar only + GUEST label below, panel on click
     return (
-      <div ref={panelRef} style={{ position: 'relative' }}>
-        <button onClick={() => setPanelOpen(v => !v)} style={s.avatarBtn}>
-          <Avatar initial={initial} size={30} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
-              {guestPseudo}
-            </div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
-              GUEST · ↑ Créer un compte
-            </div>
-          </div>
+      <div ref={panelRef}>
+        <button onClick={() => setPanelOpen(v => !v)} style={s.sidebarAvatarBtn}>
+          <Avatar initial={initial} size={34} />
+          <span style={s.guestLabel}>GUEST</span>
         </button>
 
         {panelOpen && (
@@ -310,6 +295,24 @@ const s: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
+  },
+  // Sidebar (desktop): centered column, avatar + optional label
+  sidebarAvatarBtn: {
+    background: 'none',
+    border: 'none',
+    padding: '4px 0',
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+    width: '100%',
+  },
+  guestLabel: {
+    fontSize: 7,
+    letterSpacing: 1.5,
+    color: 'var(--muted)',
+    fontFamily: 'var(--font-display)',
   },
   desktopPanel: {
     position: 'fixed',
