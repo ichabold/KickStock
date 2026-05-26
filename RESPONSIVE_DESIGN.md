@@ -512,7 +512,220 @@ Le hybrid serait le bon choix si les deux vues devaient être fonctionnellement 
 
 ---
 
-## 12. Arbre des fichiers concernés
+## 12. Mitigations et alternatives architecturales pour garantir l'interopérabilité
+
+> **La question précise :** comment s'assurer que, même en enrichissant librement le browser, les joueurs mobiles et browser peuvent toujours jouer ensemble — sans que ça repose uniquement sur la discipline humaine ?
+
+### Identification précise du vrai risque
+
+Le risque n'est pas "la duplication en général". Il faut le formuler exactement :
+
+> **Risque cible :** une règle qui gouverne ce qu'un joueur *peut* faire (valider un trade, calculer une valeur, vérifier une contrainte) est implémentée différemment dans les deux shells — ou présente dans un seul. Le résultat : deux joueurs sur la même partie ont des comportements différents selon leur device.
+
+```
+Exemple concret de régression :
+MobileShell  → valide "quantité max = cash / prix" avant d'envoyer le trade
+BrowserShell → n'a pas cette validation côté client, accepte n'importe quelle quantité
+
+Résultat : les joueurs browser peuvent tenter des trades impossibles, 
+les joueurs mobile voient une erreur UX que les browser ne voient pas.
+Ce n'est pas une différence d'immersion. C'est une mécanique cassée.
+```
+
+Ce risque est **architectural** : il vient du fait que les deux shells sont deux codebases indépendantes qui doivent rester cohérentes sur un sous-ensemble précis de comportements.
+
+---
+
+### Pattern 1 — Composants mécaniques atomiques partagés *(recommandé)*
+
+**Principe :** extraire dans `components/mechanics/` les composants qui implémentent la mécanique de jeu. Ces composants sont utilisés *verbatim* dans les deux shells — ni adaptés, ni recréés. Chaque shell peut enrichir *autour* d'eux, mais ne les remplace jamais.
+
+```
+components/
+├── mechanics/          ← PARTAGÉ — règles du jeu, identique sur les deux shells
+│   ├── TradeActions.tsx        # boutons buy/sell + validation quantité + fees
+│   ├── PriceDisplay.tsx        # prix courant + variation + couleur gain/loss
+│   ├── PortfolioSummary.tsx    # cash + valeur totale + P&L
+│   └── SimulateButton.tsx      # bouton "Jouer ce jour" + état loading/disabled
+├── mobile/             ← MOBILE ONLY — assemblage + enrichissement mobile
+│   ├── MarketTab.tsx           # grille de NationCards
+│   └── ...
+└── browser/            ← BROWSER ONLY — assemblage + enrichissement browser
+    └── BrowserShell.tsx        # layout sidebar + vues enrichies
+```
+
+**Usage dans les deux shells :**
+
+```tsx
+// Mobile — MarketTab.tsx
+// La mécanique (TradeActions) est le composant partagé
+// L'assemblage autour (NationCard compact) est mobile-only
+<NationCard>
+  <PriceDisplay nationId={id} />   {/* ← mechanics, identique */}
+  <TradeActions nationId={id} />   {/* ← mechanics, identique */}
+</NationCard>
+
+// Browser — BrowserShell.tsx
+// Même mécanique, enrichissement browser ajouté AUTOUR
+<StockPanel>
+  <PriceHistory nationId={id} />   {/* ← browser-only, enrichissement */}
+  <Sparkline nationId={id} />      {/* ← browser-only, enrichissement */}
+  <PriceDisplay nationId={id} />   {/* ← mechanics, identique */}
+  <StatsGrid nationId={id} />      {/* ← browser-only, enrichissement */}
+  <TradeActions nationId={id} />   {/* ← mechanics, identique */}
+</StockPanel>
+```
+
+**Garantie apportée :** si `TradeActions` a une validation incorrecte, elle est incorrecte sur les deux plateformes simultanément — détectable et corrigeable en un seul endroit. Il est *structurellement impossible* que mobile et browser aient des `TradeActions` différentes.
+
+---
+
+### Pattern 2 — Enrichissement additif, jamais substitutif
+
+**Principe :** le browser n'*adapte* pas les composants mécaniques — il les *entoure* d'enrichissements. La règle d'or :
+
+```
+✅ Browser = Mobile mechanics + extras browser
+❌ Browser = Version browser des mechanics (refactorisée, "améliorée")
+```
+
+En pratique, ça se traduit par une convention de nommage et d'organisation :
+
+```tsx
+// ✅ Correct — enrichissement additif
+// Le composant mécanique est importé depuis mechanics/, pas recréé
+import { TradeActions } from '@/components/mechanics/TradeActions';
+
+function BrowserStockView({ nationId }) {
+  return (
+    <div>
+      <OrderBookDepth nationId={nationId} />  {/* extra browser */}
+      <PriceChart nationId={nationId} />       {/* extra browser */}
+      <TradeActions nationId={nationId} />     {/* mécanique partagée */}
+    </div>
+  );
+}
+
+// ❌ Incorrect — la mécanique est recréée dans le shell browser
+function BrowserTradePanel({ nationId }) {
+  // ... logique de trade réécrite "pour le browser"
+  // C'est ici que la dérive silencieuse commence
+}
+```
+
+Cette convention est renforcée par une règle de review simple : **tout composant dans `browser/` qui gère du trading ou du calcul de valeur sans importer depuis `mechanics/` est une alerte.**
+
+---
+
+### Pattern 3 — Contrat TypeScript de mécaniques obligatoires
+
+**Principe :** définir une interface `MechanicsContract` que chaque shell doit satisfaire. TypeScript garantit à la compilation que les deux shells exposent les mêmes capacités mécaniques.
+
+```typescript
+// packages/types/src/index.ts
+
+/**
+ * Capacités mécaniques qu'un shell KickStock valide doit exposer.
+ * Garantit l'interopérabilité mobile/browser en termes de game features.
+ */
+export interface MechanicsContract {
+  // Trading
+  canBuy:         boolean;
+  canSell:        boolean;
+  showsPrice:     boolean;
+  showsFees:      boolean;
+  
+  // Portfolio
+  showsCash:      boolean;
+  showsPositions: boolean;
+  showsPnL:       boolean;
+  
+  // Jeu
+  canSimulate:    boolean;
+  showsStandings: boolean;
+  showsSchedule:  boolean;
+}
+
+// Valeur attendue pour un shell valide (toutes les mécaniques activées)
+export const REQUIRED_MECHANICS: MechanicsContract = {
+  canBuy: true, canSell: true, showsPrice: true, showsFees: true,
+  showsCash: true, showsPositions: true, showsPnL: true,
+  canSimulate: true, showsStandings: true, showsSchedule: true,
+};
+```
+
+```typescript
+// apps/web/hooks/useLayout.ts — validation au montage (dev only)
+if (process.env.NODE_ENV === 'development') {
+  const mechanics = layout === 'mobile' 
+    ? getMobileMechanics() 
+    : getBrowserMechanics();
+  
+  const missing = Object.entries(REQUIRED_MECHANICS)
+    .filter(([key]) => !mechanics[key as keyof MechanicsContract])
+    .map(([key]) => key);
+  
+  if (missing.length > 0) {
+    console.warn(`[KickStock] Shell "${layout}" manque les mécaniques : ${missing.join(', ')}`);
+  }
+}
+```
+
+**Garantie apportée :** en dev, toute mécanique absente dans un shell génère un warning explicite. En production, le type check à la compilation assure que les deux shells déclarent les mêmes capacités.
+
+---
+
+### Analyse comparative des trois patterns
+
+| Pattern | Garantie | Effort d'impl. | Maintenabilité | Recommandé pour |
+|---------|----------|----------------|----------------|-----------------|
+| **1 — Mechanics atomiques** | Structurelle (code partagé) | Moyen (refacto progressive) | Élevée | ✅ Long terme, recommandé |
+| **2 — Enrichissement additif** | Conventionnelle (règle de code review) | Faible (naming + discipline) | Bonne | ✅ Immédiatement applicable |
+| **3 — Contrat TypeScript** | Compile-time (déclarative) | Faible | Moyenne | ✅ Complément des deux autres |
+
+Les trois patterns sont **complémentaires**, pas exclusifs. L'ordre d'adoption recommandé :
+
+```
+Maintenant  →  Pattern 2 : adopter la convention "enrichissement additif uniquement"
+               → coût zéro, discipline de code review
+
+Prochain sprint  →  Pattern 3 : ajouter MechanicsContract dans @kickstock/types
+                    → 30 minutes, garantie compile-time
+
+Quand le browser s'enrichit  →  Pattern 1 : extraire TradeActions, PriceDisplay
+                                  dans components/mechanics/ au fil des features
+                                  → au moment où le browser reçoit ses extras
+```
+
+---
+
+### Pourquoi pas une alternative architecturale plus radicale ?
+
+Deux autres architectures permettraient théoriquement de garantir l'interopérabilité :
+
+**Architecture BFF (Backend For Frontend)**
+Le serveur retourne des shapes différentes pour mobile et browser (`/api/game/state?platform=mobile` vs `browser`). Les shells ne font que renderer ce qu'ils reçoivent. La mécanique est 100% serveur — impossible de diverger.
+→ *Trop lourd pour KickStock.* Nécessite de dupliquer les endpoints ou d'ajouter une couche d'adaptation serveur. Le gain sur l'interopérabilité est réel mais le coût est disproportionné par rapport au risque réel ici.
+
+**Monorepo multi-targets (style Expo)**
+`NationCard.mobile.tsx` et `NationCard.browser.tsx` avec un `NationCard.shared.tsx` pour la logique pure. Le bundler résout automatiquement le bon fichier. Contrat implicite : tout ce qui est dans `.shared.tsx` est garanti identique.
+→ *Intéressant pour une app plus grande.* Next.js ne supporte pas nativement les extensions `.mobile.tsx`/`.browser.tsx` — il faudrait un plugin webpack custom. Pour KickStock, les patterns 1-2-3 donnent la même garantie sans this infrastructure overhead.
+
+---
+
+### Recommandation finale
+
+L'architecture dual-shell est la bonne pour l'objectif décrit. Ce qu'il faut ajouter pour garantir l'interopérabilité sans contraindre l'enrichissement browser :
+
+1. **Créer `components/mechanics/`** — les atomes mécaniques partagés (TradeActions, PriceDisplay, SimulateButton). C'est le verrou architectural.
+2. **Convention : le browser enrichit, il ne remplace pas** — applicable dès maintenant.
+3. **`MechanicsContract` dans les types** — filet de sécurité compile-time.
+
+Avec ces trois éléments, le BrowserShell est libre de devenir aussi immersif que voulu (graphiques, historique, stats, modes de vue avancés) sans jamais risquer de casser la partie pour les joueurs mobiles.
+
+---
+
+## 13. Arbre des fichiers concernés
 
 ```
 apps/web/
