@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { getDeviceId } from '@/lib/device';
 import { getPseudo, setPseudo, isValidPseudoFormat } from '@/lib/pseudo';
+import EmailAuthModal from '@/components/auth/EmailAuthModal';
 
 interface Props {
   onDone: () => void;
@@ -196,29 +197,22 @@ export default function GuestModal({ onDone }: Props) {
         {/* ── Account block ────────────────────────────────── */}
         <div style={s.block}>
           <div style={s.blockTitle}>CRÉER UN COMPTE</div>
-          <div style={s.accountBtns}>
-            <GoogleButton />
-            <DisabledAccountBtn icon="✉" label="Email" hint="bientôt" />
-            <DisabledAccountBtn icon="" label="Apple" hint="bientôt" />
-          </div>
-          <div style={s.loginRow}>
-            Déjà un compte ?{' '}
-            <a href="/login" style={s.loginLink}>SE CONNECTER</a>
-          </div>
+          <AccountButtons />
         </div>
       </div>
     </div>
   );
 }
 
-function GoogleButton() {
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
+function AccountButtons() {
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError,   setGoogleError]   = useState('');
+  const [emailOpen,     setEmailOpen]     = useState(false);
+  const [emailView,     setEmailView]     = useState<'signin' | 'signup'>('signup');
 
   async function handleGoogle() {
-    setLoading(true);
-    setError('');
-    // Store device_id so the callback route can migrate the guest portfolio
+    setGoogleLoading(true);
+    setGoogleError('');
     document.cookie = `ks_pending_device=${getDeviceId()}; path=/; max-age=600; SameSite=Lax`;
     const sb = createClient();
     const { error } = await sb.auth.signInWithOAuth({
@@ -226,29 +220,45 @@ function GoogleButton() {
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (error) {
-      setError('Connexion Google échouée. Réessaie.');
-      setLoading(false);
+      setGoogleError('Connexion Google échouée. Réessaie.');
+      setGoogleLoading(false);
     }
   }
 
   return (
-    <div>
-      <button onClick={handleGoogle} disabled={loading} style={s.oauthBtn}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button onClick={handleGoogle} disabled={googleLoading}
+        style={{ ...s.oauthBtn, opacity: googleLoading ? 0.6 : 1 }}>
         <span style={s.oauthIcon}>G</span>
-        {loading ? 'Redirection…' : 'Continuer avec Google'}
+        {googleLoading ? 'Redirection…' : 'Continuer avec Google'}
       </button>
-      {error && <div style={s.error}>{error}</div>}
-    </div>
-  );
-}
+      {googleError && <div style={s.error}>{googleError}</div>}
 
-function DisabledAccountBtn({ icon, label, hint }: { icon: string; label: string; hint: string }) {
-  return (
-    <button disabled style={{ ...s.oauthBtn, opacity: 0.35, cursor: 'not-allowed' }}>
-      {icon && <span style={s.oauthIcon}>{icon}</span>}
-      <span>{label}</span>
-      <span style={s.comingSoon}>{hint}</span>
-    </button>
+      <button onClick={() => { setEmailView('signup'); setEmailOpen(true); }} style={s.oauthBtn}>
+        <span style={s.oauthIcon}>✉</span>Email / Mot de passe
+      </button>
+
+      <button disabled style={{ ...s.oauthBtn, opacity: 0.35, cursor: 'not-allowed' }}>
+        <span style={s.oauthIcon}></span>
+        <span>Apple</span>
+        <span style={s.comingSoon}>BIENTÔT</span>
+      </button>
+
+      <div style={s.loginRow}>
+        Déjà un compte ?{' '}
+        <button onClick={() => { setEmailView('signin'); setEmailOpen(true); }}
+          style={s.loginLink}>
+          SE CONNECTER
+        </button>
+      </div>
+
+      {emailOpen && (
+        <EmailAuthModal
+          defaultView={emailView}
+          onClose={() => setEmailOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -439,11 +449,15 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--muted)',
   },
   loginLink: {
+    background: 'none',
+    border: 'none',
+    padding: 0,
     color: 'var(--gold)',
-    textDecoration: 'none',
     fontWeight: 700,
     fontSize: 10,
     letterSpacing: 1,
     fontFamily: 'var(--font-display)',
+    cursor: 'pointer',
+    textDecoration: 'none',
   },
 };
