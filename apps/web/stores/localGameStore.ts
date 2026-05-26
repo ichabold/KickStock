@@ -154,8 +154,10 @@ export const useLocalGameStore = create<LocalGameStore>()(
               await writeStateToSupabase(userId, localState as PersistedState);
             }
           } else {
-            // First time on server — save local state
-            await writeStateToSupabase(userId, localState as PersistedState);
+            // No server state = brand-new account → always start fresh
+            const fresh = emptyState();
+            set({ ...fresh, loading: false, syncing: false, error: null });
+            await writeStateToSupabase(userId, fresh as PersistedState);
           }
         } catch { /* best-effort */ }
       },

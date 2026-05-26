@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { getDeviceId } from '@/lib/device';
 import { getPseudo, setPseudo, isValidPseudoFormat } from '@/lib/pseudo';
 import EmailAuthModal from '@/components/auth/EmailAuthModal';
+import { useGameStore } from '@/stores/gameStore';
 
 interface Props {
   onDone: () => void;
@@ -89,6 +90,8 @@ export default function GuestModal({ onDone }: Props) {
       if (data.ok) {
         setPseudo(trimmed);
         window.dispatchEvent(new Event('kickstock:pseudo-saved'));
+        // Always start fresh — new guest player begins from day 0
+        useGameStore.getState().resetGame();
         setVisible(false);
         onDone();
       } else if (data.error === 'taken') {
