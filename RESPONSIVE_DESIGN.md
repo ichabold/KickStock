@@ -5,6 +5,44 @@
 
 ---
 
+## 0. Principe fondateur — Même mécanique, cockpits différents
+
+L'architecture à deux shells repose sur une intention de design explicite :
+
+> **Les joueurs mobiles et les joueurs browser jouent dans la même partie.** Les prix, le tournoi, les portfolios, les transactions — tout est partagé en temps réel. Ce qui diffère, c'est le niveau de détail et d'immersion que chaque plateforme peut offrir.
+
+```
+                    ┌─────────────────────────────────┐
+                    │         MÉCANIQUE PARTAGÉE       │
+                    │  @kickstock/game-engine           │
+                    │  useGameStore (Zustand)           │
+                    │  API routes (/trade, /state…)     │
+                    │  Base de données Supabase         │
+                    └────────────┬────────────┬────────┘
+                                 │            │
+                    ┌────────────▼──┐    ┌────▼──────────────┐
+                    │  MOBILE SHELL │    │   BROWSER SHELL   │
+                    │  lean, rapide │    │   riche, immersif │
+                    │  touch-first  │    │   mouse-first     │
+                    │  info minimum │    │   détails étendus │
+                    └───────────────┘    └───────────────────┘
+```
+
+**Ce qui est garanti identique entre les deux shells :**
+- Les prix des nations à tout instant
+- L'état du tournoi (phases, résultats, éliminations)
+- Le portfolio du joueur (cash, positions, P&L)
+- Les règles de trading (frais, limites, atomicité)
+- La progression du jeu (jour simulé, dividendes)
+
+**Ce qui peut diverger intentionnellement :**
+- La quantité d'information affichée pour une même donnée
+- La richesse des visualisations (sparklines, historique, stats avancées)
+- Les raccourcis et interactions disponibles
+- La densité de l'interface
+
+---
+
 ## 1. Vue d'ensemble — Architecture à deux shells
 
 KickStock ne fait **pas** de responsive CSS classique (media queries qui redimensionnent les mêmes composants). À la place, il utilise une **architecture à deux shells séparés** : le même point d'entrée (`app/page.tsx`) monte soit `<MobileShell>` soit `<BrowserShell>` — deux arbres React indépendants avec leurs propres layouts, navigations et styles.
@@ -396,16 +434,21 @@ La navigation mobile (tab bar, 5 onglets, montage/démontage) et la navigation b
 
 ### 🔴 Risques et inconvénients
 
-#### 1. Duplication de logique métier — le risque principal
-C'est le danger structurel le plus sérieux. Une fonctionnalité comme "afficher le détail d'un match" doit être implémentée (ou au minimum câblée) dans les deux shells. Si une règle métier change — par exemple l'ordre des phases du tournoi — il faut mettre à jour deux endroits. Sans discipline, les deux interfaces divergent silencieusement.
+#### 1. Duplication de logique métier — risque contenu si la frontière est tenue
+Le danger structurel existe, mais il est **bien délimité** : il ne concerne que la logique de présentation, pas la mécanique. Si une règle de trading change dans `execute_trade` (RPC PostgreSQL), les deux shells en héritent automatiquement sans toucher au code React. Si l'algorithme de simulation change dans `@kickstock/game-engine`, idem.
+
+Le risque réel est plus étroit : une règle de **présentation** importante implémentée dans un shell et oubliée dans l'autre.
 
 ```
-Exemple concret : si on ajoute un nouveau filtre sur le marché,
-il faut l'ajouter dans MarketTab.tsx ET dans la vue Market du BrowserShell.
-Oublier l'un des deux = régression silencieuse.
+Risque réel : une validation côté client (ex: "tu ne peux pas acheter une nation 
+éliminée") ajoutée dans MarketTab mais oubliée dans BrowserShell.
+→ Mitigation : ces validations vivent dans le store ou l'API, jamais dans les shells.
+
+Divergence acceptable : la vue browser affiche un graphique de prix historique
+que la vue mobile ne montre pas. Ce n'est pas un bug — c'est le design voulu.
 ```
 
-**Mitigation :** centraliser toute la logique dans le store Zustand et les packages partagés (`@kickstock/game-engine`). Les shells ne font que présenter — ils ne calculent rien.
+**Règle de discipline :** si une logique doit être **identique** sur les deux plateformes → elle va dans `useGameStore`, `@kickstock/game-engine` ou une route API. Si elle peut **diverger** → elle va dans le shell concerné. La frontière doit être explicite et tenue.
 
 #### 2. Surface de code doublée = maintenance plus lourde
 ~15 fichiers mobiles + BrowserShell monolithique + composants partagés. Chaque nouvelle fonctionnalité nécessite d'évaluer si elle concerne un shell, l'autre, ou les deux. Sur un projet solo ou petite équipe, ce coût est tangible.
@@ -430,17 +473,42 @@ Google indexe généralement la version desktop. Si du contenu critique pour le 
 
 ---
 
+### La solution hybride — pourquoi elle ne convient pas ici
+
+Une approche alternative consisterait à partager les composants de vue (`MarketView`, `ScheduleView`) et ne différencier que le layout parent (navbar/sidebar). C'est le pattern classique du "layout isolation".
+
+**Ce que ça résoudrait :** ajouter un filtre sur le marché une seule fois, dans `MarketView`, sans risque d'oubli.
+
+**Pourquoi ça entre en tension avec le design voulu :**
+
+```
+Hybrid assume :  MarketView mobile ≈ MarketView browser (même composant, CSS différent)
+
+KickStock veut : MarketView mobile = prix + buy/sell, compact, touch
+                 MarketView browser = prix + sparklines + historique 30j + 
+                                      order depth + stats avancées + raccourcis clavier
+```
+
+Ces deux vues ne sont pas le même composant avec des props différentes. Ce sont des produits différents qui partagent les mêmes données. Forcer un `<MarketView showSparkline={isBrowser} showHistory={isBrowser} showOrderDepth={isBrowser} />` avec 15 props conditionnelles reproduit exactement la complexité qu'on voulait éviter — à l'intérieur du composant plutôt qu'à l'extérieur.
+
+Le modèle mental correct n'est pas "un composant qui s'adapte" — c'est **"le même moteur de jeu, deux cockpits"** : comme un jeu qui tourne sur PC et mobile avec des interfaces différentes mais une partie partagée.
+
+Le hybrid serait le bon choix si les deux vues devaient être fonctionnellement identiques et ne différer que par leur layout. Ici, la divergence d'expérience est une feature, pas une contrainte à contourner.
+
+---
+
 ### Bilan — Quand ce pattern est pertinent
 
 | Critère | Favorable à ce pattern | Défavorable |
 |---------|----------------------|-------------|
-| **Différence UX mobile/desktop** | Radicale (navigation, layout, densité) | Superficielle (juste marges et colonnes) |
+| **Différence UX mobile/desktop** | Radicale et intentionnelle | Superficielle (juste marges et colonnes) |
+| **Parité fonctionnelle** | Partielle et assumée — le browser peut en montrer plus | Totale — chaque feature doit exister identiquement partout |
+| **Interopérabilité** | Garantie par le store/API, pas par les vues | Dépend d'une parité de composants |
 | **Taille de l'équipe** | 1-3 devs avec ownership clair | Grande équipe sans conventions strictes |
-| **Parité fonctionnelle** | Partielle (features prioritaires par plateforme) | Totale (chaque feature doit exister partout) |
 | **Performance bundle** | Importante (mobile sur 3G) | Moins critique |
 | **Logique métier** | Centralisée dans un store/engine externe | Dispersée dans les composants |
 
-**Verdict pour KickStock :** le choix est justifié. Les deux interfaces sont visuellement et fonctionnellement différentes, la logique est centralisée dans `useGameStore` et `@kickstock/game-engine`, et l'équipe est petite. Le principal risque (duplication silencieuse) est contenu tant que les shells restent des _vues pures_ qui ne font que consommer le store.
+**Verdict pour KickStock :** le choix est architecturalement cohérent avec l'intention produit. La garantie de jouabilité croisée mobile/browser est assurée par la couche mécanique partagée (store, engine, API, base de données) — pas par le partage de composants React. Les shells sont libres de diverger visuellement sans jamais rompre l'interopérabilité. Le principal risque (duplication silencieuse de logique mécanique) est contenu par la règle : **toute logique qui doit être identique vit hors des shells**.
 
 ---
 
