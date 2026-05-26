@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameStore } from '@/stores/gameStore';
 import { fmt } from '@kickstock/game-engine';
@@ -144,15 +143,15 @@ function UsernameStep({ onDone }: { onDone: () => void }) {
     setSaving(true);
     setError('');
 
-    const sb = createClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (sb as any)
-      .from('profiles')
-      .update({ username: trimmed })
-      .eq('id', user!.id);
+    const res  = await fetch('/api/auth/set-username', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: trimmed }),
+    });
+    const data = await res.json();
 
-    if (updateErr) {
-      if (updateErr.code === '23505') {
+    if (!res.ok) {
+      if (res.status === 409 || data.error === 'taken') {
         setState('taken');
         setError('Ce pseudo est déjà pris.');
       } else {
@@ -162,7 +161,9 @@ function UsernameStep({ onDone }: { onDone: () => void }) {
       return;
     }
 
+    // Force full page refresh so useAuth re-fetches the updated profile
     onDone();
+    window.location.reload();
   }
 
   const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken' && state !== 'checking';

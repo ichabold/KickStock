@@ -41,8 +41,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // /auth/callback is excluded: middleware must NOT touch the PKCE code-verifier
-    // cookie before the route handler can exchange it for a session.
-    '/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // /auth/callback and /auth/confirm are excluded: middleware must NOT touch
+    // PKCE/OTP cookies before the route handlers can verify them.
+    '/((?!_next/static|_next/image|favicon.ico|auth/callback|auth/confirm|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

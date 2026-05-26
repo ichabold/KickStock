@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { fmt } from '@kickstock/game-engine';
@@ -9,6 +8,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { getPseudo, clearPseudo } from '@/lib/pseudo';
 import { getDeviceId } from '@/lib/device';
 import BottomSheet from './BottomSheet';
+import EmailAuthModal from '@/components/auth/EmailAuthModal';
 
 interface Props {
   compact?: boolean;
@@ -128,22 +128,32 @@ export default function AuthWidget({ compact = false }: Props) {
   }
 
   // ── Anonymous ─────────────────────────────────────────────────────────────
+  const [emailAuthOpen, setEmailAuthOpen] = useState(false);
+
   return (
-    <Link href="/login" style={{
-      background: 'rgba(255,219,0,.12)',
-      border: '1px solid var(--gold-dk)',
-      color: 'var(--gold)',
-      padding: compact ? '4px 10px' : '6px 14px',
-      borderRadius: 6,
-      fontSize: compact ? 9 : 11,
-      fontWeight: 700,
-      letterSpacing: 1,
-      textDecoration: 'none',
-      fontFamily: 'var(--font-display)',
-      whiteSpace: 'nowrap',
-    }}>
-      {compact ? '⚽ LOGIN' : '⚽ SE CONNECTER'}
-    </Link>
+    <>
+      <button
+        onClick={() => setEmailAuthOpen(true)}
+        style={{
+          background: 'rgba(255,219,0,.12)',
+          border: '1px solid var(--gold-dk)',
+          color: 'var(--gold)',
+          padding: compact ? '4px 10px' : '6px 14px',
+          borderRadius: 6,
+          fontSize: compact ? 9 : 11,
+          fontWeight: 700,
+          letterSpacing: 1,
+          cursor: 'pointer',
+          fontFamily: 'var(--font-display)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {compact ? '⚽ LOGIN' : '⚽ SE CONNECTER'}
+      </button>
+      {emailAuthOpen && (
+        <EmailAuthModal onClose={() => setEmailAuthOpen(false)} />
+      )}
+    </>
   );
 }
 
@@ -223,6 +233,7 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onSignOut }: {
 function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void }) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError,   setGoogleError]   = useState('');
+  const [emailOpen,     setEmailOpen]     = useState(false);
 
   async function handleGoogle() {
     setGoogleLoading(true);
@@ -269,10 +280,18 @@ function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void
           {googleLoading ? 'Redirection…' : 'Continuer avec Google'}
         </button>
         {googleError && <div style={s.errorTip}>{googleError}</div>}
-        <button disabled style={{ ...s.oauthBtn, opacity: 0.3, cursor: 'not-allowed' }}>
-          <span style={s.oauthIcon}>✉</span>Email
-          <span style={s.comingSoon}>BIENTÔT</span>
+        <button
+          onClick={() => setEmailOpen(true)}
+          style={s.oauthBtn}
+        >
+          <span style={s.oauthIcon}>✉</span>Email / Mot de passe
         </button>
+        {emailOpen && (
+          <EmailAuthModal
+            defaultView="signup"
+            onClose={() => setEmailOpen(false)}
+          />
+        )}
         <button disabled style={{ ...s.oauthBtn, opacity: 0.3, cursor: 'not-allowed' }}>
           <span style={s.oauthIcon}></span>Apple
           <span style={s.comingSoon}>BIENTÔT</span>
