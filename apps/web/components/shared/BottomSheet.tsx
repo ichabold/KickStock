@@ -55,12 +55,14 @@ const s: Record<string, React.CSSProperties> = {
     animation: 'fadeIn .15s ease-out',
   },
   sheet: {
+    width: '100%',
     background: 'var(--s1)',
     borderTop: '1px solid var(--border-hi)',
     borderRadius: '20px 20px 0 0',
     padding: '12px 20px 32px',
     maxHeight: 'calc(100dvh - 60px)',
     overflowY: 'auto',
+    boxSizing: 'border-box',
     animation: 'slideUp .2s ease-out',
   },
   handle: {

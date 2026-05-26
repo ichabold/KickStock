@@ -18,24 +18,21 @@ export default function AuthWidget({ compact = false }: Props) {
   const { user, profile, loading, signOut } = useAuth();
   const bestScore = useGameStore(s => s.bestScore);
 
-  // Guest state: no Supabase session but has a saved pseudo
   const [guestPseudo, setGuestPseudo] = useState<string | null>(null);
   useEffect(() => {
     if (!loading && !user) setGuestPseudo(getPseudo());
+    if (user) clearPseudo(); // clean up localStorage on login
   }, [loading, user]);
 
-  // Re-read pseudo when GuestModal saves it
   useEffect(() => {
     function onSaved() { setGuestPseudo(getPseudo()); }
     window.addEventListener('kickstock:pseudo-saved', onSaved);
     return () => window.removeEventListener('kickstock:pseudo-saved', onSaved);
   }, []);
 
-  // Upgrade panel visibility
   const [panelOpen, setPanelOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Close desktop panel on outside click
   useEffect(() => {
     if (!panelOpen || compact) return;
     function onDown(e: MouseEvent) {
@@ -51,15 +48,34 @@ export default function AuthWidget({ compact = false }: Props) {
 
   // ── Logged-in registered user ─────────────────────────────────────────────
   if (user) {
-    const initial = (profile?.username ?? user.email ?? '?')[0].toUpperCase();
-    const name    = profile?.username ?? user.email?.split('@')[0] ?? '';
+    const name      = profile?.username ?? user.email?.split('@')[0] ?? '';
+    const initial   = name[0]?.toUpperCase() ?? '?';
+    const avatarUrl = user.user_metadata?.avatar_url as string | undefined;
+
+    if (compact) {
+      return (
+        <>
+          <button onClick={() => setPanelOpen(true)} style={s.avatarBtn}>
+            <Avatar initial={initial} size={26} url={avatarUrl} />
+          </button>
+          <BottomSheet open={panelOpen} onClose={() => setPanelOpen(false)}>
+            <AccountMenu
+              name={name}
+              bestScore={bestScore}
+              avatarUrl={avatarUrl}
+              initial={initial}
+              onSignOut={() => { setPanelOpen(false); signOut(); }}
+            />
+          </BottomSheet>
+        </>
+      );
+    }
 
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 10 }}>
-        <Avatar initial={initial} size={compact ? 26 : 30} />
-
-        {!compact && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div ref={panelRef} style={{ position: 'relative' }}>
+        <button onClick={() => setPanelOpen(v => !v)} style={s.avatarBtn}>
+          <Avatar initial={initial} size={30} url={avatarUrl} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, textAlign: 'left' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
               {name}
             </div>
@@ -69,33 +85,27 @@ export default function AuthWidget({ compact = false }: Props) {
               </div>
             )}
           </div>
-        )}
-
-        <button
-          onClick={signOut}
-          style={{
-            background: 'none',
-            border: '1px solid #2A2A2A',
-            color: '#555',
-            padding: compact ? '3px 7px' : '4px 9px',
-            borderRadius: 5,
-            fontSize: compact ? 8 : 9,
-            cursor: 'pointer',
-            fontFamily: 'var(--font-body)',
-            letterSpacing: 1,
-          }}
-        >
-          {compact ? '✕' : 'DÉCONNEXION'}
         </button>
+
+        {panelOpen && (
+          <div style={s.desktopPanel}>
+            <AccountMenu
+              name={name}
+              bestScore={bestScore}
+              avatarUrl={avatarUrl}
+              initial={initial}
+              onSignOut={() => { setPanelOpen(false); signOut(); }}
+            />
+          </div>
+        )}
       </div>
     );
   }
 
-  // ── Guest user (has pseudo, no session) ───────────────────────────────────
+  // ── Guest user ────────────────────────────────────────────────────────────
   if (guestPseudo) {
     const initial = guestPseudo[0].toUpperCase();
 
-    // Mobile: bottom sheet
     if (compact) {
       return (
         <>
@@ -109,37 +119,19 @@ export default function AuthWidget({ compact = false }: Props) {
       );
     }
 
-    // Desktop: inline panel
     return (
       <div ref={panelRef} style={{ position: 'relative' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => setPanelOpen(v => !v)} style={s.avatarBtn}>
           <Avatar initial={initial} size={30} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>
               {guestPseudo}
             </div>
             <div style={{ fontSize: 9, color: 'var(--muted)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
-              GUEST
+              GUEST · ↑ Créer un compte
             </div>
           </div>
-          <button
-            onClick={() => setPanelOpen(v => !v)}
-            style={{
-              background: 'none',
-              border: '1px solid var(--border-hi)',
-              color: 'var(--gold)',
-              padding: '3px 8px',
-              borderRadius: 5,
-              fontSize: 9,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-display)',
-              letterSpacing: 1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            ↑ COMPTE
-          </button>
-        </div>
+        </button>
 
         {panelOpen && (
           <div style={s.desktopPanel}>
@@ -150,32 +142,46 @@ export default function AuthWidget({ compact = false }: Props) {
     );
   }
 
-  // ── Anonymous (no pseudo yet — GuestModal handles onboarding) ────────────
+  // ── Anonymous ─────────────────────────────────────────────────────────────
   return (
-    <Link
-      href="/login"
-      style={{
-        background: 'rgba(255,219,0,.12)',
-        border: '1px solid var(--gold-dk)',
-        color: 'var(--gold)',
-        padding: compact ? '4px 10px' : '6px 14px',
-        borderRadius: 6,
-        fontSize: compact ? 9 : 11,
-        fontWeight: 700,
-        letterSpacing: 1,
-        textDecoration: 'none',
-        fontFamily: 'var(--font-display)',
-        whiteSpace: 'nowrap',
-      }}
-    >
+    <Link href="/login" style={{
+      background: 'rgba(255,219,0,.12)',
+      border: '1px solid var(--gold-dk)',
+      color: 'var(--gold)',
+      padding: compact ? '4px 10px' : '6px 14px',
+      borderRadius: 6,
+      fontSize: compact ? 9 : 11,
+      fontWeight: 700,
+      letterSpacing: 1,
+      textDecoration: 'none',
+      fontFamily: 'var(--font-display)',
+      whiteSpace: 'nowrap',
+    }}>
       {compact ? '⚽ LOGIN' : '⚽ SE CONNECTER'}
     </Link>
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Avatar ───────────────────────────────────────────────────────────────────
 
-function Avatar({ initial, size }: { initial: string; size: number }) {
+function Avatar({ initial, size, url }: { initial: string; size: number; url?: string }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={initial}
+        referrerPolicy="no-referrer"
+        style={{
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          objectFit: 'cover',
+          flexShrink: 0,
+          border: '1.5px solid var(--border-hi)',
+        }}
+      />
+    );
+  }
   return (
     <div style={{
       width: size,
@@ -187,7 +193,7 @@ function Avatar({ initial, size }: { initial: string; size: number }) {
       alignItems: 'center',
       justifyContent: 'center',
       fontFamily: 'var(--font-display)',
-      fontSize: size === 26 ? 12 : 14,
+      fontSize: size <= 26 ? 12 : 14,
       fontWeight: 700,
       flexShrink: 0,
       letterSpacing: 0,
@@ -196,6 +202,38 @@ function Avatar({ initial, size }: { initial: string; size: number }) {
     </div>
   );
 }
+
+// ─── Account menu (registered users) ─────────────────────────────────────────
+
+function AccountMenu({ name, bestScore, avatarUrl, initial, onSignOut }: {
+  name: string;
+  bestScore: number | null;
+  avatarUrl?: string;
+  initial: string;
+  onSignOut: () => void;
+}) {
+  return (
+    <div style={s.menuWrap}>
+      <div style={s.menuHeader}>
+        <Avatar initial={initial} size={36} url={avatarUrl} />
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{name}</div>
+          {bestScore !== null && (
+            <div style={{ fontSize: 10, color: 'var(--gold)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+              🏆 {fmt(bestScore)} KC
+            </div>
+          )}
+        </div>
+      </div>
+      <div style={s.menuDivider} />
+      <button onClick={onSignOut} style={s.signOutBtn}>
+        Déconnexion
+      </button>
+    </div>
+  );
+}
+
+// ─── Upgrade panel (guest users) ─────────────────────────────────────────────
 
 function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void }) {
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -217,20 +255,26 @@ function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void
   }
 
   return (
-    <div style={s.panel}>
-      <div style={s.panelPseudo}>
-        Tu joues en invité · <span style={{ color: 'var(--text)' }}>{pseudo}</span>
+    <div style={s.menuWrap}>
+      <div style={s.guestHeader}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{pseudo}</div>
+        <div style={{ fontSize: 9, letterSpacing: 1, color: 'var(--muted)', fontFamily: 'var(--font-display)', marginTop: 2 }}>
+          GUEST
+        </div>
       </div>
 
-      <ul style={s.benefitsList}>
-        {['Joue sur tous tes devices', 'Progression sauvegardée', 'Classement protégé'].map(b => (
-          <li key={b} style={s.benefit}>
-            <span style={{ color: 'var(--gain)', marginRight: 6 }}>✓</span>{b}
-          </li>
-        ))}
-      </ul>
+      <div style={s.menuDivider} />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+      <div style={s.benefitsList}>
+        {['Joue sur tous tes devices', 'Progression sauvegardée', 'Classement protégé'].map(b => (
+          <div key={b} style={s.benefit}>
+            <span style={{ color: 'var(--gain)', marginRight: 8, fontSize: 11 }}>✓</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>{b}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button
           onClick={handleGoogle}
           disabled={googleLoading}
@@ -240,25 +284,18 @@ function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void
           {googleLoading ? 'Redirection…' : 'Continuer avec Google'}
         </button>
         {googleError && <div style={s.errorTip}>{googleError}</div>}
-        <DisabledBtn label="✉  Email" />
-        <DisabledBtn label="  Apple" />
+        <button disabled style={{ ...s.oauthBtn, opacity: 0.3, cursor: 'not-allowed' }}>
+          <span style={s.oauthIcon}>✉</span>Email
+          <span style={s.comingSoon}>BIENTÔT</span>
+        </button>
+        <button disabled style={{ ...s.oauthBtn, opacity: 0.3, cursor: 'not-allowed' }}>
+          <span style={s.oauthIcon}></span>Apple
+          <span style={s.comingSoon}>BIENTÔT</span>
+        </button>
       </div>
 
-      <div style={s.migrationNote}>
-        Ta progression sera migrée automatiquement.
-      </div>
+      <div style={s.migrationNote}>Ta progression sera migrée automatiquement.</div>
     </div>
-  );
-}
-
-function DisabledBtn({ label }: { label: string }) {
-  return (
-    <button disabled style={{ ...s.oauthBtn, opacity: 0.3, cursor: 'not-allowed' }}>
-      {label}
-      <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--dim)', fontFamily: 'var(--font-display)', letterSpacing: 1 }}>
-        BIENTÔT
-      </span>
-    </button>
   );
 }
 
@@ -272,52 +309,58 @@ const s: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
+    gap: 8,
   },
   desktopPanel: {
-    position: 'absolute',
-    bottom: 'calc(100% + 8px)',
-    left: 0,
-    right: 0,
+    position: 'fixed',
+    bottom: 16,
+    left: 80, // just outside the 72px sidebar
+    width: 260,
     background: 'var(--s1)',
     border: '1px solid var(--border-hi)',
     borderRadius: 12,
+    padding: '14px 16px',
     zIndex: 300,
     boxShadow: '0 8px 32px rgba(0,0,0,.6)',
   },
-  panel: {
-    padding: '4px 0 0',
+  menuWrap: {
+    width: '100%',
   },
-  panelPseudo: {
-    fontSize: 11,
-    color: 'var(--muted)',
-    marginBottom: 10,
-    lineHeight: 1.4,
+  menuHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '0 0 12px',
+  },
+  guestHeader: {
+    padding: '0 0 12px',
+  },
+  menuDivider: {
+    height: 1,
+    background: 'var(--border)',
+    margin: '0 0 12px',
   },
   benefitsList: {
-    listStyle: 'none',
-    padding: 0,
-    margin: '0 0 12px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 6,
+    marginBottom: 14,
   },
   benefit: {
-    fontSize: 11,
-    color: 'var(--muted)',
     display: 'flex',
     alignItems: 'center',
   },
   oauthBtn: {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     width: '100%',
     background: 'var(--s2)',
     border: '1px solid var(--border-hi)',
     borderRadius: 8,
-    padding: '10px 12px',
+    padding: '10px 14px',
     color: 'var(--text)',
-    fontSize: 12,
+    fontSize: 13,
     cursor: 'pointer',
     fontFamily: 'var(--font-body)',
     fontWeight: 500,
@@ -326,24 +369,42 @@ const s: Record<string, React.CSSProperties> = {
     boxSizing: 'border-box' as const,
   },
   oauthIcon: {
-    width: 18,
-    height: 18,
+    width: 20,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontWeight: 700,
-    fontSize: 12,
+    fontSize: 13,
     flexShrink: 0,
+  },
+  comingSoon: {
+    marginLeft: 'auto',
+    fontSize: 9,
+    color: 'var(--dim)',
+    fontFamily: 'var(--font-display)',
+    letterSpacing: 1,
   },
   errorTip: {
     fontSize: 10,
     color: 'var(--loss)',
-    padding: '4px 0',
   },
   migrationNote: {
-    marginTop: 10,
+    marginTop: 12,
     fontSize: 10,
     color: 'var(--dim)',
     lineHeight: 1.4,
+  },
+  signOutBtn: {
+    width: '100%',
+    background: 'none',
+    border: '1px solid var(--border)',
+    borderRadius: 7,
+    padding: '9px 12px',
+    color: 'var(--muted)',
+    fontSize: 12,
+    cursor: 'pointer',
+    fontFamily: 'var(--font-body)',
+    textAlign: 'left' as const,
+    transition: 'border-color .15s, color .15s',
   },
 };
