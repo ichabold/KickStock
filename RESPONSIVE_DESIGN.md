@@ -362,7 +362,89 @@ Le polling 3 secondes est ainsi actif quel que soit le shell affiché.
 
 ---
 
-## 11. Arbre des fichiers concernés
+## 11. Analyse du choix technique — Avantages et risques
+
+### Pourquoi ce pattern plutôt que du responsive CSS classique ?
+
+L'approche standard (un seul arbre React + media queries CSS) est suffisante quand les interfaces mobile et desktop ne diffèrent que par leur layout. KickStock a fait le choix inverse : deux arbres indépendants. Ce choix a des raisons solides, mais aussi des coûts réels.
+
+---
+
+### ✅ Avantages
+
+#### 1. Expériences véritablement distinctes, sans compromis
+Un responsive CSS classique force à concevoir des composants qui doivent fonctionner dans tous les contextes. Ici, `MarketTab.tsx` est conçu exclusivement pour un écran de 390px, et la vue Market du `BrowserShell` est conçue pour un split 2 colonnes sur 1400px. Chaque interface peut être optimisée sans contrainte de l'autre.
+
+```
+Mobile : NationCard compacte, scroll vertical, tap targets 44px minimum
+Browser : StockTile dense, grille auto-fill, hover states, raccourcis clavier possibles
+```
+
+#### 2. Zéro CSS défensif
+Avec du responsive classique, chaque composant accumule des media queries, des overrides, des `display: none` conditionnel. Ici, un composant mobile ne contient aucun code browser et vice-versa. Les CSS Modules restent petits et lisibles.
+
+#### 3. Performance JavaScript réduite
+Next.js bundle-split automatiquement par route, mais ici le split va plus loin : `MobileShell` et tous ses onglets ne sont jamais chargés sur desktop, et inversement. Le bundle effectif est plus léger selon l'appareil.
+
+#### 4. Tests et debug isolés
+Un bug sur mobile ne peut pas venir d'une interaction avec du code browser. Les composants sont testables indépendamment. Un resize à 599px change de shell instantanément — ce comportement est reproductible et déterministe.
+
+#### 5. Liberté de navigation différente
+La navigation mobile (tab bar, 5 onglets, montage/démontage) et la navigation browser (sidebar, vues persistantes) suivent des patterns UX radicalement différents. Les implémenter dans un seul composant `<Nav>` paramétrable aurait produit du code complexe et fragile. Ici, chaque shell gère sa navigation de façon autonome.
+
+---
+
+### 🔴 Risques et inconvénients
+
+#### 1. Duplication de logique métier — le risque principal
+C'est le danger structurel le plus sérieux. Une fonctionnalité comme "afficher le détail d'un match" doit être implémentée (ou au minimum câblée) dans les deux shells. Si une règle métier change — par exemple l'ordre des phases du tournoi — il faut mettre à jour deux endroits. Sans discipline, les deux interfaces divergent silencieusement.
+
+```
+Exemple concret : si on ajoute un nouveau filtre sur le marché,
+il faut l'ajouter dans MarketTab.tsx ET dans la vue Market du BrowserShell.
+Oublier l'un des deux = régression silencieuse.
+```
+
+**Mitigation :** centraliser toute la logique dans le store Zustand et les packages partagés (`@kickstock/game-engine`). Les shells ne font que présenter — ils ne calculent rien.
+
+#### 2. Surface de code doublée = maintenance plus lourde
+~15 fichiers mobiles + BrowserShell monolithique + composants partagés. Chaque nouvelle fonctionnalité nécessite d'évaluer si elle concerne un shell, l'autre, ou les deux. Sur un projet solo ou petite équipe, ce coût est tangible.
+
+#### 3. Flash d'hydration sur mobile (1 frame)
+La valeur SSR par défaut est `'browser'`. Sur un smartphone, le premier rendu est le BrowserShell, puis React corrige vers MobileShell après `useEffect`. Le flash est imperceptible en pratique (< 16ms), mais il existe. Une app Next.js 100% SSR-aware pourrait éviter ça via un cookie de session ou un User-Agent hint.
+
+```
+SSR → BrowserShell rendu (invisible, paint en cours)
+useEffect → setLayout('mobile') → re-render → MobileShell
+Durée : < 1 frame (< 16ms sur écrans 60hz)
+```
+
+#### 4. Comportement au resize non naturel
+Si un utilisateur redimensionne la fenêtre de 700px à 500px, le shell entier est démonté et remonté. L'état local des composants (position de scroll, onglet actif, champ de recherche ouvert) est réinitialisé. Ce comportement est acceptable car aucun utilisateur réel ne fait ça sur mobile, mais il peut surprendre en dev.
+
+#### 5. Risque de désynchronisation des données entre shells
+Si une feature utilise un état local au shell (ex: `useState` dans BrowserShell) plutôt que le store Zustand, cet état est perdu au changement de shell. Toute donnée qui doit survivre à un resize doit vivre dans le store global — ce qui n't est pas toujours évident à identifier au moment du développement.
+
+#### 6. SEO et accessibilité non testés sur les deux chemins
+Google indexe généralement la version desktop. Si du contenu critique pour le SEO n'existe que dans MobileShell, il ne sera pas indexé. Pour KickStock (jeu, pas blog), l'impact est faible — mais c'est un angle mort à connaître.
+
+---
+
+### Bilan — Quand ce pattern est pertinent
+
+| Critère | Favorable à ce pattern | Défavorable |
+|---------|----------------------|-------------|
+| **Différence UX mobile/desktop** | Radicale (navigation, layout, densité) | Superficielle (juste marges et colonnes) |
+| **Taille de l'équipe** | 1-3 devs avec ownership clair | Grande équipe sans conventions strictes |
+| **Parité fonctionnelle** | Partielle (features prioritaires par plateforme) | Totale (chaque feature doit exister partout) |
+| **Performance bundle** | Importante (mobile sur 3G) | Moins critique |
+| **Logique métier** | Centralisée dans un store/engine externe | Dispersée dans les composants |
+
+**Verdict pour KickStock :** le choix est justifié. Les deux interfaces sont visuellement et fonctionnellement différentes, la logique est centralisée dans `useGameStore` et `@kickstock/game-engine`, et l'équipe est petite. Le principal risque (duplication silencieuse) est contenu tant que les shells restent des _vues pures_ qui ne font que consommer le store.
+
+---
+
+## 12. Arbre des fichiers concernés
 
 ```
 apps/web/
