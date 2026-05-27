@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 interface Beat {
   selector: string;
@@ -91,22 +92,33 @@ export default function CoachMarkOverlay({ shell, onDone }: Props) {
     const cx = r.left + r.width / 2;
     const tipLeft = Math.max(12, Math.min(cx - TIP_W / 2, window.innerWidth - TIP_W - 12));
 
+    const TIP_H = 130;
     let tipTop: number;
     if (beat.tip === 'bottom') {
       tipTop = r.bottom + PAD + 16;
+      // If tooltip would go off bottom, flip to above
+      if (tipTop + TIP_H > window.innerHeight - 20) {
+        tipTop = r.top - PAD - TIP_H - 16;
+      }
     } else {
-      tipTop = r.top - PAD - 140; // approximate tip height
+      tipTop = r.top - PAD - TIP_H - 16;
+      // If tooltip would go off top, flip to below
+      if (tipTop < 20) {
+        tipTop = r.bottom + PAD + 16;
+      }
     }
+    // Final clamp to viewport
+    tipTop = Math.max(12, Math.min(tipTop, window.innerHeight - TIP_H - 12));
 
     setTipPos({ top: tipTop, left: tipLeft });
   }, [beat]);
 
-  // Re-measure on step change or resize
+  // Re-measure on step change or resize — longer delay on first beat (tab switch needs to render)
   useEffect(() => {
-    const timeout = setTimeout(measure, 60);
+    const timeout = setTimeout(measure, step === 0 ? 200 : 80);
     window.addEventListener('resize', measure);
     return () => { clearTimeout(timeout); window.removeEventListener('resize', measure); };
-  }, [measure]);
+  }, [measure, step]);
 
   function advance() {
     if (step < beats.length - 1) {
@@ -128,7 +140,10 @@ export default function CoachMarkOverlay({ shell, onDone }: Props) {
     height: rect.height + PAD * 2,
   } : null;
 
-  return (
+  // Portal to document.body — escapes any overflow:hidden parent (mobile Safari fix)
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div style={o.root} onClick={onDone}>
       {/* Spotlight: transparent box + box-shadow dims everything outside */}
       {sp && (
@@ -186,7 +201,8 @@ export default function CoachMarkOverlay({ shell, onDone }: Props) {
       <button style={o.skip} onClick={onDone}>
         Passer le tutoriel
       </button>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
