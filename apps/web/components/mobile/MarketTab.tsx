@@ -19,6 +19,9 @@ export default function MarketTab() {
   const prices     = useGameStore(s => s.prices);
   const portfolio  = useGameStore(s => s.portfolio);
   const eliminated = useGameStore(s => s.eliminated);
+  const txLog      = useGameStore(s => s.txLog);
+
+  const isFirstRun = Object.values(portfolio).every(q => q === 0) && txLog.length === 0;
 
   const SORTS: { id: SortBy; label: string }[] = [
     { id: 'default',    label: 'DEFAULT'  },
@@ -51,6 +54,15 @@ export default function MarketTab() {
   return (
     <>
       <div>
+        {isFirstRun && (
+          <div className={styles.onboarding}>
+            <div className={styles.onboardingTitle}>Bienvenue sur KickStock ⚽</div>
+            <div className={styles.onboardingBody}>
+              Tu démarres avec <strong>10 000 KC</strong>. Achète des actions sur les nations que tu penses
+              les plus fortes — leur cours monte quand elles gagnent.
+            </div>
+          </div>
+        )}
         <div className={styles.filters}>
           <input
             className={styles.search}

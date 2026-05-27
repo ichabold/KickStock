@@ -1,6 +1,6 @@
 .shell {
   width: 100%;
-  max-width: 390px;
+  max-width: 430px;
   margin: 0 auto;
   height: 100dvh;
   display: flex;
@@ -29,7 +29,7 @@
 
 .stats { display: flex; gap: 1px; }
 .stat  { padding: 2px 8px; text-align: right; border-left: 1px solid var(--border); }
-.statLbl { font-size: 8px; letter-spacing: 2px; color: var(--dim); font-weight: 700; margin-bottom: 2px; }
+.statLbl { font-size: var(--fs-eyebrow); letter-spacing: 2px; color: var(--dim); font-weight: 700; margin-bottom: 2px; }
 .statVal { font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
 
 .authArea { margin-left: 8px; flex-shrink: 0; }
@@ -43,8 +43,8 @@
   align-items: center;
   flex-shrink: 0;
 }
-.statusDay { font-family: var(--font-mono); font-size: 9px; color: var(--muted); font-weight: 600; }
-.pill { font-size: 8px; font-weight: 700; letter-spacing: 1px; padding: 2px 6px; border-radius: 3px; border: 1px solid; }
+.statusDay { font-family: var(--font-mono); font-size: var(--fs-eyebrow); color: var(--muted); font-weight: 600; }
+.pill { font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid; }
 .pillGroup { border-color: var(--gold-dk); color: var(--gold); }
 .pillKO    { border-color: var(--loss-dk); color: var(--loss); }
 
@@ -58,40 +58,19 @@
 }
 .scroll::-webkit-scrollbar { display: none; }
 
-.nav {
-  display: flex;
-  background: #050505;
-  border-top: 1px solid var(--border);
+/* ── Tournament progress bar ─────────────────────────────────────────────── */
+.progress {
+  height: 2px;
+  background: var(--border);
   flex-shrink: 0;
-  height: 64px;
-  z-index: 20;
+  position: relative;
+  overflow: hidden;
 }
-
-.navBtn {
-  flex: 1;
-  padding: 6px 2px 8px;
-  background: none;
-  border: none;
-  color: var(--dim);
-  font-size: 8px;
-  letter-spacing: .5px;
-  font-weight: 700;
-  font-family: var(--font-body);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  border-top: 2px solid transparent;
-  transition: all .15s;
-  min-height: 44px;
+.progressFill {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  background: var(--gold);
+  transition: width 0.6s var(--ease);
+  opacity: 0.7;
 }
-
-.navIco { font-size: 17px; }
-
-.navBtnOn   { color: var(--gold); border-top-color: var(--gold); }
-.navBtnPlay {
-  color: var(--gold);
-  border-top: 2px solid var(--gold);
-  background: rgba(255,219,0,0.04);
-}
-.navBtnPlay .navIco { font-size: 20px; }

@@ -188,6 +188,26 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* ── Gold ring on held team's flag during pens ─────────────────────────── */
+.goldRing {
+  display: inline-block;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(255,219,0,.35);
+  animation: ringPulse 1.2s ease-in-out infinite;
+}
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(255,219,0,.35); }
+  50%       { box-shadow: 0 0 0 3px var(--gold), 0 0 20px rgba(255,219,0,.55); }
+}
+
+.yourTeam {
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
 /* ── Per-kick reveal states (new) ──────────────────────────────────────── */
 .penKick[data-reveal="pending"] {
   background: var(--surface-2);

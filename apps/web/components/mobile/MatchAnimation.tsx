@@ -332,9 +332,14 @@ function SingleMatch({
       {/* Teams + score */}
       <div className={styles.teamsRow}>
         <div className={styles.teamBox}>
-          <div className={styles.teamFlagBig}>{nA.flag}</div>
+          <div className={`${styles.teamFlagBig} ${phase === 'pens' && nxtTeam === 'A' && (portfolio[result.a] ?? 0) > 0 ? styles.goldRing : ''}`}>
+            {nA.flag}
+          </div>
           <div className={styles.teamNameSmall}>{nA.name.toUpperCase()}</div>
-          {(expA) && <div className={styles.expBadge}>EXPOSED</div>}
+          {phase === 'pens' && nxtTeam === 'A' && (portfolio[result.a] ?? 0) > 0
+            ? <div className={styles.yourTeam}>VOTRE ÉQUIPE</div>
+            : expA && <div className={styles.expBadge}>EXPOSED</div>
+          }
         </div>
         <div className={styles.scoreBox} aria-label={`${sA} à ${sB}`}>
           <div className={`${styles.scoreNum} ${fA ? styles.flashA : ''}`}>{sA}</div>
@@ -342,9 +347,14 @@ function SingleMatch({
           <div className={`${styles.scoreNum} ${fB ? styles.flashB : ''}`}>{sB}</div>
         </div>
         <div className={styles.teamBox}>
-          <div className={styles.teamFlagBig}>{nB.flag}</div>
+          <div className={`${styles.teamFlagBig} ${phase === 'pens' && nxtTeam === 'B' && (portfolio[result.b] ?? 0) > 0 ? styles.goldRing : ''}`}>
+            {nB.flag}
+          </div>
           <div className={styles.teamNameSmall}>{nB.name.toUpperCase()}</div>
-          {(expB) && <div className={styles.expBadge}>EXPOSED</div>}
+          {phase === 'pens' && nxtTeam === 'B' && (portfolio[result.b] ?? 0) > 0
+            ? <div className={styles.yourTeam}>VOTRE ÉQUIPE</div>
+            : expB && <div className={styles.expBadge}>EXPOSED</div>
+          }
         </div>
       </div>
 

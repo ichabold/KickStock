@@ -56,6 +56,8 @@ export default function MobileShell() {
   const champion = useGameStore(s => s.champion);
 
   const day = CALENDAR[dayIndex];
+  const totalDays = CALENDAR.length;
+  const progressPct = Math.min(100, (dayIndex / Math.max(1, totalDays)) * 100);
 
   return (
     <div className={styles.shell}>
@@ -81,6 +83,11 @@ export default function MobileShell() {
 
       {/* TICKER */}
       <Ticker />
+
+      {/* TOURNAMENT PROGRESS */}
+      <div className={styles.progress} title={`Journée ${dayIndex + 1} / ${totalDays}`}>
+        <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
+      </div>
 
       {/* STATUS BAR */}
       <div className={styles.statusBar}>

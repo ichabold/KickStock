@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import styles from './page.module.css';
 
 export default function ResetPasswordPage() {
   const router  = useRouter();
@@ -41,51 +42,48 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
+    <div className={styles.page}>
+      <div className={styles.card}>
         {done ? (
           <>
-            <div style={s.icon}>✓</div>
-            <div style={s.title}>MOT DE PASSE MODIFIÉ</div>
-            <div style={s.sub}>Tu vas être redirigé…</div>
+            <div className={styles.icon}>✓</div>
+            <div className={styles.title}>MOT DE PASSE MODIFIÉ</div>
+            <div className={styles.sub}>Tu vas être redirigé…</div>
           </>
         ) : (
           <>
-            <div style={s.title}>NOUVEAU MOT DE PASSE</div>
-            <div style={s.sub}>Choisis un nouveau mot de passe pour ton compte.</div>
+            <div className={styles.title}>NOUVEAU MOT DE PASSE</div>
+            <div className={styles.sub}>Choisis un nouveau mot de passe pour ton compte.</div>
 
-            <form onSubmit={handleSubmit} style={s.form}>
+            <form onSubmit={handleSubmit} className={styles.form}>
               <div>
-                <label style={s.label}>Nouveau mot de passe</label>
+                <label className={styles.label}>Nouveau mot de passe</label>
                 <input
                   type="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="8 caractères minimum"
                   autoFocus
-                  style={s.input}
+                  className={styles.input}
                 />
               </div>
               <div>
-                <label style={s.label}>Confirmer</label>
+                <label className={styles.label}>Confirmer</label>
                 <input
                   type="password"
                   value={password2}
                   onChange={e => setPassword2(e.target.value)}
                   placeholder="Même mot de passe"
-                  style={s.input}
+                  className={styles.input}
                 />
               </div>
 
-              {error && <div style={s.errorBox}>{error}</div>}
+              {error && <div className={styles.errorBox}>{error}</div>}
 
               <button
                 type="submit"
                 disabled={loading || password.length < 8 || password !== password2}
-                style={{
-                  ...s.btn,
-                  opacity: (loading || password.length < 8 || password !== password2) ? 0.45 : 1,
-                }}
+                className={styles.btn}
               >
                 {loading ? 'SAUVEGARDE…' : 'CONFIRMER →'}
               </button>
@@ -96,99 +94,3 @@ export default function ResetPasswordPage() {
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '20px 16px',
-    background: 'var(--bg)',
-  },
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    background: 'var(--s1)',
-    border: '1px solid var(--border-hi)',
-    borderRadius: 20,
-    padding: '32px 24px 28px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 12,
-    textAlign: 'center',
-  },
-  icon: {
-    width: 52,
-    height: 52,
-    borderRadius: '50%',
-    background: 'rgba(0,255,135,.1)',
-    border: '1px solid var(--gain-dk)',
-    color: 'var(--gain)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  title: {
-    fontFamily: 'var(--font-display)',
-    fontSize: 20,
-    letterSpacing: 4,
-    color: 'var(--text)',
-  },
-  sub: {
-    fontSize: 12,
-    color: 'var(--muted)',
-    lineHeight: 1.6,
-    marginBottom: 4,
-  },
-  form: {
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-  },
-  label: {
-    display: 'block',
-    fontSize: 10,
-    color: 'var(--muted)',
-    letterSpacing: 1,
-    marginBottom: 4,
-    fontFamily: 'var(--font-display)',
-  },
-  input: {
-    width: '100%',
-    background: 'var(--s2)',
-    border: '1px solid var(--border-hi)',
-    borderRadius: 8,
-    padding: '11px 14px',
-    color: 'var(--text)',
-    fontSize: 14,
-    outline: 'none',
-    fontFamily: 'var(--font-body)',
-    boxSizing: 'border-box' as const,
-  },
-  errorBox: {
-    background: 'var(--loss-bg)',
-    border: '1px solid var(--loss-dk)',
-    borderRadius: 6,
-    padding: '7px 10px',
-    fontSize: 11,
-    color: 'var(--loss)',
-    textAlign: 'left' as const,
-  },
-  btn: {
-    width: '100%',
-    background: 'var(--gold)',
-    color: '#000',
-    border: 'none',
-    borderRadius: 9,
-    padding: '13px 0',
-    fontFamily: 'var(--font-display)',
-    fontSize: 15,
-    letterSpacing: 3,
-    cursor: 'pointer',
-  },
-};

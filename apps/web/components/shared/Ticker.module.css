@@ -30,7 +30,15 @@
   height: 100%;
   border-right: 1px solid var(--ghost);
   color: var(--muted);
+  background: none;
+  border-top: none;
+  border-bottom: none;
+  border-left: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t-fast);
 }
+.item:hover { background: rgba(255,255,255,.04); }
 
 .up  { color: var(--gain); }
 .dn  { color: var(--loss); }

@@ -10,16 +10,38 @@
 .groups { display: flex; gap: 3px; flex-wrap: wrap; }
 .gp {
   background: var(--s1); border: 1px solid var(--border); color: var(--dim);
-  border-radius: 5px; padding: 4px 6px; font-size: 9px; font-weight: 700;
-  min-height: 30px;
+  border-radius: var(--radius-sm); padding: 0 10px; font-size: var(--fs-eyebrow); font-weight: 700;
+  min-height: 44px; display: inline-flex; align-items: center;
 }
 .gpOn { background: rgba(255,219,0,0.1); border-color: var(--gold-dk); color: var(--gold); }
 
 .sortRow { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
 .sortBtn {
-  padding: 3px 7px; font-size: 8px; font-weight: 700; letter-spacing: .5px;
-  border-radius: 4px; border: 1px solid var(--border); background: var(--s1); color: var(--dim);
+  padding: 0 10px; font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .5px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--s1); color: var(--dim);
+  min-height: 36px; display: inline-flex; align-items: center;
 }
 .sortBtnOn { border-color: var(--gold-dk); color: var(--gold); background: rgba(255,219,0,0.06); }
 
 .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+
+/* ── Onboarding banner (first run) ──────────────────────────────────────── */
+.onboarding {
+  background: rgba(255,219,0,.06);
+  border: 1px solid var(--gold-dk);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.onboardingTitle {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  letter-spacing: 2px;
+  color: var(--gold);
+  margin-bottom: var(--space-1);
+}
+.onboardingBody {
+  font-size: var(--fs-label);
+  color: var(--muted);
+  line-height: 1.5;
+}
