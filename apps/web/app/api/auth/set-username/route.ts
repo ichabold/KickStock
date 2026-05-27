@@ -57,10 +57,22 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
   const lower = trimmed.toLowerCase();
 
-  // Uniqueness check (case-insensitive, exclude the user's own current username)
+  // Uniqueness check (case-insensitive).
+  // portfolios: exclude rows owned by the current user (e.g. their own migrated
+  //   guest portfolio that still carries guest_username). NULL user_id rows
+  //   (other guests) still count as taken.
+  // profiles: exclude the current user's own row.
   const [{ data: guestMatch }, { data: profileMatch }] = await Promise.all([
-    adminFrom(admin, 'portfolios').select('id').ilike('guest_username', lower).limit(1),
-    adminFrom(admin, 'profiles').select('id').ilike('username', lower).neq('id', user.id).limit(1),
+    adminFrom(admin, 'portfolios')
+      .select('id')
+      .ilike('guest_username', lower)
+      .or(`user_id.is.null,user_id.neq.${user.id}`)
+      .limit(1),
+    adminFrom(admin, 'profiles')
+      .select('id')
+      .ilike('username', lower)
+      .neq('id', user.id)
+      .limit(1),
   ]);
 
   if ((guestMatch?.length ?? 0) > 0 || (profileMatch?.length ?? 0) > 0) {

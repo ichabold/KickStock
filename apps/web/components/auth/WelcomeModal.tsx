@@ -16,63 +16,85 @@ export default function WelcomeModal() {
 
   const isMigrated = searchParams.get('ks_migrated') === '1';
   const isNewUser  = searchParams.get('ks_new_user')  === '1';
+  // guest_username passed by callback to avoid the server-side race condition:
+  // (trigger may not have created the profile row yet when callback runs)
+  const ksPseudo   = searchParams.get('ks_pseudo');
 
   const [step, setStep] = useState<Step>(null);
+  const [pseudoApplied, setPseudoApplied] = useState(false);
 
-  // Capture the guest pseudo ONCE at mount (lazy initializer = synchronous,
-  // before any useEffect runs and before clearPseudo() can erase it).
+  // Capture guest pseudo from localStorage at mount — BEFORE any useEffect
+  // runs and before AuthWidget's clearPseudo() can erase it.
   const [savedGuestPseudo] = useState<string | null>(() => getPseudo());
 
-  // Determine which step to show once auth is resolved
+  // The pseudo we want to apply to this account:
+  //   • ksPseudo  — migration path: callback received guest_username from RPC
+  //   • savedGuestPseudo — new-user path: migration didn't find a portfolio
+  //     (e.g. test cleanup deleted it) but pseudo is still in localStorage
+  const pendingPseudo =
+    ksPseudo ??
+    (isNewUser && !isMigrated && savedGuestPseudo && isValidPseudoFormat(savedGuestPseudo)
+      ? savedGuestPseudo
+      : null);
+
+  // ── Apply pending pseudo (client-side, trigger guaranteed to have run) ────
+  // We're in the browser — the auth trigger fires synchronously on the server
+  // when the user row is created, so by the time React renders this component,
+  // the profile row exists. Safe to call set-username.
+  useEffect(() => {
+    if (!user || pseudoApplied || !pendingPseudo) return;
+    setPseudoApplied(true);
+
+    const silent = !isMigrated; // migration path → reload in handleDone instead
+
+    fetch('/api/auth/set-username', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: pendingPseudo }),
+    })
+      .then(() => { if (silent) window.location.reload(); })
+      .catch(() => { if (silent) window.location.reload(); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, pseudoApplied]);
+
+  // ── Determine which modal step to show ───────────────────────────────────
   useEffect(() => {
     if (!user) return;
-    if (isMigrated) { setStep('migration'); return; }
+
+    if (isMigrated) {
+      setStep('migration');
+      return;
+    }
+
     if (isNewUser && !isMigrated) {
-      // If the player already has a guest pseudo, apply it silently — no modal.
-      // This covers the edge case where migration didn't find a portfolio
-      // (e.g. portfolio was deleted) but the pseudo still lives in localStorage.
-      if (savedGuestPseudo && isValidPseudoFormat(savedGuestPseudo)) {
-        silentlyApplyPseudo(savedGuestPseudo);
+      if (pendingPseudo) {
+        // Pseudo will be applied silently → just clean the URL, no modal
+        clearPseudo();
+        cleanUrl();
       } else {
+        // Truly new Google user with no prior guest pseudo
         setStep('username');
       }
       return;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, isMigrated, isNewUser]);
-
-  // Apply the guest pseudo to the new account without showing any UI.
-  // Passes deviceId so the server can exclude the current device's guest
-  // portfolio from the uniqueness check (avoids "already taken by myself").
-  async function silentlyApplyPseudo(pseudo: string) {
-    // Best-effort: if the pseudo is somehow still taken by another player,
-    // we silently ignore it — the user can rename later via the avatar menu.
-    try {
-      await fetch('/api/auth/set-username', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: pseudo }),
-      });
-    } catch {
-      // Ignore network errors
-    }
-    clearPseudo();
-    cleanUrl();
-  }
+  }, [user?.id, isMigrated, isNewUser]);
 
   function cleanUrl() {
     const url = new URL(window.location.href);
     url.searchParams.delete('ks_migrated');
     url.searchParams.delete('ks_new_user');
+    url.searchParams.delete('ks_pseudo');
     url.searchParams.delete('ks_auth_error');
     router.replace(url.pathname, { scroll: false });
   }
 
   function handleDone() {
-    // Clear the guest pseudo now that the account exists
     clearPseudo();
     setStep(null);
     cleanUrl();
+    // Reload so useAuth picks up the updated profile.username
+    window.location.reload();
   }
 
   if (!step) return null;
@@ -80,13 +102,8 @@ export default function WelcomeModal() {
   return (
     <div style={s.overlay}>
       <div style={s.card}>
-        {step === 'migration' && (
-          // Pseudo is already carried over from the guest account — skip username step
-          <MigrationStep onNext={handleDone} />
-        )}
-        {step === 'username' && (
-          <UsernameStep onDone={handleDone} guestPseudo={savedGuestPseudo} />
-        )}
+        {step === 'migration' && <MigrationStep onNext={handleDone} />}
+        {step === 'username'  && <UsernameStep  onDone={handleDone} guestPseudo={savedGuestPseudo} />}
       </div>
     </div>
   );
@@ -94,15 +111,15 @@ export default function WelcomeModal() {
 
 // ─── Migration confirmation ───────────────────────────────────────────────────
 
-function MigrationStep({ onNext }: { onNext: () => void; }) {
+function MigrationStep({ onNext }: { onNext: () => void }) {
   const cash      = useGameStore(s => s.cash);
   const portfolio = useGameStore(s => s.portfolio);
   const prices    = useGameStore(s => s.prices);
   const bestScore = useGameStore(s => s.bestScore);
 
-  const portVal    = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
-  const totalVal   = cash + portVal;
-  const positions  = Object.values(portfolio).filter(q => q > 0).length;
+  const portVal   = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
+  const totalVal  = cash + portVal;
+  const positions = Object.values(portfolio).filter(q => q > 0).length;
 
   return (
     <>
@@ -132,12 +149,12 @@ function StatRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ─── Username prompt ──────────────────────────────────────────────────────────
+// ─── Username prompt (new Google user, no prior guest pseudo) ─────────────────
 
 function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo: string | null }) {
   const { user } = useAuth();
 
-  // Priority: guest pseudo (captured before clearPseudo) → Google display name
+  // Priority: guest pseudo → Google display name
   const initialPseudo = (() => {
     if (guestPseudo && isValidPseudoFormat(guestPseudo)) return guestPseudo;
     const name = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
@@ -145,13 +162,13 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
     return cleaned.length >= 3 ? cleaned : '';
   })();
 
-  const [pseudo,    setPseudo]    = useState(initialPseudo);
-  const [state,     setState]     = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const [pseudo,     setPseudo]     = useState(initialPseudo);
+  const [state,      setState]      = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   const [suggestion, setSuggestion] = useState<string | null>(null);
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState('');
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState('');
 
-  // Immediately check availability for the pre-filled pseudo
+  // Pre-check availability for the pre-filled pseudo
   useEffect(() => {
     if (initialPseudo && isValidPseudoFormat(initialPseudo)) {
       checkAvailability(initialPseudo);
@@ -165,12 +182,8 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
     setSuggestion(null);
     const res  = await fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(value)}`);
     const data = await res.json();
-    if (data.available) {
-      setState('available');
-    } else {
-      setState('taken');
-      setSuggestion(data.suggestion ?? null);
-    }
+    setState(data.available ? 'available' : 'taken');
+    if (!data.available) setSuggestion(data.suggestion ?? null);
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -181,10 +194,10 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
     setSaving(true);
     setError('');
 
-    // Inline check if not yet confirmed available — single click flow
+    // Inline availability check — single-click flow
     if (state !== 'available') {
       try {
-        const chk = await fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(trimmed)}`);
+        const chk     = await fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(trimmed)}`);
         const chkData = await chk.json();
         if (!chkData.available) {
           setState('taken');
@@ -194,9 +207,7 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
           return;
         }
         setState('available');
-      } catch {
-        // Let set-username handle it
-      }
+      } catch { /* let set-username handle it */ }
     }
 
     const res  = await fetch('/api/auth/set-username', {
@@ -207,21 +218,15 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
     const data = await res.json();
 
     if (!res.ok) {
-      if (res.status === 409 || data.error === 'taken') {
-        setState('taken');
-        setError('Ce pseudo est déjà pris.');
-      } else {
-        setError('Erreur, réessaie.');
-      }
+      setState(data.error === 'taken' ? 'taken' : 'idle');
+      setError(data.error === 'taken' ? 'Ce pseudo est déjà pris.' : 'Erreur, réessaie.');
       setSaving(false);
       return;
     }
 
-    onDone();
-    window.location.reload();
+    onDone(); // triggers reload via handleDone
   }
 
-  // Button enabled even while checking — submit does inline check if needed
   const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken';
 
   return (
@@ -267,7 +272,7 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
             )}
           </div>
         )}
-        {error && <div style={s.errorBox}>{error}</div>}
+        {error && state !== 'taken' && <div style={s.errorBox}>{error}</div>}
 
         <button
           type="submit"

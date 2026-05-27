@@ -6,8 +6,14 @@
  *  1. Exchange the `code` param for a Supabase session
  *  2. Read `ks_pending_device` cookie set by the Google button
  *  3. Call migrate_guest_to_user RPC if a device_id is present
- *  4. Detect first-time signup (needs username prompt)
+ *  4. Detect first-time signup
  *  5. Redirect to / with query params for WelcomeModal
+ *
+ * NOTE: We intentionally do NOT update profiles.username here.
+ * The handle_new_user trigger fires server-side when auth.users is created,
+ * but it may not have run yet by the time this route handler executes (race).
+ * Instead, the guest_username is passed to the client via `ks_pseudo` and
+ * applied in WelcomeModal — at that point the trigger has definitely run.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
@@ -38,7 +44,7 @@ export async function GET(request: NextRequest) {
         setAll: (cookiesToSet) => {
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
-          );
+        );
         },
       },
     },
@@ -61,13 +67,13 @@ export async function GET(request: NextRequest) {
 
   // ── Detect first-time signup ──────────────────────────────────────────────
   // Use session.user.created_at — available immediately without a DB round-trip.
-  // (Querying the profiles table here races the auth trigger that creates the row.)
   const isNewUser = session.user.created_at
     ? Date.now() - new Date(session.user.created_at).getTime() < 2 * 60 * 1000
     : false;
 
   // ── Migrate guest portfolio if device_id present ──────────────────────────
   let migrationStatus: string | null = null;
+  let guestUsername:   string | null = null;
 
   if (deviceId) {
     const { data: result } = await adminRpc(admin, 'migrate_guest_to_user', {
@@ -77,23 +83,12 @@ export async function GET(request: NextRequest) {
     const rpcResult = result as { status: string; guest_username?: string } | null;
     migrationStatus = rpcResult?.status ?? null;
 
-    // If the guest had a chosen pseudo, carry it into the new account's profile —
-    // but only if the profile's username is still auto-generated (is_auto = TRUE).
-    const guestUsername = rpcResult?.guest_username;
-    if (
-      guestUsername &&
-      (migrationStatus === 'migrated' || migrationStatus === 'conflict_resolved')
-    ) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (admin as any)
-        .from('profiles')
-        .update({ username: guestUsername, is_auto: false })
-        .eq('id', userId)
-        .eq('is_auto', true);
+    if (migrationStatus === 'migrated' || migrationStatus === 'conflict_resolved') {
+      guestUsername = rpcResult?.guest_username ?? null;
     }
   }
 
-  // ── Build redirect URL with welcome params ────────────────────────────────
+  // ── Build redirect URL ────────────────────────────────────────────────────
   const redirectUrl = new URL(`${origin}/`);
 
   if (migrationStatus === 'migrated' || migrationStatus === 'conflict_resolved') {
@@ -101,6 +96,11 @@ export async function GET(request: NextRequest) {
   }
   if (isNewUser) {
     redirectUrl.searchParams.set('ks_new_user', '1');
+  }
+  // Pass the guest_username to the client so WelcomeModal can apply it once
+  // the auth trigger has run and the profile row exists.
+  if (guestUsername) {
+    redirectUrl.searchParams.set('ks_pseudo', guestUsername);
   }
 
   response.headers.set('Location', redirectUrl.toString());
