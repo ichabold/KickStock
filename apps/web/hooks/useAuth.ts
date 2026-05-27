@@ -8,6 +8,7 @@ export interface AuthProfile {
   id: string;
   username: string;
   country: string | null;
+  is_auto: boolean;
 }
 
 export function useAuth() {
@@ -20,7 +21,7 @@ export function useAuth() {
   const fetchProfile = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, username, country')
+      .select('id, username, country, is_auto')
       .eq('id', userId)
       .single();
     if (data) setProfile(data);

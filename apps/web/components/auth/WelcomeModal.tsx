@@ -16,66 +16,79 @@ export default function WelcomeModal() {
 
   const isMigrated = searchParams.get('ks_migrated') === '1';
   const isNewUser  = searchParams.get('ks_new_user')  === '1';
-  // guest_username passed by callback to avoid the server-side race condition:
-  // (trigger may not have created the profile row yet when callback runs)
-  const ksPseudo   = searchParams.get('ks_pseudo');
+
+  // Guest username passed by the callback route via URL.
+  // We do this instead of updating the profile server-side in the callback,
+  // because handle_new_user trigger may not have run yet at that point (race).
+  const ksPseudo = searchParams.get('ks_pseudo');
 
   const [step, setStep] = useState<Step>(null);
   const [pseudoApplied, setPseudoApplied] = useState(false);
 
-  // Capture guest pseudo from localStorage at mount — BEFORE any useEffect
-  // runs and before AuthWidget's clearPseudo() can erase it.
+  // Capture the guest pseudo from localStorage at component mount —
+  // synchronous (lazy useState initializer), before any useEffect (including
+  // AuthWidget's clearPseudo()) can erase it.
   const [savedGuestPseudo] = useState<string | null>(() => getPseudo());
 
-  // The pseudo we want to apply to this account:
-  //   • ksPseudo  — migration path: callback received guest_username from RPC
-  //   • savedGuestPseudo — new-user path: migration didn't find a portfolio
-  //     (e.g. test cleanup deleted it) but pseudo is still in localStorage
-  const pendingPseudo =
-    ksPseudo ??
-    (isNewUser && !isMigrated && savedGuestPseudo && isValidPseudoFormat(savedGuestPseudo)
-      ? savedGuestPseudo
-      : null);
+  // The pseudo we want to apply. Two sources, same priority:
+  //   ksPseudo       — from migration path (callback encoded it in URL)
+  //   savedGuestPseudo — fallback when migration didn't find a portfolio
+  //                      (e.g. portfolio was deleted in cleanup) but the pseudo
+  //                      is still present in localStorage
+  const pendingPseudo: string | null = (() => {
+    if (ksPseudo && isValidPseudoFormat(ksPseudo)) return ksPseudo;
+    if (savedGuestPseudo && isValidPseudoFormat(savedGuestPseudo)) return savedGuestPseudo;
+    return null;
+  })();
 
-  // ── Apply pending pseudo (client-side, trigger guaranteed to have run) ────
-  // We're in the browser — the auth trigger fires synchronously on the server
-  // when the user row is created, so by the time React renders this component,
-  // the profile row exists. Safe to call set-username.
+  // ── Apply pending pseudo once profile is available ────────────────────────
+  //
+  // We wait for `profile` (not just `user`) for two reasons:
+  //   1. We check profile.is_auto — never overwrite a user-chosen pseudo
+  //   2. By the time useAuth has fetched the profile, the auth trigger has
+  //      definitely run and the profile row exists in the DB
   useEffect(() => {
-    if (!user || pseudoApplied || !pendingPseudo) return;
+    if (!user || !profile || pseudoApplied || !pendingPseudo) return;
+
+    // profile.is_auto=false means the player already has a chosen pseudo — don't overwrite
+    if (!profile.is_auto) {
+      setPseudoApplied(true); // mark as handled so we don't keep re-checking
+      return;
+    }
+
     setPseudoApplied(true);
 
-    const silent = !isMigrated; // migration path → reload in handleDone instead
+    const isSilent = !isMigrated; // migration path: reload triggered by handleDone instead
 
     fetch('/api/auth/set-username', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: pendingPseudo }),
     })
-      .then(() => { if (silent) window.location.reload(); })
-      .catch(() => { if (silent) window.location.reload(); });
+      .then(() => { if (isSilent) window.location.reload(); })
+      .catch(() => { if (isSilent) window.location.reload(); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, pseudoApplied]);
+  }, [user?.id, profile?.id, pseudoApplied]);
 
   // ── Determine which modal step to show ───────────────────────────────────
   useEffect(() => {
     if (!user) return;
 
     if (isMigrated) {
+      // Show migration confirmation; pseudo is applied by the effect above
       setStep('migration');
       return;
     }
 
-    if (isNewUser && !isMigrated) {
-      if (pendingPseudo) {
-        // Pseudo will be applied silently → just clean the URL, no modal
-        clearPseudo();
-        cleanUrl();
-      } else {
-        // Truly new Google user with no prior guest pseudo
-        setStep('username');
-      }
+    if (pendingPseudo) {
+      // Pseudo will be applied silently — just clean the URL, no modal needed
+      cleanUrl();
       return;
+    }
+
+    if (isNewUser) {
+      // Truly new Google user with no prior guest pseudo — ask them to choose
+      setStep('username');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, isMigrated, isNewUser]);
@@ -154,7 +167,6 @@ function StatRow({ label, value }: { label: string; value: string }) {
 function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo: string | null }) {
   const { user } = useAuth();
 
-  // Priority: guest pseudo → Google display name
   const initialPseudo = (() => {
     if (guestPseudo && isValidPseudoFormat(guestPseudo)) return guestPseudo;
     const name = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
@@ -168,11 +180,8 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState('');
 
-  // Pre-check availability for the pre-filled pseudo
   useEffect(() => {
-    if (initialPseudo && isValidPseudoFormat(initialPseudo)) {
-      checkAvailability(initialPseudo);
-    }
+    if (initialPseudo && isValidPseudoFormat(initialPseudo)) checkAvailability(initialPseudo);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -194,7 +203,7 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
     setSaving(true);
     setError('');
 
-    // Inline availability check — single-click flow
+    // Single-click: inline check if not already confirmed available
     if (state !== 'available') {
       try {
         const chk     = await fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(trimmed)}`);
@@ -224,7 +233,7 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
       return;
     }
 
-    onDone(); // triggers reload via handleDone
+    onDone();
   }
 
   const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken';
@@ -262,8 +271,7 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
         {state === 'taken' && (
           <div style={s.errorBox}>
             Pseudo déjà pris.{suggestion && (
-              <button
-                type="button"
+              <button type="button"
                 onClick={() => { setPseudo(suggestion); setState('idle'); setSuggestion(null); setTimeout(() => checkAvailability(suggestion), 0); }}
                 style={s.suggestionBtn}
               >
