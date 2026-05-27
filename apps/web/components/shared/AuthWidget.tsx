@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameStore } from '@/stores/gameStore';
 import { fmt } from '@kickstock/game-engine';
-import { getPseudo, clearPseudo } from '@/lib/pseudo';
+import { getPseudo, clearPseudo, isValidPseudoFormat } from '@/lib/pseudo';
 import { getDeviceId } from '@/lib/device';
 import BottomSheet from './BottomSheet';
 import EmailAuthModal from '@/components/auth/EmailAuthModal';
@@ -206,7 +206,8 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onSignOut }: {
   initial: string;
   onSignOut: () => void;
 }) {
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmReset,   setConfirmReset]   = useState(false);
+  const [changePseudo,   setChangePseudo]   = useState(false);
   const resetGame = useGameStore(s => s.resetGame);
 
   return (
@@ -223,6 +224,9 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onSignOut }: {
         </div>
       </div>
       <div style={s.menuDivider} />
+      <button onClick={() => setChangePseudo(true)} style={s.resetBtn}>
+        ✏️ Changer mon pseudo
+      </button>
       <button onClick={() => setConfirmReset(true)} style={s.resetBtn}>
         🔄 Recommencer une partie
       </button>
@@ -236,6 +240,130 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onSignOut }: {
           onCancel={() => setConfirmReset(false)}
         />
       )}
+      {changePseudo && (
+        <ChangePseudoModal
+          currentPseudo={name}
+          onClose={() => setChangePseudo(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Change pseudo modal ──────────────────────────────────────────────────────
+
+function ChangePseudoModal({ currentPseudo, onClose }: { currentPseudo: string; onClose: () => void }) {
+  const [pseudo,  setPseudo]  = useState('');
+  const [state,   setState]   = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState(false);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = pseudo.trim();
+    if (!isValidPseudoFormat(trimmed) || state === 'taken' || saving) return;
+
+    setSaving(true);
+    setError('');
+
+    // Inline availability check — single click
+    if (state !== 'available') {
+      try {
+        const chk = await fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(trimmed)}`);
+        const chkData = await chk.json();
+        if (!chkData.available) {
+          setState('taken');
+          setError('Ce pseudo est déjà pris.');
+          setSaving(false);
+          return;
+        }
+        setState('available');
+      } catch { /* let set-username handle it */ }
+    }
+
+    const res  = await fetch('/api/auth/set-username', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: trimmed }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error === 'taken' ? 'Ce pseudo est déjà pris.' : 'Erreur, réessaie.');
+      if (data.error === 'taken') setState('taken');
+      setSaving(false);
+      return;
+    }
+
+    setSuccess(true);
+    setTimeout(() => { onClose(); window.location.reload(); }, 1200);
+  }
+
+  const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken' && !saving;
+
+  return (
+    <div style={s.confirmOverlay}>
+      <div style={{ ...s.confirmCard, gap: 0 }}>
+        <div style={{ ...s.confirmTitle, marginBottom: 6 }}>CHANGER MON PSEUDO</div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 16, textAlign: 'center' }}>
+          Actuel : <strong style={{ color: 'var(--text)' }}>{currentPseudo}</strong>
+        </div>
+
+        {success ? (
+          <div style={{ textAlign: 'center', color: 'var(--gain)', fontSize: 13, padding: '12px 0' }}>
+            ✓ Pseudo mis à jour !
+          </div>
+        ) : (
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ position: 'relative' }}>
+              <input
+                autoFocus
+                value={pseudo}
+                onChange={e => { setPseudo(e.target.value); setState('idle'); setError(''); }}
+                onBlur={() => { if (pseudo.trim() && isValidPseudoFormat(pseudo.trim())) {
+                  setState('checking');
+                  fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(pseudo.trim())}`)
+                    .then(r => r.json())
+                    .then(d => setState(d.available ? 'available' : 'taken'))
+                    .catch(() => setState('idle'));
+                }}}
+                placeholder="Nouveau pseudo"
+                maxLength={20}
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                style={{
+                  ...s.pseudoInput,
+                  borderColor: state === 'taken' ? 'var(--loss)'
+                    : state === 'available' ? 'var(--gain-dk)'
+                    : 'var(--border-hi)',
+                }}
+              />
+              {state === 'checking'  && <span style={s.pseudoHint}>…</span>}
+              {state === 'available' && <span style={{ ...s.pseudoHint, color: 'var(--gain)' }}>✓</span>}
+            </div>
+
+            {state === 'taken' && (
+              <div style={s.pseudoError}>Pseudo déjà pris.</div>
+            )}
+            {error && state !== 'taken' && (
+              <div style={s.pseudoError}>{error}</div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!isSubmittable}
+              style={{ ...s.confirmDanger, background: 'var(--gold)', color: '#000', opacity: isSubmittable ? 1 : 0.4 }}
+            >
+              {saving ? 'SAUVEGARDE…' : 'CONFIRMER →'}
+            </button>
+            <button type="button" onClick={onClose} style={s.confirmCancel}>
+              Annuler
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
@@ -532,5 +660,35 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 12,
     cursor: 'pointer',
     fontFamily: 'var(--font-body)',
+  },
+  pseudoInput: {
+    width: '100%',
+    background: 'var(--s2)',
+    border: '1px solid var(--border-hi)',
+    borderRadius: 8,
+    padding: '11px 36px 11px 14px',
+    color: 'var(--text)',
+    fontSize: 14,
+    outline: 'none',
+    fontFamily: 'var(--font-body)',
+    boxSizing: 'border-box' as const,
+    transition: 'border-color .15s',
+  },
+  pseudoHint: {
+    position: 'absolute' as const,
+    right: 12,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    fontSize: 12,
+    color: 'var(--muted)',
+    pointerEvents: 'none' as const,
+  },
+  pseudoError: {
+    background: 'var(--loss-bg)',
+    border: '1px solid var(--loss-dk)',
+    borderRadius: 6,
+    padding: '6px 10px',
+    fontSize: 11,
+    color: 'var(--loss)',
   },
 };

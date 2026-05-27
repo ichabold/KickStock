@@ -19,19 +19,46 @@ export default function WelcomeModal() {
 
   const [step, setStep] = useState<Step>(null);
 
-  // Capture the guest pseudo ONCE at mount, before clearPseudo() can erase it.
-  // Both effects below run after render; capturing in state (lazy initializer)
-  // ensures we read localStorage synchronously during this render pass.
+  // Capture the guest pseudo ONCE at mount (lazy initializer = synchronous,
+  // before any useEffect runs and before clearPseudo() can erase it).
   const [savedGuestPseudo] = useState<string | null>(() => getPseudo());
 
   // Determine which step to show once auth is resolved
   useEffect(() => {
     if (!user) return;
     if (isMigrated) { setStep('migration'); return; }
-    // Show username prompt only for brand-new Google users who didn't migrate
-    // (email signups already supply their pseudo at signup time)
-    if (isNewUser && !isMigrated) { setStep('username'); return; }
+    if (isNewUser && !isMigrated) {
+      // If the player already has a guest pseudo, apply it silently — no modal.
+      // This covers the edge case where migration didn't find a portfolio
+      // (e.g. portfolio was deleted) but the pseudo still lives in localStorage.
+      if (savedGuestPseudo && isValidPseudoFormat(savedGuestPseudo)) {
+        silentlyApplyPseudo(savedGuestPseudo);
+      } else {
+        setStep('username');
+      }
+      return;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isMigrated, isNewUser]);
+
+  // Apply the guest pseudo to the new account without showing any UI.
+  // Passes deviceId so the server can exclude the current device's guest
+  // portfolio from the uniqueness check (avoids "already taken by myself").
+  async function silentlyApplyPseudo(pseudo: string) {
+    // Best-effort: if the pseudo is somehow still taken by another player,
+    // we silently ignore it — the user can rename later via the avatar menu.
+    try {
+      await fetch('/api/auth/set-username', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: pseudo }),
+      });
+    } catch {
+      // Ignore network errors
+    }
+    clearPseudo();
+    cleanUrl();
+  }
 
   function cleanUrl() {
     const url = new URL(window.location.href);
@@ -154,6 +181,24 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
     setSaving(true);
     setError('');
 
+    // Inline check if not yet confirmed available — single click flow
+    if (state !== 'available') {
+      try {
+        const chk = await fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(trimmed)}`);
+        const chkData = await chk.json();
+        if (!chkData.available) {
+          setState('taken');
+          setSuggestion(chkData.suggestion ?? null);
+          setError('Ce pseudo est déjà pris.');
+          setSaving(false);
+          return;
+        }
+        setState('available');
+      } catch {
+        // Let set-username handle it
+      }
+    }
+
     const res  = await fetch('/api/auth/set-username', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -172,12 +217,12 @@ function UsernameStep({ onDone, guestPseudo }: { onDone: () => void; guestPseudo
       return;
     }
 
-    // Force full page refresh so useAuth re-fetches the updated profile
     onDone();
     window.location.reload();
   }
 
-  const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken' && state !== 'checking';
+  // Button enabled even while checking — submit does inline check if needed
+  const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken';
 
   return (
     <>

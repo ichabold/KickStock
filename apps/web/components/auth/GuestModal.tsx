@@ -74,10 +74,35 @@ export default function GuestModal({ onDone }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = pseudo.trim();
-    if (!isValidPseudoFormat(trimmed) || state === 'taken' || submitting) return;
+    if (!isValidPseudoFormat(trimmed) || submitting) return;
 
     setSubmitting(true);
     setSubmitError(null);
+
+    // Always check availability on submit — no need to blur first.
+    // If we already know it's taken (state='taken'), bail immediately.
+    if (state === 'taken') {
+      setSubmitError('Ce pseudo est déjà pris.');
+      setSubmitting(false);
+      return;
+    }
+    if (state !== 'available') {
+      // Not yet checked (idle) or still checking from onBlur — do it now inline.
+      try {
+        const chk = await fetch(`/api/auth/check-pseudo?q=${encodeURIComponent(trimmed)}`);
+        const chkData = await chk.json();
+        if (!chkData.available) {
+          setPseudoState('taken');
+          setSuggestion(chkData.suggestion ?? null);
+          setSubmitError('Ce pseudo est déjà pris.');
+          setSubmitting(false);
+          return;
+        }
+        setPseudoState('available');
+      } catch {
+        // Network error — let the main POST below handle it
+      }
+    }
 
     try {
       const res = await fetch('/api/auth/guest', {
@@ -115,7 +140,8 @@ export default function GuestModal({ onDone }: Props) {
     setTimeout(() => checkAvailability(suggestion), 0);
   }
 
-  const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken' && state !== 'invalid' && state !== 'checking';
+  // Button stays enabled while checking — submit does an inline check if needed
+  const isSubmittable = isValidPseudoFormat(pseudo.trim()) && state !== 'taken' && state !== 'invalid';
 
   if (!visible) return null;
 
