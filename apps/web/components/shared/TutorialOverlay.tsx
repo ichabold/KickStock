@@ -10,7 +10,7 @@ const TUT_STEPS = [
   },
   {
     title: 'Mouvements de prix',
-    text: "Un résultat positif augmente le prix. Une défaite le fait chuter. Le gagnant absorbe 50% de la valeur du perdant.",
+    text: "Un résultat positif augmente le prix. Une défaite le fait chuter. Le gagnant absorbe 40% de la valeur du perdant.",
     icon: '📈',
   },
   {

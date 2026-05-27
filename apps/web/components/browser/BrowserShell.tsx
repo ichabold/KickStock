@@ -14,7 +14,7 @@ import GuestModal from '@/components/auth/GuestModal';
 import WelcomeModal from '@/components/auth/WelcomeModal';
 import { getPseudo } from '@/lib/pseudo';
 import { PriceDisplay, TradeActions, SimulateButton, usePortfolioTotals } from '@/components/mechanics';
-import TutorialOverlay from '@/components/shared/TutorialOverlay';
+import CoachMarkOverlay from '@/components/shared/CoachMarkOverlay';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useAuth } from '@/hooks/useAuth';
@@ -938,10 +938,11 @@ export default function BrowserShell() {
     return () => useGameStore.getState().stopSync();
   }, []);
 
-  // Auto-open tutorial on first guest creation — P0 fix
+  // Auto-open coach marks on first guest creation — P0 fix
   useEffect(() => {
     function handleShowTut() {
       localStorage.setItem('kickstock_seen_tutorial', '1');
+      setView('market'); // ensure market tiles are visible for coach marks
       setShowTut(true);
     }
     window.addEventListener('kickstock:show-tutorial', handleShowTut);
@@ -1139,7 +1140,7 @@ export default function BrowserShell() {
           onClose={() => setNationId(null)}
         />
       )}
-      {showTut && <TutorialOverlay onClose={() => setShowTut(false)}/>}
+      {showTut && <CoachMarkOverlay shell="browser" onDone={() => setShowTut(false)} />}
     </div>
     </>
   );

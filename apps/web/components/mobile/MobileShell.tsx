@@ -9,7 +9,7 @@ import { Suspense } from 'react';
 import AuthWidget from '@/components/shared/AuthWidget';
 import GuestModal from '@/components/auth/GuestModal';
 import WelcomeModal from '@/components/auth/WelcomeModal';
-import TutorialOverlay from '@/components/shared/TutorialOverlay';
+import CoachMarkOverlay from '@/components/shared/CoachMarkOverlay';
 import { useAuth } from '@/hooks/useAuth';
 import MarketTab from './MarketTab';
 import ScheduleTab from './ScheduleTab';
@@ -35,6 +35,7 @@ export default function MobileShell() {
   useEffect(() => {
     function handleShowTut() {
       localStorage.setItem('kickstock_seen_tutorial', '1');
+      setTab('market'); // ensure NationCards are visible for coach marks
       setShowTut(true);
     }
     window.addEventListener('kickstock:show-tutorial', handleShowTut);
@@ -77,7 +78,7 @@ export default function MobileShell() {
       <header className={styles.header}>
         <span className={styles.logo}>KICKSTOCK</span>
         <div className={styles.stats}>
-          <div className={styles.stat}>
+          <div className={styles.stat} data-coach="cash-stat">
             <div className={styles.statLbl}>CASH</div>
             <div className={styles.statVal}>{fmt(cash)}</div>
           </div>
@@ -128,7 +129,7 @@ export default function MobileShell() {
 
       <GuestModal onDone={() => {}} />
       <Suspense><WelcomeModal /></Suspense>
-      {showTut && <TutorialOverlay onClose={() => setShowTut(false)} />}
+      {showTut && <CoachMarkOverlay shell="mobile" onDone={() => setShowTut(false)} />}
 
       {/* BOTTOM NAV */}
       <BottomNav

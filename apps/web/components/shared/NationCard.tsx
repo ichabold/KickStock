@@ -20,6 +20,7 @@ interface Props {
   onCardClick?: () => void;
   density?: Density;
   flash?: 'up' | 'down' | '';
+  coachTarget?: string;
 }
 
 function Sparkline({ history, up }: { history: number[]; up: boolean }) {
@@ -55,7 +56,7 @@ function Sparkline({ history, up }: { history: number[]; up: boolean }) {
 }
 
 export default function NationCard({
-  nation, onBuy, onSell, onCardClick, density = 'comfortable', flash,
+  nation, onBuy, onSell, onCardClick, density = 'comfortable', flash, coachTarget,
 }: Props) {
   const prices     = useGameStore(s => s.prices);
   const history    = useGameStore(s => s.priceHistory[nation.id] ?? []);
@@ -81,6 +82,7 @@ export default function NationCard({
       className={cardClass}
       onClick={onCardClick}
       style={{ cursor: onCardClick ? 'pointer' : undefined }}
+      {...(coachTarget ? { 'data-coach': coachTarget } : {})}
     >
       <div className={styles.top}>
         <span className={styles.flag} aria-hidden>{nation.flag}</span>

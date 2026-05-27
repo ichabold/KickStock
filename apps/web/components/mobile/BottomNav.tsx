@@ -38,6 +38,7 @@ export default function BottomNav({ active, onChange, onPlay }: Props) {
         className={styles.play}
         onClick={onPlay}
         aria-label="Simulate next match-day"
+        data-coach="play-btn"
       >
         <IconPlay />
       </button>

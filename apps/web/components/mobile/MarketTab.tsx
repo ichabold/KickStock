@@ -92,13 +92,14 @@ export default function MarketTab() {
         </div>
 
         <div className={styles.grid}>
-          {filtered.map(n => (
+          {filtered.map((n, i) => (
             <NationCard
               key={n.id}
               nation={n}
               onBuy={() => setModal({ nation: n, mode: 'buy' })}
               onSell={() => setModal({ nation: n, mode: 'sell' })}
               onCardClick={() => setNationId(n.id)}
+              coachTarget={i === 0 ? 'nation-card' : undefined}
             />
           ))}
         </div>
