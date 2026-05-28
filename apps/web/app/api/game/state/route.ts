@@ -11,6 +11,8 @@ import type { StoredMatchResult } from '@kickstock/types';
 
 export const dynamic = 'force-dynamic';
 
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adminFrom = (a: ReturnType<typeof createAdminClient>, t: string) => (a as any).from(t);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,6 +33,10 @@ export async function GET(req: NextRequest) {
 
     if (!deviceId && !userId) {
       return NextResponse.json({ error: 'Missing X-Device-ID header' }, { status: 400 });
+    }
+
+    if (deviceId && !UUID_V4.test(deviceId)) {
+      return NextResponse.json({ error: 'invalid_device_id' }, { status: 400 });
     }
 
     // ── Get or create portfolio ───────────────────────────────────────────────

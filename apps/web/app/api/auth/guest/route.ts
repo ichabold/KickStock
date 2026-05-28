@@ -8,8 +8,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { isRateLimited } from '@/lib/rateLimit';
 
-const RESERVED = new Set(['admin', 'kickstock', 'moderator', 'system', 'support', 'official']);
+const RESERVED  = new Set(['admin', 'kickstock', 'moderator', 'system', 'support', 'official']);
+const UUID_V4   = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adminFrom = (a: ReturnType<typeof createAdminClient>, t: string) => (a as any).from(t);
@@ -17,17 +19,48 @@ const adminFrom = (a: ReturnType<typeof createAdminClient>, t: string) => (a as 
 const adminRpc  = (a: ReturnType<typeof createAdminClient>, fn: string, args: object) => (a as any).rpc(fn, args);
 
 export async function POST(req: NextRequest) {
-  let body: { pseudo?: string; deviceId?: string };
+  // ── Rate limiting ────────────────────────────────────────────────────────────
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (isRateLimited(ip)) {
+    return NextResponse.json({ error: 'too_many_requests' }, { status: 429 });
+  }
+
+  let body: { pseudo?: string; deviceId?: string; cfToken?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
   }
 
-  const { pseudo, deviceId } = body;
+  const { pseudo, deviceId, cfToken } = body;
 
   if (!pseudo || !deviceId) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
+  }
+
+  // ── UUID v4 validation ───────────────────────────────────────────────────────
+  if (!UUID_V4.test(deviceId)) {
+    return NextResponse.json({ error: 'invalid_device_id' }, { status: 400 });
+  }
+
+  // ── Cloudflare Turnstile ─────────────────────────────────────────────────────
+  const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+  if (turnstileSecret) {
+    if (!cfToken) {
+      return NextResponse.json({ error: 'missing_captcha' }, { status: 400 });
+    }
+    const verify = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: new URLSearchParams({
+        secret:   turnstileSecret,
+        response: cfToken,
+        remoteip: ip,
+      }),
+    });
+    const { success } = await verify.json() as { success: boolean };
+    if (!success) {
+      return NextResponse.json({ error: 'captcha_failed' }, { status: 403 });
+    }
   }
 
   const trimmed = pseudo.trim();

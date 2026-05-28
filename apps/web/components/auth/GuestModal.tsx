@@ -22,7 +22,11 @@ export default function GuestModal({ onDone }: Props) {
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [cfToken, setCfToken]         = useState<string | null>(null);
+  const inputRef        = useRef<HTMLInputElement>(null);
+  const turnstileRef    = useRef<HTMLDivElement>(null);
+  const turnstileWidget = useRef<string | null>(null);
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
 
   // Show modal only if no session AND no saved pseudo
   useEffect(() => {
@@ -40,6 +44,44 @@ export default function GuestModal({ onDone }: Props) {
     if (!visible) return;
     const isTouch = window.matchMedia('(pointer: coarse)').matches;
     if (!isTouch) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [visible]);
+
+  // Load Turnstile invisible widget when modal opens
+  useEffect(() => {
+    if (!visible || !siteKey || !turnstileRef.current) return;
+
+    const existing = document.getElementById('ks-turnstile-script');
+    const render = () => {
+      if (!turnstileRef.current || turnstileWidget.current) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      turnstileWidget.current = (window as any).turnstile?.render(turnstileRef.current, {
+        sitekey:           siteKey,
+        execution:         'render',
+        size:              'invisible',
+        callback:          (token: string) => setCfToken(token),
+        'expired-callback': () => setCfToken(null),
+      }) ?? null;
+    };
+
+    if (existing) {
+      render();
+    } else {
+      const script = document.createElement('script');
+      script.id  = 'ks-turnstile-script';
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.onload = render;
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      if (turnstileWidget.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).turnstile?.remove(turnstileWidget.current);
+        turnstileWidget.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const checkAvailability = useCallback(async (value: string) => {
@@ -106,10 +148,17 @@ export default function GuestModal({ onDone }: Props) {
     }
 
     try {
+      // If Turnstile is enabled but token isn't ready yet, wait briefly
+      if (siteKey && !cfToken) {
+        setSubmitError('Vérification en cours, réessaie dans un instant.');
+        setSubmitting(false);
+        return;
+      }
+
       const res = await fetch('/api/auth/guest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pseudo: trimmed, deviceId: getDeviceId() }),
+        body: JSON.stringify({ pseudo: trimmed, deviceId: getDeviceId(), cfToken }),
       });
       const data = await res.json();
 
@@ -203,6 +252,22 @@ export default function GuestModal({ onDone }: Props) {
               </div>
             )}
             {submitError && <div style={s.error}>{submitError}</div>}
+
+            {/* Turnstile invisible widget — renders here, hidden from user */}
+            <div ref={turnstileRef} style={{ display: 'none' }} />
+            {siteKey && (
+              <div style={s.turnstileNotice}>
+                Ce site est protégé par Cloudflare Turnstile.{' '}
+                <a
+                  href="https://www.cloudflare.com/privacypolicy/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={s.turnstileLink}
+                >
+                  Politique de confidentialité
+                </a>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -467,5 +532,16 @@ const s: Record<string, React.CSSProperties> = {
     letterSpacing: 1,
     fontFamily: 'var(--font-display)',
     cursor: 'pointer',
+  },
+  turnstileNotice: {
+    fontSize: 9,
+    color: 'var(--dim)',
+    textAlign: 'center' as const,
+    lineHeight: 1.4,
+    marginTop: 2,
+  },
+  turnstileLink: {
+    color: 'var(--dim)',
+    textDecoration: 'underline',
   },
 };
