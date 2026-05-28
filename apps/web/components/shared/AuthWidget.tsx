@@ -88,7 +88,12 @@ export default function AuthWidget({ compact = false }: Props) {
               bestScore={bestScore}
               avatarUrl={avatarUrl}
               initial={initial}
-              onSignOut={() => { setPanelOpen(false); signOut(); }}
+              onSignOut={async () => {
+                setPanelOpen(false);
+                useGameStore.getState().resetGame();
+                await signOut();
+                window.location.reload();
+              }}
             />
           </BottomSheet>
         </>
@@ -109,7 +114,12 @@ export default function AuthWidget({ compact = false }: Props) {
               bestScore={bestScore}
               avatarUrl={avatarUrl}
               initial={initial}
-              onSignOut={() => { setPanelOpen(false); signOut(); }}
+              onSignOut={async () => {
+                setPanelOpen(false);
+                useGameStore.getState().resetGame();
+                await signOut();
+                window.location.reload();
+              }}
             />
           </div>
         )}

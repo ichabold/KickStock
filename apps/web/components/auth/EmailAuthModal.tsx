@@ -145,6 +145,7 @@ function SignUpView({ onCheckEmail, onClose }: { onCheckEmail: () => void; onClo
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimPseudo = pseudo.trim();
+    const trimEmail  = email.trim().toLowerCase();
     if (loading || pseudoState === 'taken' || pseudoState === 'checking') return;
     if (!isValidPseudoFormat(trimPseudo)) { setError('Pseudo invalide (3-20 caractères, lettres/chiffres/_-).'); return; }
     if (password.length < 8) { setError('Le mot de passe doit faire au moins 8 caractères.'); return; }
@@ -152,12 +153,30 @@ function SignUpView({ onCheckEmail, onClose }: { onCheckEmail: () => void; onClo
     setLoading(true);
     setError('');
 
+    // Check if email already exists before calling signUp (Supabase silently
+    // accepts duplicate signups when "prevent enumeration" is on).
+    try {
+      const chk  = await fetch(`/api/auth/check-email?q=${encodeURIComponent(trimEmail)}`);
+      const chkData = await chk.json() as { exists?: boolean; confirmed?: boolean };
+      if (chkData.exists) {
+        setError(
+          chkData.confirmed
+            ? 'Cet email est déjà utilisé. Connecte-toi ou utilise « Mot de passe oublié ».'
+            : 'Un email de confirmation a déjà été envoyé à cette adresse. Vérifie ta boîte mail.',
+        );
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // If the check fails, proceed anyway — signUp will catch the duplicate.
+    }
+
     // Set pending device cookie for portfolio migration (same as Google flow)
     document.cookie = `ks_pending_device=${getDeviceId()}; path=/; max-age=600; SameSite=Lax`;
 
     const sb = createClient();
-    const { error: err } = await sb.auth.signUp({
-      email: email.trim(),
+    const { data, error: err } = await sb.auth.signUp({
+      email: trimEmail,
       password,
       options: {
         data: { username: trimPseudo },
@@ -167,10 +186,18 @@ function SignUpView({ onCheckEmail, onClose }: { onCheckEmail: () => void; onClo
 
     if (err) {
       if (err.message.toLowerCase().includes('already registered')) {
-        setError('Cet email est déjà utilisé. Connecte-toi !');
+        setError('Cet email est déjà utilisé. Connecte-toi ou utilise « Mot de passe oublié ».');
       } else {
         setError('Erreur lors de l\'inscription. Réessaie.');
       }
+      setLoading(false);
+      return;
+    }
+
+    // Supabase may return success with empty identities when enumeration
+    // protection is on but the email is already taken.
+    if (!data.user || (data.user.identities ?? []).length === 0) {
+      setError('Cet email est déjà utilisé. Connecte-toi ou utilise « Mot de passe oublié ».');
       setLoading(false);
       return;
     }
