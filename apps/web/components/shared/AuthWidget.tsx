@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameStore } from '@/stores/gameStore';
+import { useGameMode } from '@/hooks/useGameMode';
 import { fmt } from '@kickstock/game-engine';
 import { getPseudo, clearPseudo, isValidPseudoFormat, getOAuthPending, clearOAuthPending, saveOAuthPending } from '@/lib/pseudo';
 import { getDeviceId } from '@/lib/device';
@@ -267,6 +268,7 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onClose, onSignOut }
   const [confirmReset, setConfirmReset] = useState(false);
   const [changePseudo, setChangePseudo] = useState(false);
   const resetGame = useGameStore(s => s.resetGame);
+  const { mode, switchMode } = useGameMode();
 
   return (
     <div style={s.menuWrap}>
@@ -281,6 +283,16 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onClose, onSignOut }
           )}
         </div>
       </div>
+      <div style={s.menuDivider} />
+
+      {/* ── Mode switch ─────────────────────────────────────────────────────── */}
+      <button
+        onClick={() => { onClose(); switchMode(mode === 'online' ? 'offline' : 'online'); }}
+        style={{ ...s.resetBtn, color: mode === 'online' ? 'var(--muted)' : 'var(--gain)', borderTop: '1px solid var(--border)', paddingTop: 8 }}
+      >
+        {mode === 'online' ? '🎲 Jouer en simulation →' : '⚡ Retour au mode Live →'}
+      </button>
+
       <div style={s.menuDivider} />
       <button onClick={() => setChangePseudo(true)} style={s.resetBtn}>
         {t('changePseudo')}

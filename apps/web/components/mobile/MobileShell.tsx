@@ -16,11 +16,12 @@ import MarketTab from './MarketTab';
 import ScheduleTab from './ScheduleTab';
 import PortfolioTab from './PortfolioTab';
 import SimulateTab from './SimulateTab';
+import LiveTab from './LiveTab';
 import StandingsTab from './StandingsTab';
 import BottomNav from './BottomNav';
 import styles from './MobileShell.module.css';
 import type { TabId } from '@kickstock/types';
-import { CALENDAR } from '@kickstock/constants';
+import { useGameMode } from '@/hooks/useGameMode';
 
 export default function MobileShell() {
   const t = useTranslations('shell');
@@ -63,11 +64,15 @@ export default function MobileShell() {
 
   const { cash, totalVal: totVal, pl } = usePortfolioTotals();
 
-  const dayIndex = useGameStore(s => s.dayIndex);
-  const champion = useGameStore(s => s.champion);
+  const dayIndex  = useGameStore(s => s.dayIndex);
+  const champion  = useGameStore(s => s.champion);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap = useGameStore(s => (s as any)._bootstrap);
+  const { mode }  = useGameMode();
+  const isOnline  = mode === 'online';
 
-  const day = CALENDAR[dayIndex];
-  const totalDays = CALENDAR.length;
+  const day       = bootstrap?.days?.find((d: { day_index: number }) => d.day_index === dayIndex) ?? null;
+  const totalDays = bootstrap?.days?.length ?? 34;
   const progressPct = Math.min(100, (dayIndex / Math.max(1, totalDays)) * 100);
 
   return (
@@ -107,11 +112,16 @@ export default function MobileShell() {
             ? champion
               ? t('tournamentEndedChampion', { champion })
               : t('tournamentEnded')
-            : day.label}
+            : day.full_label}
         </span>
         {day && (
-          <span className={`${styles.pill} ${day.isKO ? styles.pillKO : styles.pillGroup}`}>
+          <span className={`${styles.pill} ${day.is_ko ? styles.pillKO : styles.pillGroup}`}>
             {day.phase}
+          </span>
+        )}
+        {isOnline && (
+          <span style={{ fontSize: 9, color: 'var(--gain)', fontWeight: 700, letterSpacing: 1, marginLeft: 4 }}>
+            ● LIVE
           </span>
         )}
       </div>
@@ -120,7 +130,10 @@ export default function MobileShell() {
       <main className={styles.scroll}>
         {tab === 'schedule'  && <ScheduleTab />}
         {tab === 'standings' && <StandingsTab />}
-        {tab === 'simulate'  && <SimulateTab onDone={() => setTab('schedule')} />}
+        {tab === 'simulate'  && (isOnline
+          ? <LiveTab />
+          : <SimulateTab onDone={() => setTab('schedule')} />
+        )}
         {tab === 'market'    && <MarketTab />}
         {tab === 'portfolio' && <PortfolioTab />}
       </main>
@@ -134,6 +147,7 @@ export default function MobileShell() {
         active={tab}
         onChange={setTab}
         onPlay={() => setTab('simulate')}
+        isOnline={isOnline}
       />
     </div>
   );

@@ -52,7 +52,7 @@ API-Football (RapidAPI)
         │         ├─ upsert matches (ne touche JAMAIS processed_at ni les scores)
         │         └─ met à jour competitions.last_sync_at
         │
-        └─── [Cron */5 min]  /api/cron/sync-results
+        └─── [Cron */30 min]  /api/cron/sync-results
                   │
                   ├─ isMatchWindowActive() → non : skip (0 appel API)
                   │                       → oui :
@@ -70,12 +70,13 @@ API-Football (RapidAPI)
                   └─ checkAndAdvancePhase()
 ```
 
-| | `sync-fixtures` (daily) | `sync-results` (*/5 min) |
-|--|------------------------|--------------------------|
-| Fréquence | 1× / compétition / jour | 0–72×/jour selon fenêtres |
+| | `sync-fixtures` (daily) | `sync-results` (every 30 min) |
+|--|------------------------|-------------------------------|
+| Fréquence | 1× / compétition / jour | 0–12×/jour selon fenêtres |
 | Responsabilité | Calendrier, équipes, reports, métadonnées | Résultats, prix, dividendes |
 | Écrit `processed_at` | ❌ jamais | ✅ toujours |
 | Appel API si rien | 1 (daily inévitable) | 0 (court-circuit) |
+| **Plan Free (~100 req/j)** | ✅ 1 req/jour | ✅ ~6 req/jour (fenêtre 3h) |
 
 ---
 
@@ -987,19 +988,25 @@ Le mode offline fonctionne ensuite **exactement comme aujourd'hui** — simulati
 {
   "crons": [
     { "path": "/api/cron/sync-fixtures", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/sync-results",  "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/sync-results",  "schedule": "*/30 * * * *" }
   ]
 }
 ```
 
-**Budget API :**
+**Budget API — Plan Free (~100 req/jour) :**
 
-| Scénario | sync-fixtures/j | sync-results/j | Total |
-|----------|----------------|----------------|-------|
-| Hors compétition | 1 | 0 | **1** |
-| Journée groupes CdM (4 matchs, 6h fenêtres) | 1 | ~72 | **73** |
-| Journée KO (2 matchs) | 1 | ~48 | **49** |
-| CdM + LdC simultanées | 2 | ~72 | **74** |
+| Scénario | sync-fixtures/j | sync-results/j | Total | Plan Free OK? |
+|----------|----------------|----------------|-------|---------------|
+| Hors compétition | 1 | 0 | **1** | ✅ |
+| Journée groupes (4 matchs, ~6h fenêtres actives) | 1 | ~12 | **13** | ✅ |
+| Journée KO (2 matchs, ~5h) | 1 | ~10 | **11** | ✅ |
+| CdM + LdC simultanées | 2 | ~12 | **14** | ✅ |
+
+> **Note :** La granularité passe à 30 min au lieu de 5 min.
+> Un but marqué à 87' ne se reflètera dans les prix qu'au prochain tick (max 30 min d'attente).
+> Acceptable pour un MVP — monter à 5 min quand le plan Basic (~10$/mois) sera souscrit.
+
+**Upgrade futur (plan Basic) :** changer `*/30` en `*/5` dans `vercel.json` + ajuster le bucket Redis de 1800s → 300s dans `football-api.ts`.
 
 ---
 

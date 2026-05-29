@@ -1,5 +1,22 @@
 import { NATIONS, GROUPS, DIV_RATES } from '@kickstock/constants';
-import type { Match, GameState, StoredMatchResult } from '@kickstock/types';
+import type { Match, GameState, StoredMatchResult, TeamMeta } from '@kickstock/types';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Resolves the team list: uses injected teams if provided, falls back to NATIONS. */
+function resolveTeams(teams?: TeamMeta[]): TeamMeta[] {
+  if (teams && teams.length > 0) return teams;
+  // Legacy fallback — will be removed once all callers inject teams
+  return NATIONS.map(n => ({
+    id: n.id, name: n.name, flag: n.flag,
+    group: n.group, strength: n.str, initialPrice: n.p,
+  }));
+}
+
+function resolveGroups(teams: TeamMeta[]): string[] {
+  const gs = [...new Set(teams.map(t => t.group).filter(Boolean))].sort();
+  return gs.length > 0 ? gs : GROUPS.slice(1);
+}
 
 // ─── GROUP STANDINGS ──────────────────────────────────────────────────────────
 
@@ -17,19 +34,22 @@ function cmp(a: StandingEntry, b: StandingEntry): number {
 
 export function deriveGroupStandings(
   matchResults: Record<number, StoredMatchResult[]>,
-  eliminated: string[],
+  eliminated:   string[],
+  teams?:       TeamMeta[],
 ): Record<string, string[]> {
+  const allTeams = resolveTeams(teams);
+  const groups   = resolveGroups(allTeams);
   const gs: Record<string, StandingEntry[]> = {};
 
-  for (const g of GROUPS.slice(1)) {
-    gs[g] = NATIONS.filter(n => n.group === g).map(n => ({
-      id: n.id, pts: 0, gf: 0, ga: 0, str: n.str,
+  for (const g of groups) {
+    gs[g] = allTeams.filter(t => t.group === g).map(t => ({
+      id: t.id, pts: 0, gf: 0, ga: 0, str: t.strength,
     }));
   }
 
   for (const results of Object.values(matchResults)) {
     for (const r of results) {
-      for (const g of GROUPS.slice(1)) {
+      for (const g of groups) {
         const tA = gs[g].find(t => t.id === r.a);
         const tB = gs[g].find(t => t.id === r.b);
         if (!tA || !tB) continue;
@@ -43,7 +63,7 @@ export function deriveGroupStandings(
   }
 
   const standings: Record<string, string[]> = {};
-  for (const g of GROUPS.slice(1)) {
+  for (const g of groups) {
     standings[g] = [...gs[g]]
       .filter(t => !eliminated.includes(t.id))
       .sort(cmp)
@@ -72,26 +92,28 @@ export interface StandingRow {
 
 export function buildGroupStandingsUI(
   matchResults: Record<number, StoredMatchResult[]>,
-  prices: Record<string, number>,
-  eliminated: string[],
+  prices:       Record<string, number>,
+  eliminated:   string[],
+  teams?:       TeamMeta[],
 ): Record<string, StandingRow[]> {
+  const allTeams = resolveTeams(teams);
+  const groups   = resolveGroups(allTeams);
   const gs: Record<string, StandingRow[]> = {};
 
-  for (const g of GROUPS.slice(1)) {
-    gs[g] = NATIONS.filter(n => n.group === g).map(n => ({
-      id: n.id, flag: n.flag, name: n.name,
+  for (const g of groups) {
+    gs[g] = allTeams.filter(t => t.group === g).map(t => ({
+      id: t.id, flag: t.flag, name: t.name,
       mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0,
-      price: prices[n.id] ?? n.p, initP: n.p,
-      elim: eliminated.includes(n.id),
+      price: prices[t.id] ?? t.initialPrice, initP: t.initialPrice,
+      elim: eliminated.includes(t.id),
     }));
   }
 
   for (const [diStr, results] of Object.entries(matchResults)) {
     const di = Number(diStr);
-    // only group stage days (0-16)
-    if (di >= 17) continue;
+    if (di >= 17) continue; // only group stage days
     for (const r of results) {
-      for (const g of GROUPS.slice(1)) {
+      for (const g of groups) {
         const tA = gs[g].find(t => t.id === r.a);
         const tB = gs[g].find(t => t.id === r.b);
         if (!tA || !tB) continue;
@@ -105,7 +127,7 @@ export function buildGroupStandingsUI(
     }
   }
 
-  for (const g of GROUPS.slice(1)) {
+  for (const g of groups) {
     gs[g].sort((a, b) =>
       (b.pts - a.pts) || ((b.gf - b.ga) - (a.gf - a.ga)) || (b.gf - a.gf),
     );
@@ -114,29 +136,30 @@ export function buildGroupStandingsUI(
 }
 
 // ─── R32 POOL BUILDER ─────────────────────────────────────────────────────────
-// Official FIFA 2026 R32 bracket seeding based on group results
 
 export function buildR32Pool(
   matchResults: Record<number, StoredMatchResult[]>,
-  eliminated: string[],
+  eliminated:   string[],
+  teams?:       TeamMeta[],
 ): string[] {
-  const standings = deriveGroupStandings(matchResults, eliminated);
+  const allTeams  = resolveTeams(teams);
+  const standings = deriveGroupStandings(matchResults, eliminated, allTeams);
 
-  const winner = (g: string) => standings[g]?.[0] ?? null;
-  const runner = (g: string) => standings[g]?.[1] ?? null;
+  const winner  = (g: string) => standings[g]?.[0] ?? null;
+  const runner  = (g: string) => standings[g]?.[1] ?? null;
   const thirdOf = (g: string) => standings[g]?.[2] ?? null;
 
   // Best 8 thirds from 12 groups
-  const allThirds = GROUPS.slice(1)
+  interface ThirdEntry extends StandingEntry { group: string }
+  const allThirds = resolveGroups(allTeams)
     .map(g => {
       const id = thirdOf(g);
       if (!id) return null;
-      const n = NATIONS.find(n => n.id === id);
-      return n ? { id, group: g, pts: 0, gf: 0, ga: 0, str: n.str } : null;
+      const t = allTeams.find(t => t.id === id);
+      return t ? { id, group: g, pts: 0, gf: 0, ga: 0, str: t.strength } as ThirdEntry : null;
     })
-    .filter(Boolean) as Array<{ id: string; group: string; pts: number; gf: number; ga: number; str: number }>;
+    .filter(Boolean) as ThirdEntry[];
 
-  // Enrich thirds with actual points from group results
   for (const results of Object.values(matchResults)) {
     for (const r of results) {
       const t = allThirds.find(t => t.id === r.a || t.id === r.b);
@@ -166,36 +189,32 @@ export function buildR32Pool(
 
   // Official FIFA 2026 R32 pairings
   const matches: [string | null, string | null][] = [
-    [winner('A'), pickThird(['C', 'E', 'F', 'H', 'I'])],  // M1
-    [winner('B'), pickThird(['E', 'F', 'G', 'I', 'J'])],  // M2
-    [runner('A'), runner('B')],                            // M3
-    [winner('C'), runner('F')],                            // M4
-    [winner('D'), pickThird(['B', 'E', 'F', 'I', 'J'])],  // M5
-    [winner('E'), pickThird(['A', 'B', 'C', 'D', 'F'])],  // M6
-    [runner('C'), winner('F')],                            // M7
-    [runner('D'), runner('G')],                            // M8
-    [runner('E'), runner('I')],                            // M9
-    [winner('G'), pickThird(['A', 'E', 'H', 'I', 'J'])],  // M10
-    [winner('H'), runner('J')],                            // M11
-    [runner('K'), runner('L')],                            // M12
-    [winner('I'), pickThird(['C', 'D', 'F', 'G', 'H'])],  // M13
-    [winner('J'), runner('H')],                            // M14
-    [winner('K'), pickThird(['D', 'E', 'I', 'J', 'L'])],  // M15
-    [winner('L'), pickThird(['E', 'H', 'I', 'J', 'K'])],  // M16
+    [winner('A'), pickThird(['C', 'E', 'F', 'H', 'I'])],
+    [winner('B'), pickThird(['E', 'F', 'G', 'I', 'J'])],
+    [runner('A'), runner('B')],
+    [winner('C'), runner('F')],
+    [winner('D'), pickThird(['B', 'E', 'F', 'I', 'J'])],
+    [winner('E'), pickThird(['A', 'B', 'C', 'D', 'F'])],
+    [runner('C'), winner('F')],
+    [runner('D'), runner('G')],
+    [runner('E'), runner('I')],
+    [winner('G'), pickThird(['A', 'E', 'H', 'I', 'J'])],
+    [winner('H'), runner('J')],
+    [runner('K'), runner('L')],
+    [winner('I'), pickThird(['C', 'D', 'F', 'G', 'H'])],
+    [winner('J'), runner('H')],
+    [winner('K'), pickThird(['D', 'E', 'I', 'J', 'L'])],
+    [winner('L'), pickThird(['E', 'H', 'I', 'J', 'K'])],
   ];
 
-  // Flatten to [m1a, m1b, m2a, m2b, ...] — 32 entries
   const pool: Array<string | null> = [];
-  for (const [a, b] of matches) {
-    pool.push(a);
-    pool.push(b);
-  }
+  for (const [a, b] of matches) { pool.push(a); pool.push(b); }
 
   // Fill nulls with best remaining non-eliminated teams
   const used = new Set(pool.filter(Boolean) as string[]);
-  const remaining = NATIONS
-    .filter(n => !eliminated.includes(n.id) && !used.has(n.id))
-    .sort((a, b) => b.str - a.str);
+  const remaining = allTeams
+    .filter(t => !eliminated.includes(t.id) && !used.has(t.id))
+    .sort((a, b) => b.strength - a.strength);
 
   for (let i = 0; i < pool.length; i++) {
     if (!pool[i] && remaining.length > 0) pool[i] = remaining.shift()!.id;
@@ -224,7 +243,6 @@ export function buildMatchesForDay(
     return res;
   };
 
-  // R32: 32 teams in pairs, spread over 6 days
   const r32Slices: Record<string, [number, number]> = {
     r32_28: [0, 4],   r32_29: [4, 10],  r32_30: [10, 16],
     r32_1:  [16, 22], r32_2:  [22, 26], r32_3:  [26, 32],
@@ -234,7 +252,6 @@ export function buildMatchesForDay(
     return pairSlice(r32Pool, s, e);
   }
 
-  // R16: 16 winners, 2 matches/day
   const r16Slices: Record<string, [number, number]> = {
     r16_1: [0, 4], r16_2: [4, 8], r16_3: [8, 12], r16_4: [12, 16],
   };
@@ -243,7 +260,6 @@ export function buildMatchesForDay(
     return pairSlice(r16Pool, s, e);
   }
 
-  // QF: 8 teams, spread over 3 days
   const qfSlices: Record<string, [number, number]> = {
     qf_1: [0, 2], qf_2: [2, 4], qf_3: [4, 8],
   };
@@ -267,3 +283,6 @@ export function buildMatchesForDay(
 
   return [];
 }
+
+// Keep DIV_RATES re-export for any legacy callers
+export { DIV_RATES };

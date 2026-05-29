@@ -1,4 +1,4 @@
-// ─── NATION ───────────────────────────────────────────────────────────────────
+// ─── NATION (legacy — used by hardcoded constants, game engine now uses TeamMeta) ─
 export interface Nation {
   id: string;
   name: string;
@@ -7,6 +7,62 @@ export interface Nation {
   conf: string;    // confederation
   str: number;     // FIFA strength 0-100
   group: string;   // group letter A-L
+}
+
+// ─── TEAM META (API-driven replacement for Nation) ────────────────────────────
+/** Minimal team descriptor injected into game-engine functions. */
+export interface TeamMeta {
+  id:           string;   // "BRA"
+  name:         string;
+  flag:         string;   // emoji 🇧🇷
+  group:        string;   // "A"…"L"
+  strength:     number;   // 0-100 (from FIFA ranking)
+  initialPrice: number;   // KC starting price
+  confederation?: string;
+  logoUrl?:     string;
+}
+
+// ─── BOOTSTRAP (API → offline store seed) ────────────────────────────────────
+export interface BootstrapDay {
+  day_index:  number;
+  full_label: string;   // "Day 1 · Thu Jun 11"
+  date_label: string;   // "Jun 11"
+  phase:      string;   // "Groups"|"R32"|"R16"|"QF"|"SF"|"3rd"|"Final"
+  is_ko:      boolean;
+  div_key:    string | null;
+}
+
+export interface BootstrapFixture {
+  day_index: number;
+  nation_a:  string;
+  nation_b:  string;
+  venue:     string | null;
+}
+
+/** Raw team row as returned by /api/competition/bootstrap (snake_case from DB). */
+export interface BootstrapTeam {
+  id:            string;
+  name:          string;
+  flag_emoji:    string | null;
+  logo_url:      string | null;
+  group_code:    string | null;
+  strength:      number;
+  initial_price: number;
+  confederation: string | null;
+}
+
+export interface BootstrapData {
+  competition: {
+    id:         number;
+    name:       string;
+    start_date: string;
+    league_id:  number;
+    season:     number;
+  };
+  teams:          BootstrapTeam[];
+  days:           BootstrapDay[];
+  group_fixtures: BootstrapFixture[];
+  generated_at:   string;
 }
 
 // ─── MATCH ────────────────────────────────────────────────────────────────────
