@@ -66,10 +66,11 @@ export async function GET(req: Request) {
     try {
       const fixtures = await fetchAllFixtures(comp.league_id, comp.season);
       console.log(`[sync-fixtures] ${comp.name} league=${comp.league_id} season=${comp.season}: API returned ${fixtures.length} fixtures`);
+      console.log(`[sync-fixtures] DEBUG comp=${JSON.stringify(comp)}`);
       if (fixtures[0]) {
         const f0 = fixtures[0];
         const { calcDayIndex } = await import('@/lib/normalizer');
-        console.log(`[sync-fixtures] DEBUG fixture[0].date=${f0.fixture.date} start_date=${comp.start_date} dayIndex=${comp.start_date ? calcDayIndex(f0.fixture.date, comp.start_date) : 'N/A (no start_date)'}`);
+        console.log(`[sync-fixtures] DEBUG fixture[0].date=${f0.fixture.date} start_date=${comp.start_date} dayIndex=${comp.start_date ? calcDayIndex(f0.fixture.date, comp.start_date) : 'N/A'}`);
       }
       let upserted = 0;
       let skipped  = 0;
