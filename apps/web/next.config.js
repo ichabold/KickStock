@@ -1,5 +1,6 @@
 // @ts-check
 const { withSentryConfig } = require('@sentry/nextjs');
+const withNextIntl          = require('next-intl/plugin')('./i18n/request.ts');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -17,7 +18,7 @@ const nextConfig = {
   },
 };
 
-module.exports = withSentryConfig(nextConfig, {
+module.exports = withSentryConfig(withNextIntl(nextConfig), {
   // Sentry organisation + project (set via CI env vars or .sentryclirc)
   org:     process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
