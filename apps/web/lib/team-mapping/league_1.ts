@@ -37,6 +37,7 @@ export const LEAGUE_1_MAPPING: Record<string, string> = {
   'France':                 'FRA',
   'Spain':                  'ESP',
   'England':                'ENG',
+  'Wales':                  'WAL',
   'Germany':                'GER',
   'Portugal':               'POR',
   'Netherlands':            'NED',

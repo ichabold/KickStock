@@ -11,6 +11,7 @@
 
 import type { ApiFixture } from './football-api';
 import { apiNameToTeamId } from './team-mapping';
+import { teamIdToFlagEmoji } from './team-mapping/team-iso2';
 
 // ── Types for DB rows ─────────────────────────────────────────────────────────
 
@@ -209,8 +210,8 @@ export function normalizeFixture(
   const dayIndex = competition.start_date
     ? calcDayIndex(fixture.fixture.date, competition.start_date)
     : 0;
-  const isoA = extractIsoFromLogoUrl(fixture.teams.home.logo);
-  const isoB = extractIsoFromLogoUrl(fixture.teams.away.logo);
+  const flagEmojiA = teamIdToFlagEmoji(idA) ?? (extractIsoFromLogoUrl(fixture.teams.home.logo) ? isoToFlagEmoji(extractIsoFromLogoUrl(fixture.teams.home.logo)!) : null);
+  const flagEmojiB = teamIdToFlagEmoji(idB) ?? (extractIsoFromLogoUrl(fixture.teams.away.logo) ? isoToFlagEmoji(extractIsoFromLogoUrl(fixture.teams.away.logo)!) : null);
   const groupCode = parseGroupCode(fixture.league.group);
 
   return {
@@ -219,14 +220,14 @@ export function normalizeFixture(
       api_team_id: fixture.teams.home.id,
       name:        fixture.teams.home.name,
       logo_url:    fixture.teams.home.logo ?? null,
-      flag_emoji:  isoA ? isoToFlagEmoji(isoA) : null,
+      flag_emoji:  flagEmojiA,
     },
     teamB: {
       id:          idB,
       api_team_id: fixture.teams.away.id,
       name:        fixture.teams.away.name,
       logo_url:    fixture.teams.away.logo ?? null,
-      flag_emoji:  isoB ? isoToFlagEmoji(isoB) : null,
+      flag_emoji:  flagEmojiB,
     },
     compTeamA: {
       competition_id: competition.id,

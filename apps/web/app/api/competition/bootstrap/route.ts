@@ -19,8 +19,9 @@
  * The offline store resolves KO matches at simulation time using buildKOMatches.
  */
 
-import { NextResponse }      from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { NextResponse }        from 'next/server';
+import { createAdminClient }   from '@/lib/supabase/admin';
+import { teamIdToFlagEmoji }   from '@/lib/team-mapping/team-iso2';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,7 +81,7 @@ export async function GET() {
   }>).map(ct => ({
     id:            ct.teams.id,
     name:          ct.teams.name,
-    flag_emoji:    ct.teams.flag_emoji,
+    flag_emoji:    ct.teams.flag_emoji ?? teamIdToFlagEmoji(ct.teams.id),
     logo_url:      ct.teams.logo_url,
     group_code:    ct.group_code,
     strength:      ct.teams.strength,

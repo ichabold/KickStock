@@ -74,8 +74,6 @@ export async function GET(req: Request) {
         : comp.start_date;
       const effectiveComp = { ...comp, start_date: derivedStartDate };
 
-      console.log(`[sync-fixtures] start_date: DB=${comp.start_date} derived=${derivedStartDate}`);
-
       let upserted = 0;
       let skipped  = 0;
 
@@ -90,7 +88,7 @@ export async function GET(req: Request) {
 
         // ── 1. Upsert teams
         // Only update non-game-design fields (NOT strength — admin-configured)
-        await adm(admin).from('teams').upsert(
+        const { error: teamsErr } = await adm(admin).from('teams').upsert(
           [
             { id: teamA.id, api_team_id: teamA.api_team_id, name: teamA.name, logo_url: teamA.logo_url, flag_emoji: teamA.flag_emoji },
             { id: teamB.id, api_team_id: teamB.api_team_id, name: teamB.name, logo_url: teamB.logo_url, flag_emoji: teamB.flag_emoji },
@@ -101,18 +99,20 @@ export async function GET(req: Request) {
             // strength is NOT in this payload → will not be overwritten
           }
         );
+        if (teamsErr) throw new Error(`teams upsert: ${teamsErr.message}`);
 
         // ── 2. Upsert competition_teams (group_code only — NOT initial_price)
-        await adm(admin).from('competition_teams').upsert(
+        const { error: ctErr } = await adm(admin).from('competition_teams').upsert(
           [
             { competition_id: compTeamA.competition_id, team_id: compTeamA.team_id, group_code: compTeamA.group_code },
             { competition_id: compTeamB.competition_id, team_id: compTeamB.team_id, group_code: compTeamB.group_code },
           ],
           { onConflict: 'competition_id,team_id', ignoreDuplicates: false }
         );
+        if (ctErr) throw new Error(`competition_teams upsert: ${ctErr.message}`);
 
         // ── 3. Upsert competition_days (metadata)
-        await adm(admin).from('competition_days').upsert(
+        const { error: dayErr } = await adm(admin).from('competition_days').upsert(
           {
             competition_id: day.competition_id,
             day_index:      day.day_index,
@@ -124,11 +124,12 @@ export async function GET(req: Request) {
           },
           { onConflict: 'competition_id,day_index', ignoreDuplicates: false }
         );
+        if (dayErr) throw new Error(`competition_days upsert: ${dayErr.message}`);
 
         // ── 4. Upsert match (GOLDEN RULE: never touch processed_at / scores)
         // We use a raw SQL upsert via RPC to guarantee the exclusion.
         // Supabase JS client .upsert() would overwrite all columns by default.
-        await adm(admin).rpc('upsert_fixture', {
+        const { error: matchErr } = await adm(admin).rpc('upsert_fixture', {
           p_fixture_id:     match.fixture_id,
           p_competition_id: match.competition_id,
           p_nation_a:       match.nation_a,
@@ -140,6 +141,7 @@ export async function GET(req: Request) {
           p_scheduled_at:   match.scheduled_at,
           p_api_status:     match.api_status,
         });
+        if (matchErr) throw new Error(`upsert_fixture RPC: ${matchErr.message}`);
 
         upserted++;
       }
