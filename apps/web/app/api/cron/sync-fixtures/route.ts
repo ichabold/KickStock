@@ -65,9 +65,6 @@ export async function GET(req: Request) {
   for (const comp of competitions as Competition[]) {
     try {
       const fixtures = await fetchAllFixtures(comp.league_id, comp.season);
-      if (!Array.isArray(fixtures)) {
-        throw new Error(`fetchAllFixtures returned non-array: ${typeof fixtures} — value: ${JSON.stringify(fixtures).slice(0, 200)}`);
-      }
       console.log(`[sync-fixtures] ${comp.name}: ${fixtures.length} fixtures`);
 
       // Derive start_date from fixtures (most reliable — avoids DB/REST discrepancies).
@@ -122,14 +119,6 @@ export async function GET(req: Request) {
         );
         if (dayErr) throw new Error(`competition_days upsert: ${dayErr.message}`);
 
-        // ── 3b. Verify teams actually exist (FK sanity check)
-        for (const teamId of [match.nation_a, match.nation_b]) {
-          const { data: teamCheck, error: chkErr } = await adm(admin)
-            .from('teams').select('id').eq('id', teamId).maybeSingle();
-          if (chkErr) throw new Error(`team check [${teamId}]: ${chkErr.message}`);
-          if (!teamCheck) throw new Error(`team [${teamId}] not found in DB after upsert — upsert silently failed`);
-        }
-
         // ── 4. Upsert match (GOLDEN RULE: never touch processed_at / scores)
         // We use a raw SQL upsert via RPC to guarantee the exclusion.
         // Supabase JS client .upsert() would overwrite all columns by default.
@@ -145,7 +134,7 @@ export async function GET(req: Request) {
           p_scheduled_at:   match.scheduled_at,
           p_api_status:     match.api_status,
         });
-        if (matchErr) throw new Error(`upsert_fixture RPC [fixture=${match.fixture_id} ${match.nation_a}v${match.nation_b}]: ${matchErr.message}`);
+        if (matchErr) throw new Error(`upsert_fixture RPC: ${matchErr.message}`);
 
         upserted++;
       }
