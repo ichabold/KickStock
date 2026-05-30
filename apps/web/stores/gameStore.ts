@@ -3,30 +3,37 @@
 /**
  * gameStore — public entry point for all components.
  *
- * Online mode (default):
- *   → onlineGameStore: server-backed state, real match results from API.
- *   → Trading lock enforced, LIVE tab replaces Simulate button.
+ * Reads the mode from localStorage (via getGameModeSync) at module init
+ * and re-exports the correct store. Components always import from here —
+ * the mode switch is invisible to them.
  *
- * Offline / simulation mode (accessible via account menu):
- *   → localGameStore: per-device state in localStorage, client-side simulation.
- *   → No trading lock. Prices move from simulated results.
+ * Online (default): onlineGameStore — server-backed, real API results.
+ * Offline:          localGameStore  — localStorage, client-side simulation.
  *
- * Mode is stored in localStorage('kickstock:mode').
- * Switching mode reloads the page (intentional — avoids conditional hooks).
- *
- * All components import from '@/stores/gameStore' — the mode is invisible to them.
+ * Mode stored in localStorage('kickstock:mode').
+ * Switching reloads the page (avoids conditional hook issues).
  */
 
-// During SSR / first render, default to offline store to avoid hydration mismatch.
-// The client will switch to online store after the first render if needed.
-// For now, we re-export localGameStore as the default until the online store
-// is fully wired to the new API-Football backend (S5).
-//
-// TODO (S5): switch default to onlineGameStore once sync-results is live.
-
-export {
-  useLocalGameStore as useGameStore,
-  buildMatchesForCurrentDay,
-  fmt,
-  pctOf,
+import { getGameModeSync } from '@/hooks/useGameMode';
+import {
+  useOnlineGameStore,
+  buildMatchesForCurrentDay as onlineBuildMatches,
+  fmt, pctOf,
+} from './onlineGameStore';
+import {
+  useLocalGameStore,
+  buildMatchesForCurrentDay as localBuildMatches,
 } from './localGameStore';
+
+const mode = getGameModeSync();
+
+export { fmt, pctOf };
+
+// Cast to localGameStore's type (superset of GameState — both stores implement it)
+export const useGameStore = (
+  mode === 'online' ? useOnlineGameStore : useLocalGameStore
+) as typeof useLocalGameStore;
+
+export const buildMatchesForCurrentDay = (
+  mode === 'online' ? onlineBuildMatches : localBuildMatches
+) as typeof localBuildMatches;
