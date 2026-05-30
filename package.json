@@ -13,6 +13,6 @@
     "typescript": "^5.4.5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@parcel/watcher", "@swc/core"]
+    "onlyBuiltDependencies": ["@parcel/watcher", "@swc/core", "@sentry/cli", "esbuild"]
   }
 }
