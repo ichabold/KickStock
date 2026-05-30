@@ -83,10 +83,11 @@ async function redisSet(key: string, value: string, ttl: number): Promise<void> 
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return;
   try {
-    await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+    // Upstash REST: POST to base URL with Redis command array
+    await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value, ex: ttl }),
+      body: JSON.stringify(['SET', key, value, 'EX', ttl]),
     });
   } catch { /* best-effort */ }
 }
@@ -115,11 +116,17 @@ async function fetchWithCache<T>(
   cacheKey: string,
   ttl:       number,
   fetcher:   () => Promise<T>,
+  isValid?:  (v: T) => boolean,
 ): Promise<T> {
   // Try cache first
   const cached = await redisGet(cacheKey);
   if (cached) {
-    try { return JSON.parse(cached) as T; } catch { /* corrupt cache, refetch */ }
+    try {
+      const parsed = JSON.parse(cached) as T;
+      // Reject corrupt/malformed cached values (e.g. from a previous buggy redisSet)
+      if (!isValid || isValid(parsed)) return parsed;
+      console.warn(`[football-api] cached value failed validation for ${cacheKey}, refetching`);
+    } catch { /* corrupt JSON, refetch */ }
   }
 
   try {
@@ -129,8 +136,13 @@ async function fetchWithCache<T>(
   } catch (err) {
     // Stale-while-revalidate: if we have a stale cached value, return it
     if (cached) {
-      console.warn(`[football-api] fetch failed, returning stale cache for ${cacheKey}`, err);
-      return JSON.parse(cached) as T;
+      try {
+        const parsed = JSON.parse(cached) as T;
+        if (!isValid || isValid(parsed)) {
+          console.warn(`[football-api] fetch failed, returning stale cache for ${cacheKey}`, err);
+          return parsed;
+        }
+      } catch { /* corrupt, can't use stale */ }
     }
     throw err;
   }
@@ -166,7 +178,7 @@ export async function fetchAllFixtures(
     });
     if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
     return parseFixtures(await res.json());
-  });
+  }, Array.isArray);
 }
 
 /**
@@ -199,7 +211,7 @@ export async function fetchFinishedFixtures(
     }
 
     return allFixtures;
-  });
+  }, Array.isArray);
 }
 
 /**
