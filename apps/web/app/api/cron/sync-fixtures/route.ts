@@ -122,6 +122,14 @@ export async function GET(req: Request) {
         );
         if (dayErr) throw new Error(`competition_days upsert: ${dayErr.message}`);
 
+        // ── 3b. Verify teams actually exist (FK sanity check)
+        for (const teamId of [match.nation_a, match.nation_b]) {
+          const { data: teamCheck, error: chkErr } = await adm(admin)
+            .from('teams').select('id').eq('id', teamId).maybeSingle();
+          if (chkErr) throw new Error(`team check [${teamId}]: ${chkErr.message}`);
+          if (!teamCheck) throw new Error(`team [${teamId}] not found in DB after upsert — upsert silently failed`);
+        }
+
         // ── 4. Upsert match (GOLDEN RULE: never touch processed_at / scores)
         // We use a raw SQL upsert via RPC to guarantee the exclusion.
         // Supabase JS client .upsert() would overwrite all columns by default.
