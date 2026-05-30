@@ -180,11 +180,15 @@ async function main() {
   }
 
   const teamsWithRanks: TeamWithRank[] = compTeams.map(ct => {
-    // Match by api_team_id first, then by name
-    const r = ct.teams.api_team_id
+    // Match by api_team_id first, then fallback to name
+    const byId   = ct.teams.api_team_id
       ? rankings.find(r => r.apiTeamId === ct.teams.api_team_id)
-      : rankings.find(r => r.teamName === ct.teams.name ||
-                           r.teamName.toLowerCase() === ct.teams.name.toLowerCase());
+      : undefined;
+    const byName = rankings.find(r =>
+      r.teamName === ct.teams.name ||
+      r.teamName.toLowerCase() === ct.teams.name.toLowerCase()
+    );
+    const r = byId ?? byName;
 
     return {
       team_id:  ct.team_id,
