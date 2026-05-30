@@ -17,6 +17,7 @@ export const LEAGUE_1_MAPPING: Record<string, string> = {
 
   // ── CONCACAF (8 teams) ─────────────────────────────────────────────────────
   'United States':          'USA',
+  'USA':                    'USA',    // alternate (API-Football uses this)
   'Mexico':                 'MEX',
   'Canada':                 'CAN',
   'Costa Rica':             'CRC',
