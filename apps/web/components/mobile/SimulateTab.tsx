@@ -2,14 +2,11 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CALENDAR, NATIONS } from '@kickstock/constants';
 import { useGameStore, fmt, buildMatchesForCurrentDay } from '@/stores/gameStore';
 import { SimulateButton } from '@/components/mechanics';
-import type { StoredMatchResult } from '@kickstock/types';
+import type { StoredMatchResult, BootstrapData, BootstrapDay, TeamMeta } from '@kickstock/types';
 import MatchAnimation from './MatchAnimation';
 import styles from './PlayButton.module.css';
-
-const gN = (id: string) => NATIONS.find(n => n.id === id);
 
 interface Props {
   onDone: () => void;
@@ -27,8 +24,14 @@ export default function SimulateTab({ onDone }: Props) {
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
   const state     = useGameStore(s => s);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams     = useGameStore(s => (s as any)._teams)     as TeamMeta[];
 
-  const day     = CALENDAR[dayIndex];
+  const gN = (id: string) => teams.find(t => t.id === id);
+
+  const day: BootstrapDay | null = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
   const matches = day ? buildMatchesForCurrentDay(state) : [];
 
   const exposure = matches.reduce((acc, m) =>
@@ -36,7 +39,7 @@ export default function SimulateTab({ onDone }: Props) {
         + (portfolio[m.b] ?? 0) * (prices[m.b] ?? 0),
   0);
 
-  // ── Tournament finished ────────────────────────────────────────────────────
+  // ── Tournament finished ─────────────────────────────────────────────────────
   if (!day) {
     return (
       <div className={styles.wrap}>
@@ -47,7 +50,7 @@ export default function SimulateTab({ onDone }: Props) {
     );
   }
 
-  // ── Match animation ────────────────────────────────────────────────────────
+  // ── Match animation ─────────────────────────────────────────────────────────
   if (view === 'animating') {
     return (
       <MatchAnimation
@@ -59,12 +62,12 @@ export default function SimulateTab({ onDone }: Props) {
     );
   }
 
-  // ── Post-simulate results ──────────────────────────────────────────────────
+  // ── Post-simulate results ───────────────────────────────────────────────────
   if (view === 'done') {
     const divResults = results.filter(r => r.divCash > 0);
     return (
       <div className={styles.wrap}>
-        <div className={styles.resultsTitle}>{day.label}</div>
+        <div className={styles.resultsTitle}>{day.full_label}</div>
         <div className={styles.results}>
           {results.map((r, i) => {
             const nA = gN(r.a);
@@ -72,7 +75,7 @@ export default function SimulateTab({ onDone }: Props) {
             return (
               <div key={i} className={`${styles.result} ${r.isUpset ? styles.upset : ''}`}>
                 <span className={styles.rTeam} style={{ color: r.res === 'A' ? 'var(--gold)' : 'var(--muted)' }}>
-                  {nA?.flag} {nA?.name?.toUpperCase()}
+                  {nA?.flag} {nA?.name?.toUpperCase() ?? r.a}
                 </span>
                 <span className={styles.rScore}>
                   {r.scoreA}–{r.scoreB}
@@ -80,7 +83,7 @@ export default function SimulateTab({ onDone }: Props) {
                   {r.etRes && !r.penWinner && <span className={styles.rExtra}> {t('aet')}</span>}
                 </span>
                 <span className={styles.rTeam} style={{ color: r.res === 'B' ? 'var(--gold)' : 'var(--muted)' }}>
-                  {nB?.flag} {nB?.name?.toUpperCase()}
+                  {nB?.flag} {nB?.name?.toUpperCase() ?? r.b}
                 </span>
                 {r.elimId && <span className={styles.elimNote}>{t('eliminated', { nation: gN(r.elimId)?.name?.toUpperCase() ?? r.elimId })}</span>}
                 {r.isUpset && <span className={styles.upsetNote}>{t('upset')}</span>}
@@ -108,10 +111,10 @@ export default function SimulateTab({ onDone }: Props) {
     );
   }
 
-  // ── Pre-simulate view ──────────────────────────────────────────────────────
+  // ── Pre-simulate view ───────────────────────────────────────────────────────
   return (
     <div className={styles.wrap}>
-      <div className={styles.dayLabel}>{day.label}</div>
+      <div className={styles.dayLabel}>{day.full_label}</div>
       <div className={styles.phase}>{day.phase}</div>
 
       {exposure > 0 && (
@@ -131,9 +134,9 @@ export default function SimulateTab({ onDone }: Props) {
             return (
               <div key={i} className={`${styles.matchPreview} ${hasA || hasB ? styles.exposed : ''}`}>
                 <span className={styles.mpFlag}>{nA?.flag}</span>
-                <span className={styles.mpName}>{nA?.name?.toUpperCase()}</span>
+                <span className={styles.mpName}>{nA?.name?.toUpperCase() ?? m.a}</span>
                 <span className={styles.mpVs}>{t('vs')}</span>
-                <span className={styles.mpName}>{nB?.name?.toUpperCase()}</span>
+                <span className={styles.mpName}>{nB?.name?.toUpperCase() ?? m.b}</span>
                 <span className={styles.mpFlag}>{nB?.flag}</span>
                 {m.venue && <span className={styles.mpVenue}>{t('venue', { venue: m.venue })}</span>}
               </div>

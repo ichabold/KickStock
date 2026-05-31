@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useGameStore, fmt, pctOf, buildMatchesForCurrentDay } from '@/stores/gameStore';
-import { CALENDAR, NATIONS, GROUPS } from '@kickstock/constants';
 import { buildGroupStandingsUI } from '@kickstock/game-engine';
 import TradeModal from '@/components/shared/TradeModal';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
@@ -18,9 +17,23 @@ import CoachMarkOverlay from '@/components/shared/CoachMarkOverlay';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useAuth } from '@/hooks/useAuth';
-import type { Nation, TradeMode, StoredMatchResult } from '@kickstock/types';
+import type { Nation, TradeMode, StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
 
-const gN = (id: string) => NATIONS.find(n => n.id === id);
+function teamToNation(t: TeamMeta): Nation {
+  return { id: t.id, name: t.name, flag: t.flag, p: t.initialPrice, conf: t.confederation ?? '', str: t.strength, group: t.group };
+}
+
+function getDynamicKey(bootstrap: BootstrapData, phase: string, dayIndex: number): string {
+  const phaseDays = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
+  const pos = phaseDays.findIndex(d => d.day_index === dayIndex);
+  if (phase === 'R32')   return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[pos]  ?? 'r32_1';
+  if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[pos]                      ?? 'r16_1';
+  if (phase === 'QF')    return (['qf_1','qf_2','qf_3'])[pos]                                 ?? 'qf_1';
+  if (phase === 'SF')    return pos === 0 ? 'sf_1' : 'sf_2';
+  if (phase === '3rd')   return '3rd';
+  if (phase === 'Final') return 'final';
+  return phase.toLowerCase();
+}
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 function Spark({ history, up }: { history: number[]; up: boolean }) {
@@ -39,14 +52,15 @@ function Spark({ history, up }: { history: number[]; up: boolean }) {
 
 // ─── StockTile ─────────────────────────────────────────────────────────────────
 function StockTile({ nation, onBuy, onSell, onCardClick }: {
-  nation: Nation; onBuy: () => void; onSell: () => void; onCardClick?: () => void;
+  nation: TeamMeta; onBuy: () => void; onSell: () => void; onCardClick?: () => void;
 }) {
+  const legacyNation = teamToNation(nation);
   const history  = useGameStore(s => s.priceHistory[nation.id] ?? []);
   const held     = useGameStore(s => s.portfolio[nation.id] ?? 0);
   const isElim   = useGameStore(s => s.eliminated.includes(nation.id));
   // price + up needed locally for Sparkline gradient colour
-  const price    = useGameStore(s => s.prices[nation.id] ?? nation.p);
-  const up       = price >= nation.p;
+  const price    = useGameStore(s => s.prices[nation.id] ?? nation.initialPrice);
+  const up       = price >= nation.initialPrice;
 
   return (
     <div
@@ -61,12 +75,12 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
       </div>
       <div className="st-badges">
         <span className="bdg g">GR.{nation.group}</span>
-        <span className="bdg c">{nation.conf}</span>
+        <span className="bdg c">{nation.confederation}</span>
       </div>
 
       {/* PriceDisplay — mechanic atom, same formula as NationCard */}
       <PriceDisplay
-        nation={nation}
+        nation={legacyNation}
         wrapClassName="st-pr"
         priceClassName="st-price"
         kcClassName="st-kc"
@@ -80,7 +94,7 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
         ? <div className="bdis">💀 ÉLIMINÉ · 1 KC</div>
         : /* TradeActions — mechanic atom, same disabled logic as NationCard */
           <TradeActions
-            nation={nation}
+            nation={legacyNation}
             onBuy={onBuy}
             onSell={onSell}
             wrapClassName="st-acts"
@@ -96,7 +110,9 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
 
 // ─── Shared: clickable team name ───────────────────────────────────────────────
 function TeamName({ id, color, onNationClick }: { id: string; color?: string; onNationClick: (id: string) => void }) {
-  const n = gN(id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const n = teams.find(t => t.id === id);
   return (
     <button
       onClick={() => onNationClick(id)}
@@ -106,37 +122,41 @@ function TeamName({ id, color, onNationClick }: { id: string; color?: string; on
         fontWeight: 'inherit', textAlign: 'left',
       }}
     >
-      {n?.flag} {n?.name?.toUpperCase()}
+      {n?.flag} {n?.name?.toUpperCase() ?? id}
     </button>
   );
 }
 
 // ─── HomeView ─────────────────────────────────────────────────────────────────
 function HomeView({ onTrade, onNationClick, onMatchClick }: {
-  onTrade: (n: Nation, m: TradeMode) => void;
+  onTrade: (n: TeamMeta, m: TradeMode) => void;
   onNationClick: (id: string) => void;
   onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
 }) {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
-  const curDay       = CALENDAR[dayIndex];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams     = useGameStore(s => (s as any)._teams)     as TeamMeta[];
+  const curDay    = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
+  const prevDay   = bootstrap?.days.find(d => d.day_index === dayIndex - 1) ?? null;
   const prevResults  = matchResults[dayIndex - 1] ?? [];
-  const prevDay      = CALENDAR[dayIndex - 1];
 
   const todayMatches = useMemo(() => curDay ? buildMatchesForCurrentDay(state) : [], [curDay, state]);
   const todayNations = useMemo(() => {
     const ids = new Set<string>();
     todayMatches.forEach(m => { ids.add(m.a); ids.add(m.b); });
-    return NATIONS.filter(n => ids.has(n.id));
-  }, [todayMatches]);
+    return teams.filter(t => ids.has(t.id));
+  }, [todayMatches, teams]);
 
   return (
     <div className="view-home">
       <div className="home-l">
         {prevResults.length > 0 && (
           <>
-            <div className="day-hdr"><span className="dot" style={{background:'var(--muted)'}}/>JOURNÉE PRÉCÉDENTE · {prevDay?.label}</div>
+            <div className="day-hdr"><span className="dot" style={{background:'var(--muted)'}}/>JOURNÉE PRÉCÉDENTE · {prevDay?.full_label}</div>
             <div className="matches-scroll">
               {prevResults.map((r, i) => {
                 const winA = r.res === 'A', winB = r.res === 'B';
@@ -150,7 +170,7 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
                     <button
                       className="mscore"
                       style={{background:'none',border:'none',cursor:'pointer',color:'inherit',fontFamily:'inherit',fontWeight:'inherit',fontSize:'inherit'}}
-                      onClick={() => onMatchClick(r, prevDay?.label ?? '')}
+                      onClick={() => onMatchClick(r, prevDay?.full_label ?? '')}
                     >
                       {r.scoreA}–{r.scoreB}{r.penWinner ? ' P' : r.etRes ? ' AET' : ''}
                     </button>
@@ -163,7 +183,7 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
         )}
         {curDay && (
           <>
-            <div className="day-hdr"><span className="dot" style={{background:'var(--gold)'}}/>JOURNÉE COURANTE · {curDay.label}</div>
+            <div className="day-hdr"><span className="dot" style={{background:'var(--gold)'}}/>JOURNÉE COURANTE · {curDay.full_label}</div>
             <div className="matches-scroll">
               {todayMatches.length > 0 ? todayMatches.map((m, i) => (
                 <div key={i} className="mrow">
@@ -199,24 +219,28 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
 
 // ─── MarketView ───────────────────────────────────────────────────────────────
 function MarketView({ onTrade, onNationClick }: {
-  onTrade: (n: Nation, m: TradeMode) => void;
+  onTrade: (n: TeamMeta, m: TradeMode) => void;
   onNationClick: (id: string) => void;
 }) {
   const [filter, setFilter] = useState('');
   const [group, setGroup]   = useState('ALL');
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams  = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const groups = useMemo(() => ['ALL', ...[...new Set(teams.map(t => t.group).filter(Boolean))].sort()], [teams]);
+
   const filtered = useMemo(() =>
-    NATIONS.filter(n =>
+    teams.filter(n =>
       (group === 'ALL' || n.group === group) &&
       (filter === '' || n.name.toLowerCase().includes(filter.toLowerCase()) || n.id.toLowerCase().includes(filter.toLowerCase()))
     ).sort((a, b) => a.name.localeCompare(b.name))
-  , [filter, group]);
+  , [teams, filter, group]);
 
   return (
     <div className="mkt-wrap">
       <div className="mkt-controls">
         <input className="si" placeholder="🔍 Rechercher un pays..." value={filter} onChange={e => setFilter(e.target.value)}/>
-        {GROUPS.map(g => (
+        {groups.map(g => (
           <button key={g} className={`fp${group === g ? ' on' : ''}`} onClick={() => setGroup(g)}>{g}</button>
         ))}
       </div>
@@ -240,13 +264,16 @@ function ScheduleView({ onNationClick, onMatchClick }: {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
 
   return (
     <div className="view-sched">
       <div className="sched-l">
         <div className="day-hdr">TOUS LES MATCHS — PHASE DE GROUPES</div>
         <div className="matches-scroll">
-          {CALENDAR.filter(d => !d.isKO).map((day, di) => {
+          {bootstrap?.days.filter(d => !d.is_ko).map((day) => {
+            const di       = day.day_index;
             const played   = matchResults[di];
             const isPast   = di < dayIndex;
             const isCur    = di === dayIndex;
@@ -256,16 +283,16 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                   padding: '4px 8px', fontSize: 9, fontWeight: 700, letterSpacing: 2,
                   color: isCur ? 'var(--gold)' : 'var(--mu)', marginTop: 6,
                 }}>
-                  {isCur ? '▶ ' : ''}{day.label} — {day.phase}
+                  {isCur ? '▶ ' : ''}{day.full_label} — {day.phase}
                 </div>
-                {day.matches.map((m, mi) => {
-                  const res = played?.find(r => (r.a === m.a && r.b === m.b) || (r.a === m.b && r.b === m.a));
-                  const flipped = res && res.a === m.b;
+                {(bootstrap.group_fixtures ?? []).filter(f => f.day_index === di).map((m, mi) => {
+                  const res = played?.find(r => (r.a === m.nation_a && r.b === m.nation_b) || (r.a === m.nation_b && r.b === m.nation_a));
+                  const flipped = res && res.a === m.nation_b;
                   const sA = flipped ? res!.scoreB : res?.scoreA;
                   const sB = flipped ? res!.scoreA : res?.scoreB;
                   const resA = flipped ? (res?.res === 'A' ? 'B' : res?.res === 'B' ? 'A' : 'draw') : res?.res;
                   const canonResult: StoredMatchResult | undefined = flipped
-                    ? { ...res!, a: m.a, b: m.b, scoreA: res!.scoreB, scoreB: res!.scoreA,
+                    ? { ...res!, a: m.nation_a, b: m.nation_b, scoreA: res!.scoreB, scoreB: res!.scoreA,
                         res: res!.res === 'A' ? 'B' : res!.res === 'B' ? 'A' : 'draw',
                         pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
                     : res;
@@ -273,15 +300,15 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                     <div key={mi} className={`mrow${isCur ? ' cur' : isPast ? ' past' : ''}`}>
                       <div className="mtime">J·{di+1}</div>
                       <div className="mteams">
-                        <TeamName id={m.a} color={res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
+                        <TeamName id={m.nation_a} color={res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
                         <span className="vs"> vs </span>
-                        <TeamName id={m.b} color={res ? (resA === 'B' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
+                        <TeamName id={m.nation_b} color={res ? (resA === 'B' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
                       </div>
                       {res && canonResult ? (
                         <button
                           className="mscore"
                           style={{background:'none',border:'none',cursor:'pointer',color:'inherit',fontFamily:'JetBrains Mono',fontWeight:700,fontSize:13}}
-                          onClick={() => onMatchClick(canonResult, day.label)}
+                          onClick={() => onMatchClick(canonResult, day.full_label)}
                         >
                           {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
                         </button>
@@ -302,7 +329,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
       <div className="sched-r">
         <div className="day-hdr">PHASE KO</div>
         {(['R32','R16','QF','SF','3rd','Final'] as const).map(phase => {
-          const phaseDays = CALENDAR.filter(d => d.phase === phase);
+          const phaseDays = bootstrap?.days.filter(d => d.phase === phase) ?? [];
           if (!phaseDays.length) return null;
           const phaseLabels: Record<string, string> = {
             R32: 'HUITIÈMES · R32', R16: 'SEIZIÈMES · R16', QF: 'QUARTS DE FINALE',
@@ -311,21 +338,19 @@ function ScheduleView({ onNationClick, onMatchClick }: {
           return (
             <div className="elim-section" key={phase}>
               <div className="es-hdr">{phaseLabels[phase]}</div>
-              {phaseDays.map((day, pdi) => {
-                const di = CALENDAR.indexOf(day);
+              {phaseDays.map((day) => {
+                const di = day.day_index;
                 const played  = matchResults[di];
                 const isCur   = di === dayIndex;
-                const displayMatches = day.matches.length > 0
-                  ? day.matches
-                  : played
-                    ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue }))
-                    : isCur
-                      ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-                      : [];
+                const displayMatches = played
+                  ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue }))
+                  : isCur
+                    ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+                    : [];
 
                 return (
-                  <div key={pdi} className={`ko-match${displayMatches.length === 0 ? ' tbd' : ''}`}>
-                    <div className="ko-date">{day.label}{isCur ? ' ▶' : ''}</div>
+                  <div key={di} className={`ko-match${displayMatches.length === 0 ? ' tbd' : ''}`}>
+                    <div className="ko-date">{day.full_label}{isCur ? ' ▶' : ''}</div>
                     {displayMatches.length > 0 ? displayMatches.map((m, mi) => {
                       const res = played?.find(r => (r.a === m.a && r.b === m.b) || (r.a === m.b && r.b === m.a));
                       const flipped = res && res.a === m.b;
@@ -342,7 +367,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                           <TeamName id={m.a} color={res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
                           {res && canonResult
                             ? <button className="ko-vs" style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)'}}
-                                onClick={() => onMatchClick(canonResult, day.label)}>
+                                onClick={() => onMatchClick(canonResult, day.full_label)}>
                                 {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
                               </button>
                             : <span className="ko-vs">vs</span>
@@ -370,7 +395,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
 
 // ─── PortfolioView ────────────────────────────────────────────────────────────
 function PortfolioView({ onTrade, onNationClick }: {
-  onTrade: (n: Nation, m: TradeMode) => void;
+  onTrade: (n: TeamMeta, m: TradeMode) => void;
   onNationClick: (id: string) => void;
 }) {
   // usePortfolioTotals — mechanic hook, same formula as MobileShell PortfolioTab
@@ -381,13 +406,15 @@ function PortfolioView({ onTrade, onNationClick }: {
   const avgCost   = useGameStore(s => s.avgCost);
   const eliminated = useGameStore(s => s.eliminated);
   const txLog     = useGameStore(s => s.txLog);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)
     .map(([id, qty]) => {
-      const n       = gN(id);
+      const n       = teams.find(t => t.id === id);
       const price   = prices[id] ?? 0;
-      const avg     = avgCost[id] ?? n?.p ?? 0;
+      const avg     = avgCost[id] ?? n?.initialPrice ?? 0;
       const value   = price * qty;
       const invested = avg * qty;
       const pl      = value - invested;
@@ -496,24 +523,30 @@ function StandingsView({ onNationClick, onMatchClick }: {
   const r32Pool      = useGameStore(s => s.r32Pool);
   const portfolio    = useGameStore(s => s.portfolio);
   const champion     = useGameStore(s => s.champion);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams        = useGameStore(s => (s as any)._teams) as TeamMeta[];
 
   const standings = useMemo(
     () => buildGroupStandingsUI(matchResults, prices, eliminated),
     [matchResults, prices, eliminated],
   );
 
-  const isKO = dayIndex > 17 || !CALENDAR[dayIndex] || CALENDAR[dayIndex]?.phase !== 'Groups';
+  const currentDay = bootstrap?.days.find(d => d.day_index === dayIndex);
+  const isKO = !currentDay || currentDay.phase !== 'Groups';
 
   const koResults = useMemo(() => {
     const r: Record<string, StoredMatchResult[]> = { R32: [], R16: [], QF: [], SF: [], Final: [], '3rd': [] };
     for (const [diStr, res] of Object.entries(matchResults)) {
-      const day = CALENDAR[Number(diStr)];
-      if (!day?.isKO) continue;
-      const key = day.phase as string;
+      const bDay = bootstrap?.days.find(d => d.day_index === Number(diStr));
+      if (!bDay?.is_ko) continue;
+      const key = bDay.phase as string;
       if (r[key]) r[key] = [...r[key], ...res];
     }
     return r;
-  }, [matchResults]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchResults, bootstrap]);
 
   const koPhases = ['R32', 'R16', 'QF', 'SF', 'Final', '3rd'] as const;
   const koLabels: Record<string,string> = {
@@ -528,13 +561,13 @@ function StandingsView({ onNationClick, onMatchClick }: {
         <div style={{marginBottom: 20}}>
           {champion && (
             <div style={{background:'rgba(255,219,0,.06)',border:'1px solid var(--gold-dk)',borderRadius:10,padding:'16px',marginBottom:12,textAlign:'center'}}>
-              <div style={{fontSize:48}}>{gN(champion)?.flag}</div>
+              <div style={{fontSize:48}}>{teams.find(t => t.id === champion)?.flag}</div>
               <button
                 style={{background:'none',border:'none',cursor:'pointer',padding:0}}
                 onClick={() => onNationClick(champion)}
               >
                 <div style={{fontFamily:'Bebas Neue',fontSize:22,letterSpacing:4,color:'var(--gold)'}}>
-                  {gN(champion)?.name?.toUpperCase()} — CHAMPION 🏆
+                  {teams.find(t => t.id === champion)?.name?.toUpperCase()} — CHAMPION 🏆
                 </div>
               </button>
             </div>
@@ -550,7 +583,7 @@ function StandingsView({ onNationClick, onMatchClick }: {
                     const dayEntry = Object.entries(matchResults).find(([, results]) =>
                       results.some(x => x.a === r.a && x.b === r.b)
                     );
-                    const dayLabel = dayEntry ? CALENDAR[Number(dayEntry[0])]?.label ?? '' : '';
+                    const dayLabel = dayEntry ? bootstrap?.days.find(d => d.day_index === Number(dayEntry[0]))?.full_label ?? '' : '';
                     return (
                       <div key={i} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:7,padding:'8px 12px'}}>
                         <div style={{display:'flex',justifyContent:'space-between',fontSize:12,fontWeight:700,color:r.res==='A'?'var(--gold)':'var(--mu)'}}>
@@ -580,7 +613,7 @@ function StandingsView({ onNationClick, onMatchClick }: {
       {/* Group standings */}
       <div style={{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:3,color:'var(--mu)',marginBottom:10}}>CLASSEMENTS DE GROUPE</div>
       <div className="std-grid">
-        {Object.entries(standings).map(([g, teams]) => (
+        {Object.entries(standings).map(([g, standTeams]) => (
           <div className="grp-card" key={g}>
             <div className="grp-hdr">GROUPE {g}</div>
             <table className="grp-table">
@@ -593,7 +626,7 @@ function StandingsView({ onNationClick, onMatchClick }: {
                 <th className="mono">Prix KC</th>
               </tr></thead>
               <tbody>
-                {teams.map((t, i) => {
+                {standTeams.map((t, i) => {
                   const ch    = pctOf(t.price, t.initP);
                   const up    = ch >= 0;
                   const isQ   = i < 2 || r32Pool.includes(t.id);
@@ -668,6 +701,8 @@ function BracketView({ onNationClick, onMatchClick }: {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const r32Pool      = useGameStore(s => s.r32Pool);
   const state        = useGameStore(s => s);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
 
   const phases = [
     { label: 'HUITIÈMES DE FINALE · R32', key: 'R32' },
@@ -680,28 +715,27 @@ function BracketView({ onNationClick, onMatchClick }: {
   return (
     <div className="bkt-wrap">
       {phases.map(phase => {
-        const days = CALENDAR.filter(d => d.phase === phase.key);
+        const days = bootstrap?.days.filter(d => d.phase === phase.key) ?? [];
         const isFinal = phase.key === 'Final';
         return (
           <div className="bkt-stage" key={phase.key}>
             <div className="bkt-stage-ttl">{phase.label}</div>
             <div className="bkt-row">
-              {days.map((day, pdi) => {
-                const di = CALENDAR.indexOf(day);
+              {days.map((day) => {
+                const di = day.day_index;
                 const played = matchResults[di];
                 const isCur  = di === dayIndex;
-                const displayMatches = day.matches.length > 0
-                  ? day.matches
-                  : played
-                    ? played.map(r => ({ a: r.a, b: r.b }))
-                    : isCur
-                      ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-                      : [];
+                const displayMatches = played
+                  ? played.map(r => ({ a: r.a, b: r.b }))
+                  : isCur
+                    ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+                    : [];
 
                 if (displayMatches.length === 0) {
                   // R32: show actual teams (if group stage done) or seeding labels
-                  if (phase.key === 'R32' && day.dynamic) {
-                    const slice = R32_SLICES[day.dynamic];
+                  const dynamicKey = bootstrap ? getDynamicKey(bootstrap, phase.key, di) : null;
+                  if (phase.key === 'R32' && dynamicKey) {
+                    const slice = R32_SLICES[dynamicKey];
                     if (slice) {
                       const [s, e] = slice;
                       if (r32Pool.length >= e) {
@@ -711,8 +745,8 @@ function BracketView({ onNationClick, onMatchClick }: {
                           if (r32Pool[i] && r32Pool[i + 1]) poolPairs.push({ a: r32Pool[i], b: r32Pool[i + 1] });
                         }
                         return poolPairs.map((m, mi) => (
-                          <div key={`${pdi}-${mi}`} className="bkt-m upcoming">
-                            <div className="bkt-meta">{day.label}{isCur ? ' ▶' : ''}</div>
+                          <div key={`${di}-${mi}`} className="bkt-m upcoming">
+                            <div className="bkt-meta">{day.full_label}{isCur ? ' ▶' : ''}</div>
                             <div className="bkt-t"><TeamName id={m.a} onNationClick={onNationClick}/></div>
                             <div className="bkt-t"><TeamName id={m.b} onNationClick={onNationClick}/></div>
                           </div>
@@ -724,8 +758,8 @@ function BracketView({ onNationClick, onMatchClick }: {
                         seedPairs.push(R32_SEEDING_LABELS[i / 2] ?? ['?', '?']);
                       }
                       return seedPairs.map(([la, lb], mi) => (
-                        <div key={`${pdi}-${mi}`} className="bkt-m upcoming">
-                          <div className="bkt-meta">{day.label}</div>
+                        <div key={`${di}-${mi}`} className="bkt-m upcoming">
+                          <div className="bkt-meta">{day.full_label}</div>
                           <div className="bkt-t"><span className="tbd">{la}</span></div>
                           <div className="bkt-t"><span className="tbd">{lb}</span></div>
                         </div>
@@ -733,8 +767,8 @@ function BracketView({ onNationClick, onMatchClick }: {
                     }
                   }
                   return (
-                    <div key={pdi} className="bkt-m upcoming" style={isFinal ? {background:'rgba(255,219,0,.03)',borderColor:'rgba(255,219,0,.35)'} : {}}>
-                      <div className="bkt-meta">{day.label}{isCur ? ' ▶' : ''}</div>
+                    <div key={di} className="bkt-m upcoming" style={isFinal ? {background:'rgba(255,219,0,.03)',borderColor:'rgba(255,219,0,.35)'} : {}}>
+                      <div className="bkt-meta">{day.full_label}{isCur ? ' ▶' : ''}</div>
                       <div className="bkt-t"><span className="tbd">À déterminer</span></div>
                       <div className="bkt-t"><span className="tbd">À déterminer</span></div>
                     </div>
@@ -753,18 +787,18 @@ function BracketView({ onNationClick, onMatchClick }: {
                         pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
                     : res;
                   return (
-                    <div key={`${pdi}-${mi}`} className={`bkt-m${!played ? ' upcoming' : ''}`}
+                    <div key={`${di}-${mi}`} className={`bkt-m${!played ? ' upcoming' : ''}`}
                       style={isFinal ? {background:'rgba(255,219,0,.03)',borderColor:'rgba(255,219,0,.35)'} : {}}>
-                      <div className="bkt-meta">{day.label}</div>
+                      <div className="bkt-meta">{day.full_label}</div>
                       <div className="bkt-t" style={{color: res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined}}>
                         <TeamName id={m.a} color={res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
                         {res && <button style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',marginLeft:6,fontSize:14,fontWeight:700,color:'var(--gold)'}}
-                          onClick={() => canonResult && onMatchClick(canonResult, day.label)}>{sA}</button>}
+                          onClick={() => canonResult && onMatchClick(canonResult, day.full_label)}>{sA}</button>}
                       </div>
                       <div className="bkt-t" style={{color: res ? (resA === 'B' ? 'var(--gold)' : 'var(--mu)') : undefined}}>
                         <TeamName id={m.b} color={res ? (resA === 'B' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
                         {res && <button style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',marginLeft:6,fontSize:14,fontWeight:700,color:'var(--gold)'}}
-                          onClick={() => canonResult && onMatchClick(canonResult, day.label)}>{sB}</button>}
+                          onClick={() => canonResult && onMatchClick(canonResult, day.full_label)}>{sB}</button>}
                       </div>
                       {res?.penWinner && <div style={{fontSize:8,color:'var(--mu)',marginTop:2}}>Pens {res.penA}–{res.penB}</div>}
                       {res?.etRes && !res.penWinner && <div style={{fontSize:8,color:'var(--gold)',marginTop:2}}>AET</div>}
@@ -980,7 +1014,12 @@ export default function BrowserShell() {
   const resetGame = useGameStore(s => s.resetGame);
   const champion  = useGameStore(s => s.champion);
 
-  const day = CALENDAR[dayIndex];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams     = useGameStore(s => (s as any)._teams)     as TeamMeta[];
+
+  const day = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
 
   const SIDEBAR_MAIN: { id: ViewId; icon: string; label: string }[] = [
     { id: 'home',       icon: '🏠', label: 'HOME'    },
@@ -991,7 +1030,7 @@ export default function BrowserShell() {
     { id: 'bracket',    icon: '🎯', label: 'BRACKET' },
   ];
 
-  function doTrade(n: Nation, m: TradeMode) { setModal({nation: n, mode: m}); }
+  function doTrade(n: TeamMeta, m: TradeMode) { setModal({nation: teamToNation(n), mode: m}); }
   function onNationClick(id: string) { setNationId(id); }
   function onMatchClick(r: StoredMatchResult, dayLabel: string) { setMatchDetail({ result: r, dayLabel }); }
 
@@ -1039,7 +1078,7 @@ export default function BrowserShell() {
           <div className="tb-r">
             {champion && (
               <div style={{fontFamily:'Bebas Neue',fontSize:13,letterSpacing:2,color:'var(--gold)',background:'rgba(255,219,0,.1)',border:'1px solid var(--gold-dk)',padding:'4px 10px',borderRadius:5}}>
-                🏆 {gN(champion)?.flag} {gN(champion)?.name?.toUpperCase()}
+                🏆 {teams.find(t => t.id === champion)?.flag} {teams.find(t => t.id === champion)?.name?.toUpperCase()}
               </div>
             )}
             {/* SimulateButton — mechanic atom, same advanceDay() logic as SimulateTab */}
@@ -1054,9 +1093,9 @@ export default function BrowserShell() {
         {/* TICKER */}
         <div className="ticker-wrap">
           <div className="ticker-t">
-            {[...NATIONS, ...NATIONS].map((n, i) => {
-              const p = prices[n.id] ?? n.p; const up = p >= n.p;
-              const pct = ((p - n.p) / n.p * 100).toFixed(1);
+            {[...teams, ...teams].map((n, i) => {
+              const p = prices[n.id] ?? n.initialPrice; const up = p >= n.initialPrice;
+              const pct = ((p - n.initialPrice) / n.initialPrice * 100).toFixed(1);
               return <span key={i} className="ti">{n.flag} {n.id} <span className={up ? 'up' : 'dn'}>{Math.round(p)} {up ? '▲+' : '▼'}{Math.abs(Number(pct))}%</span></span>;
             })}
           </div>
@@ -1093,32 +1132,42 @@ export default function BrowserShell() {
           <div className="res-box" onClick={e => e.stopPropagation()}>
             <div className="res-title">RÉSULTATS</div>
             <div className="res-matches">
-              {simResults.map((r, i) => (
-                <div key={i} className={`res-match${r.isUpset ? ' upset' : ''}`}>
-                  <button style={{background:'none',border:'none',cursor:'pointer',color:r.res==='A'?'var(--gold)':'var(--mu)',fontFamily:'inherit',fontSize:'inherit'}}
-                    onClick={() => { setSimResults(null); onNationClick(r.a); }}>{gN(r.a)?.flag} {gN(r.a)?.name?.toUpperCase()}</button>
-                  <button className="res-score" style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'inherit'}}
-                    onClick={() => { setSimResults(null); onMatchClick(r, ''); }}>
-                    {r.scoreA}–{r.scoreB}
-                    {r.penWinner && <span style={{fontSize:10,color:'var(--mu)'}}> ({r.penA}–{r.penB} P)</span>}
-                    {r.etRes && !r.penWinner && <span style={{fontSize:10,color:'var(--gold)'}}> AET</span>}
-                  </button>
-                  <button style={{background:'none',border:'none',cursor:'pointer',color:r.res==='B'?'var(--gold)':'var(--mu)',fontFamily:'inherit',fontSize:'inherit'}}
-                    onClick={() => { setSimResults(null); onNationClick(r.b); }}>{gN(r.b)?.flag} {gN(r.b)?.name?.toUpperCase()}</button>
-                  {r.elimId && <span className="res-elim">💀 {gN(r.elimId)?.name?.toUpperCase()} éliminé</span>}
-                  {r.isUpset && <span className="res-upbadge">🚀 UPSET!</span>}
-                </div>
-              ))}
+              {simResults.map((r, i) => {
+                const tA = teams.find(t => t.id === r.a);
+                const tB = teams.find(t => t.id === r.b);
+                const tElim = r.elimId ? teams.find(t => t.id === r.elimId) : undefined;
+                const tWinner = r.winnerId ? teams.find(t => t.id === r.winnerId) : undefined;
+                const tDivTeam = tWinner ?? tA;
+                return (
+                  <div key={i} className={`res-match${r.isUpset ? ' upset' : ''}`}>
+                    <button style={{background:'none',border:'none',cursor:'pointer',color:r.res==='A'?'var(--gold)':'var(--mu)',fontFamily:'inherit',fontSize:'inherit'}}
+                      onClick={() => { setSimResults(null); onNationClick(r.a); }}>{tA?.flag} {tA?.name?.toUpperCase()}</button>
+                    <button className="res-score" style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'inherit'}}
+                      onClick={() => { setSimResults(null); onMatchClick(r, ''); }}>
+                      {r.scoreA}–{r.scoreB}
+                      {r.penWinner && <span style={{fontSize:10,color:'var(--mu)'}}> ({r.penA}–{r.penB} P)</span>}
+                      {r.etRes && !r.penWinner && <span style={{fontSize:10,color:'var(--gold)'}}> AET</span>}
+                    </button>
+                    <button style={{background:'none',border:'none',cursor:'pointer',color:r.res==='B'?'var(--gold)':'var(--mu)',fontFamily:'inherit',fontSize:'inherit'}}
+                      onClick={() => { setSimResults(null); onNationClick(r.b); }}>{tB?.flag} {tB?.name?.toUpperCase()}</button>
+                    {r.elimId && <span className="res-elim">💀 {tElim?.name?.toUpperCase()} éliminé</span>}
+                    {r.isUpset && <span className="res-upbadge">🚀 UPSET!</span>}
+                  </div>
+                );
+              })}
             </div>
             {simResults.filter(r => r.divCash > 0).length > 0 && (
               <div className="res-divs">
                 <div className="res-divtitle">🎁 DIVIDENDES REÇUS</div>
-                {simResults.filter(r => r.divCash > 0).map((r, i) => (
-                  <div key={i} className="res-divrow">
-                    <span>{gN(r.winnerId ?? r.a)?.flag} {gN(r.winnerId ?? r.a)?.name?.toUpperCase()}</span>
-                    <span className="res-divamt">+{fmt(r.divCash)} KC</span>
-                  </div>
-                ))}
+                {simResults.filter(r => r.divCash > 0).map((r, i) => {
+                  const divTeam = teams.find(t => t.id === (r.winnerId ?? r.a));
+                  return (
+                    <div key={i} className="res-divrow">
+                      <span>{divTeam?.flag} {divTeam?.name?.toUpperCase()}</span>
+                      <span className="res-divamt">+{fmt(r.divCash)} KC</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <button className="res-close" onClick={() => setSimResults(null)}>VOIR LE MARCHÉ →</button>

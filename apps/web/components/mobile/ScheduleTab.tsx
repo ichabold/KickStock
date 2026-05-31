@@ -2,14 +2,11 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CALENDAR, NATIONS } from '@kickstock/constants';
 import { useGameStore, pctOf, buildMatchesForCurrentDay } from '@/stores/gameStore';
-import type { StoredMatchResult } from '@kickstock/types';
+import type { StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
 import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import styles from './ScheduleTab.module.css';
-
-const gN = (id: string) => NATIONS.find(n => n.id === id);
 
 export default function ScheduleTab() {
   const t = useTranslations('schedule');
@@ -20,31 +17,47 @@ export default function ScheduleTab() {
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams        = useGameStore(s => (s as any)._teams)     as TeamMeta[];
+
+  const gN = (id: string) => teams.find(t => t.id === id);
+
+  if (!bootstrap) {
+    return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>Chargement…</div>;
+  }
 
   return (
     <>
       <div>
-        {CALENDAR.map((day, di) => {
+        {bootstrap.days.map((day) => {
+          const di        = day.day_index;
           const isPast    = di < dayIndex;
           const isCurrent = di === dayIndex;
           const played    = matchResults[di];
 
-          const displayMatches = day.matches.length > 0
-            ? day.matches
+          // Group fixtures for this day
+          const groupFixtures = bootstrap.group_fixtures
+            .filter(f => f.day_index === di)
+            .map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }));
+
+          const displayMatches = !day.is_ko && groupFixtures.length > 0
+            ? groupFixtures
             : played
               ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue }))
-              : di >= dayIndex && day.dynamic
+              : di >= dayIndex && day.is_ko
                 ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
                 : [];
 
           return (
             <div key={di} className={`${styles.dayBlock} ${isCurrent ? styles.current : ''} ${isPast ? styles.past : ''}`}>
               <div className={styles.dayHeader}>
-                <span className={styles.dayLabel}>{isCurrent ? '▶ ' : ''}{day.label}</span>
+                <span className={styles.dayLabel}>{isCurrent ? '▶ ' : ''}{day.full_label}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {isPast && played && <span style={{ fontSize: 8, color: 'var(--gain)', fontWeight: 700 }}>{t('played')}</span>}
                   {isCurrent && <span style={{ fontSize: 8, color: 'var(--gold)', fontWeight: 700 }}>{t('next')}</span>}
-                  <span className={`${styles.phase} ${day.isKO ? styles.phaseKO : styles.phaseGroup}`}>
+                  <span className={`${styles.phase} ${day.is_ko ? styles.phaseKO : styles.phaseGroup}`}>
                     {day.phase}
                   </span>
                 </div>
@@ -58,7 +71,7 @@ export default function ScheduleTab() {
 
                 const res = played?.find(r => r.a === m.a && r.b === m.b)
                          ?? played?.find(r => r.a === m.b && r.b === m.a);
-                const flipped    = res && res.a === m.b;
+                const flipped = res && res.a === m.b;
                 const canonResult: StoredMatchResult | undefined = flipped
                   ? { ...res!, a: m.a, b: m.b, scoreA: res!.scoreB, scoreB: res!.scoreA,
                       res: res!.res === 'A' ? 'B' : res!.res === 'B' ? 'A' : 'draw',
@@ -80,7 +93,7 @@ export default function ScheduleTab() {
                       style={{ color: res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--muted)' : undefined) : undefined }}
                       onClick={() => setNationId(m.a)}
                     >
-                      {nA?.name?.toUpperCase()}
+                      {nA?.name?.toUpperCase() ?? m.a}
                     </button>
                     <span className={styles.vs}>VS</span>
                     <button
@@ -88,7 +101,7 @@ export default function ScheduleTab() {
                       style={{ color: res ? (resA === 'B' ? 'var(--gold)' : resA !== 'draw' ? 'var(--muted)' : undefined) : undefined }}
                       onClick={() => setNationId(m.b)}
                     >
-                      {nB?.name?.toUpperCase()}
+                      {nB?.name?.toUpperCase() ?? m.b}
                     </button>
                     <span className={styles.flag}>{nB?.flag}</span>
 
@@ -97,7 +110,7 @@ export default function ScheduleTab() {
                         <button
                           className={styles.scoreBtn}
                           style={{ color: resA === 'draw' ? 'var(--muted)' : 'var(--gold)' }}
-                          onClick={() => canonResult && setMatchDetail({ result: canonResult, dayLabel: day.label })}
+                          onClick={() => canonResult && setMatchDetail({ result: canonResult, dayLabel: day.full_label })}
                         >
                           {sA}–{sB}
                         </button>
@@ -118,7 +131,7 @@ export default function ScheduleTab() {
                 );
               }) : (
                 <div className={styles.dynamic}>
-                  {day.isKO ? t('dynamicKO') : t('upcoming')}
+                  {day.is_ko ? t('dynamicKO') : t('upcoming')}
                 </div>
               )}
             </div>
