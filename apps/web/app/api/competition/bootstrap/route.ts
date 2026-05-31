@@ -28,21 +28,27 @@ export const dynamic = 'force-dynamic';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adm = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
 
-export async function GET() {
+export async function GET(req: Request) {
   const admin = createAdminClient();
+  const url   = new URL(req.url);
+  const competitionIdParam = url.searchParams.get('competition_id');
 
-  // ── 1. Active competition ─────────────────────────────────────────────────
-  const { data: comp, error: compErr } = await adm(admin)
+  // ── 1. Competition ────────────────────────────────────────────────────────
+  let compQuery = adm(admin)
     .from('competitions')
-    .select('id, name, start_date, league_id, season')
-    .eq('is_active', true)
-    .order('id', { ascending: false })
-    .limit(1)
-    .single();
+    .select('id, name, start_date, league_id, season');
+
+  if (competitionIdParam && /^\d+$/.test(competitionIdParam)) {
+    compQuery = compQuery.eq('id', parseInt(competitionIdParam, 10));
+  } else {
+    compQuery = compQuery.eq('is_active', true).order('id', { ascending: false });
+  }
+
+  const { data: comp, error: compErr } = await compQuery.limit(1).single();
 
   if (compErr || !comp) {
     return NextResponse.json(
-      { error: 'No active competition found. Run sync-fixtures first.' },
+      { error: 'Competition not found. Run sync-fixtures first.' },
       { status: 404 }
     );
   }

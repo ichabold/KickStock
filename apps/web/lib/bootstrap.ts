@@ -1,99 +1,75 @@
 /**
- * bootstrap.ts — Loads and caches competition data for offline mode.
+ * bootstrap.ts — Loads and caches competition data.
  *
- * The bootstrap replaces the hardcoded NATIONS + CALENDAR constants.
- * Data comes from /api/competition/bootstrap, cached in localStorage (24h TTL).
- *
- * On cache miss (first load or expired):
- *   → Fetch from API → store in localStorage → return
- * On cache hit:
- *   → Return immediately (no network request)
- * On fetch failure with stale cache:
- *   → Return stale data (game continues, sync on next load)
- * On fetch failure with no cache:
- *   → Return null (caller shows an error/retry)
+ * Data comes from /api/competition/bootstrap?competition_id=N, cached in
+ * localStorage per competition (24h TTL).
  */
 
 import type { BootstrapData, TeamMeta } from '@kickstock/types';
 
-const CACHE_KEY = 'kickstock:bootstrap:v1';
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 
-interface CacheEntry {
-  data:      BootstrapData;
-  fetchedAt: number;
+function cacheKey(competitionId: number) {
+  return `kickstock:bootstrap:v2:${competitionId}`;
 }
 
-function readCache(): BootstrapData | null {
+interface CacheEntry { data: BootstrapData; fetchedAt: number }
+
+function readCache(competitionId: number): BootstrapData | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey(competitionId));
     if (!raw) return null;
     const entry = JSON.parse(raw) as CacheEntry;
     if (Date.now() - entry.fetchedAt < CACHE_TTL) return entry.data;
-    return null; // expired
+    return null;
   } catch { return null; }
 }
 
-function readStale(): BootstrapData | null {
+function readStale(competitionId: number): BootstrapData | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey(competitionId));
     if (!raw) return null;
     return (JSON.parse(raw) as CacheEntry).data;
   } catch { return null; }
 }
 
-function writeCache(data: BootstrapData): void {
+function writeCache(competitionId: number, data: BootstrapData): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, fetchedAt: Date.now() }));
-  } catch { /* storage full / private mode — ignore */ }
+    localStorage.setItem(cacheKey(competitionId), JSON.stringify({ data, fetchedAt: Date.now() }));
+  } catch { /* storage full / private mode */ }
 }
 
-/**
- * Returns bootstrap data, using localStorage cache when possible.
- * Never throws — returns null on complete failure.
- */
-export async function getBootstrap(): Promise<BootstrapData | null> {
-  // 1. Cache hit
-  const cached = readCache();
+export async function getBootstrap(competitionId = 1): Promise<BootstrapData | null> {
+  const cached = readCache(competitionId);
   if (cached) return cached;
 
-  // 2. Fetch from API
   try {
-    const res = await fetch('/api/competition/bootstrap', { cache: 'no-store' });
+    const res = await fetch(`/api/competition/bootstrap?competition_id=${competitionId}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as BootstrapData;
 
     if (!data.teams?.length || !data.days?.length) {
-      throw new Error('Bootstrap response is empty — run sync-fixtures first');
+      throw new Error('Bootstrap empty — run sync-fixtures first');
     }
 
-    writeCache(data);
+    writeCache(competitionId, data);
     return data;
   } catch (err) {
     console.warn('[bootstrap] fetch failed:', err);
-    // 3. Stale fallback
-    const stale = readStale();
-    if (stale) {
-      console.warn('[bootstrap] using stale cache');
-      return stale;
-    }
+    const stale = readStale(competitionId);
+    if (stale) { console.warn('[bootstrap] using stale cache'); return stale; }
     return null;
   }
 }
 
-/** Force-invalidates the cache and re-fetches. Use from admin panel. */
-export async function refreshBootstrap(): Promise<BootstrapData | null> {
-  if (typeof window !== 'undefined') localStorage.removeItem(CACHE_KEY);
-  return getBootstrap();
+export async function refreshBootstrap(competitionId = 1): Promise<BootstrapData | null> {
+  if (typeof window !== 'undefined') localStorage.removeItem(cacheKey(competitionId));
+  return getBootstrap(competitionId);
 }
 
-/**
- * Converts BootstrapData.teams (snake_case DB rows) into the TeamMeta
- * shape expected by the game engine (camelCase).
- */
 export function bootstrapToTeams(data: BootstrapData): TeamMeta[] {
   return data.teams.map(t => ({
     id:            t.id,

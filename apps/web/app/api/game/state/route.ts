@@ -1,23 +1,22 @@
 /**
  * GET /api/game/state
- * Returns the full shared game state + the requesting player's portfolio.
+ *
+ * Returns the full competition game state + the requesting player's portfolio.
+ * Competition identified by X-Competition-ID header (defaults to active competition).
  * Player identified by X-Device-ID header (anonymous) or Supabase session (logged in).
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import * as Sentry from '@sentry/nextjs';
-import { NATIONS } from '@kickstock/constants';
 import type { StoredMatchResult } from '@kickstock/types';
 
 export const dynamic = 'force-dynamic';
 
-const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const adm = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const adminFrom = (a: ReturnType<typeof createAdminClient>, t: string) => (a as any).from(t);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const adminRpc  = (a: ReturnType<typeof createAdminClient>, fn: string, args: object) => (a as any).rpc(fn, args);
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(req: NextRequest) {
   try {
@@ -40,22 +39,82 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'invalid_device_id' }, { status: 400 });
     }
 
-    // ── Get or create portfolio ───────────────────────────────────────────────
-    const { data: portfolioId, error: pidErr } = await adminRpc(admin, 'get_or_create_portfolio', {
-      p_device_id: deviceId,
-      p_user_id:   userId,
-    });
+    // ── Resolve competition ───────────────────────────────────────────────────
+    const rawCompId = req.headers.get('X-Competition-ID');
+    let competitionId: number;
+
+    if (rawCompId && /^\d+$/.test(rawCompId)) {
+      competitionId = parseInt(rawCompId, 10);
+    } else {
+      const { data: comp } = await adm(admin)
+        .from('competitions')
+        .select('id')
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+      if (!comp) return NextResponse.json({ error: 'No active competition' }, { status: 404 });
+      competitionId = (comp as { id: number }).id;
+    }
+
+    // ── Get or create portfolio (competition-scoped) ───────────────────────────
+    const { data: portfolioId, error: pidErr } = await adm(admin).rpc(
+      'get_or_create_competition_portfolio',
+      { p_competition_id: competitionId, p_device_id: deviceId, p_user_id: userId },
+    );
     if (pidErr) throw pidErr;
 
     // ── Parallel fetches ──────────────────────────────────────────────────────
-    const [gsRes, nRes, npRes, mRes, pfRes, hRes, txRes] = await Promise.all([
-      adminFrom(admin, 'game_state').select('*').single(),
-      adminFrom(admin, 'nations').select('id, current_price'),
-      adminFrom(admin, 'nation_prices').select('nation_id, price, day_index').order('day_index', { ascending: true }),
-      adminFrom(admin, 'matches').select('*').not('played_at', 'is', null).order('day_index'),
-      adminFrom(admin, 'portfolios').select('cash, avg_cost, tx_log, best_score').eq('id', portfolioId).single(),
-      adminFrom(admin, 'holdings').select('nation_id, quantity').eq('portfolio_id', portfolioId),
-      adminFrom(admin, 'transactions').select('nation_id, type, quantity, price, day_index').eq('portfolio_id', portfolioId).order('created_at', { ascending: false }).limit(100),
+    const [gsRes, ctRes, cpRes, mRes, pfRes, hRes, txRes] = await Promise.all([
+      // Game state (competition-scoped)
+      adm(admin)
+        .from('competition_game_state')
+        .select('*')
+        .eq('competition_id', competitionId)
+        .single(),
+
+      // Team prices + metadata
+      adm(admin)
+        .from('competition_teams')
+        .select('team_id, current_price, initial_price, teams(name, flag_emoji)')
+        .eq('competition_id', competitionId),
+
+      // Price history (competition-scoped)
+      adm(admin)
+        .from('competition_prices')
+        .select('team_id, price, day_index')
+        .eq('competition_id', competitionId)
+        .order('day_index', { ascending: true }),
+
+      // Played matches (competition-scoped)
+      adm(admin)
+        .from('matches')
+        .select('day_index, result_data')
+        .eq('competition_id', competitionId)
+        .not('played_at', 'is', null)
+        .order('day_index'),
+
+      // Portfolio
+      adm(admin)
+        .from('portfolios')
+        .select('cash, avg_cost, tx_log, best_score')
+        .eq('id', portfolioId)
+        .single(),
+
+      // Holdings (competition-scoped)
+      adm(admin)
+        .from('holdings')
+        .select('nation_id, quantity')
+        .eq('portfolio_id', portfolioId)
+        .eq('competition_id', competitionId),
+
+      // Transactions (competition-scoped, last 100)
+      adm(admin)
+        .from('transactions')
+        .select('nation_id, type, quantity, price, day_index')
+        .eq('portfolio_id', portfolioId)
+        .eq('competition_id', competitionId)
+        .order('created_at', { ascending: false })
+        .limit(100),
     ]);
 
     interface GSRow {
@@ -64,19 +123,25 @@ export async function GET(req: NextRequest) {
       sf_pool: string[]; final_pool: string[]; third_pool: string[];
     }
     const gs = gsRes.data as GSRow | null;
-    if (!gs) throw new Error('game_state not initialized — run seed 001_game_data.sql');
+    if (!gs) return NextResponse.json({ error: 'competition_game_state not initialized' }, { status: 500 });
 
-    // ── Prices record ─────────────────────────────────────────────────────────
+    // ── Team lookup map (for txLog enrichment) ────────────────────────────────
+    interface CTRow { team_id: string; current_price: number | null; initial_price: number; teams: { name: string; flag_emoji: string | null } | null }
+    const teamMap: Record<string, { name: string; flag: string }> = {};
     const pricesRecord: Record<string, number> = {};
-    for (const n of (nRes.data ?? []) as Array<{ id: string; current_price: number | null }>) {
-      pricesRecord[n.id] = n.current_price ?? 0;
+
+    for (const ct of (ctRes.data ?? []) as CTRow[]) {
+      pricesRecord[ct.team_id] = ct.current_price ?? ct.initial_price;
+      if (ct.teams) {
+        teamMap[ct.team_id] = { name: ct.teams.name, flag: ct.teams.flag_emoji ?? '' };
+      }
     }
 
     // ── Price history ─────────────────────────────────────────────────────────
     const priceHistory: Record<string, number[]> = {};
-    for (const row of (npRes.data ?? []) as Array<{ nation_id: string; price: number; day_index: number }>) {
-      if (!priceHistory[row.nation_id]) priceHistory[row.nation_id] = [];
-      priceHistory[row.nation_id][row.day_index] = row.price;
+    for (const row of (cpRes.data ?? []) as Array<{ team_id: string; price: number; day_index: number }>) {
+      if (!priceHistory[row.team_id]) priceHistory[row.team_id] = [];
+      priceHistory[row.team_id][row.day_index] = row.price;
     }
 
     // ── Match results ─────────────────────────────────────────────────────────
@@ -95,13 +160,14 @@ export async function GET(req: NextRequest) {
 
     // ── Transaction log ───────────────────────────────────────────────────────
     const txLog = ((txRes.data ?? []) as Array<{ nation_id: string; type: string; quantity: number; price: number; day_index: number }>).map(t => {
-      const n = NATIONS.find(x => x.id === t.nation_id);
-      return { dir: t.type as 'buy' | 'sell', flag: n?.flag ?? '', name: n?.name ?? t.nation_id, qty: t.quantity, price: t.price, day: t.day_index };
+      const team = teamMap[t.nation_id];
+      return { dir: t.type as 'buy' | 'sell', flag: team?.flag ?? '', name: team?.name ?? t.nation_id, qty: t.quantity, price: t.price, day: t.day_index };
     });
 
     const pf = pfRes.data as { cash: number; avg_cost: unknown; tx_log: unknown; best_score: number | null } | null;
 
     const responseBody = {
+      competitionId,
       dayIndex:    gs.current_day_index,
       phase:       gs.current_phase,
       champion:    gs.champion_id ?? null,
@@ -122,9 +188,7 @@ export async function GET(req: NextRequest) {
       bestScore:   pf?.best_score ?? null,
     };
 
-    // ETag based on day + portfolio id so clients skip re-parsing unchanged state.
-    // day index changes on every advance; portfolioId ties the ETag to this player.
-    const etag = `"d${gs.current_day_index}-p${portfolioId}"`;
+    const etag = `"c${competitionId}-d${gs.current_day_index}-p${portfolioId}"`;
     if (req.headers.get('If-None-Match') === etag) {
       return new Response(null, { status: 304 });
     }

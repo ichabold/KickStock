@@ -24,6 +24,19 @@ import type {
 } from '@kickstock/types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
+const COMPETITION_KEY = 'kickstock:competition';
+
+export function getCompetitionIdSync(): number {
+  if (typeof window === 'undefined') return 1;
+  const stored = localStorage.getItem(COMPETITION_KEY);
+  return stored ? parseInt(stored, 10) : 1;
+}
+
+export function setCompetitionId(id: number): void {
+  localStorage.setItem(COMPETITION_KEY, String(id));
+  window.location.reload();
+}
+
 export { fmt, pctOf };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -34,6 +47,7 @@ interface AdvanceDayResult {
 }
 
 interface OnlineGameStore extends GameState {
+  _competitionId:    number;
   _bootstrap:        BootstrapData | null;
   _teams:            TeamMeta[];
   bootstrapLoading:  boolean;
@@ -82,6 +96,7 @@ function getGroupFixtures(bootstrap: BootstrapData | null, dayIndex: number): Ma
 
 export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   ...baseState(),
+  _competitionId:   getCompetitionIdSync(),
   _bootstrap:       null,
   _teams:           [],
   bootstrapLoading: false,
@@ -98,7 +113,7 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     if (current._bootstrap || current.bootstrapLoading) return;
 
     set({ bootstrapLoading: true, bootstrapError: false });
-    const data = await getBootstrap();
+    const data = await getBootstrap(current._competitionId);
 
     if (!data) {
       set({ bootstrapLoading: false, bootstrapError: true });
@@ -118,8 +133,9 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     const teams = get()._teams;
 
     const deviceId = getDeviceId();
+    const competitionId = get()._competitionId;
     try {
-      const data = await fetchGameState(deviceId);
+      const data = await fetchGameState(deviceId, competitionId);
       const enriched = data.txLog.map(t => {
         const team = teams.find(x => x.id === t.name) ?? null;
         return { ...t, flag: team?.flag ?? '', name: team?.name ?? t.name };
@@ -196,7 +212,7 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
       if (held < quantity) return 'Actions insuffisantes';
     }
 
-    const result = await apiTrade(getDeviceId(), mode, nationId, quantity);
+    const result = await apiTrade(getDeviceId(), get()._competitionId, mode, nationId, quantity);
     if (result.error) return result.error;
 
     if (mode === 'buy') {
@@ -229,7 +245,7 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   // ── advanceDay ───────────────────────────────────────────────────────────────
   advanceDay: async () => {
     const s = get();
-    const response = await apiAdvanceDay(getDeviceId(), s.dayIndex);
+    const response = await apiAdvanceDay(getDeviceId(), s._competitionId, s.dayIndex);
     if (!response?.results) return null;
     set({
       prices: response.prices, eliminated: response.eliminated,

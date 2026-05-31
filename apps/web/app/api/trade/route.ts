@@ -1,13 +1,8 @@
 /**
  * POST /api/trade
- * Executes a buy or sell via the execute_trade RPC (SECURITY DEFINER, atomic).
+ * Executes a buy or sell via the execute_competition_trade RPC (SECURITY DEFINER, atomic).
  *
- * Auth strategy:
- *   • Authenticated user → sessioned Supabase client (anon key + JWT).
- *     The RPC receives auth.uid() from the JWT and can verify ownership.
- *   • Anonymous player  → admin client scoped to the device_id.
- *
- * Body: { nationId: string, mode: 'buy'|'sell', quantity: number }
+ * Body: { competitionId: number, nationId: string, mode: 'buy'|'sell', quantity: number }
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -19,8 +14,11 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { nationId, mode, quantity } = body;
+    const { competitionId, nationId, mode, quantity } = body;
 
+    if (!competitionId || typeof competitionId !== 'number') {
+      return NextResponse.json({ code: 'INVALID_PARAMS', error: 'competitionId manquant' }, { status: 400 });
+    }
     if (!nationId || typeof nationId !== 'string') {
       return NextResponse.json({ code: 'INVALID_PARAMS', error: 'nationId manquant' }, { status: 400 });
     }
@@ -36,7 +34,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ code: 'MISSING_DEVICE_ID', error: 'X-Device-ID requis' }, { status: 400 });
     }
 
-    // Try to get the authenticated user session
     let userId: string | null = null;
     let useSessionedClient = false;
     let sessionedClient: Awaited<ReturnType<typeof createServerClient>> | null = null;
@@ -44,23 +41,19 @@ export async function POST(req: NextRequest) {
     try {
       sessionedClient = await createServerClient();
       const { data: { user } } = await sessionedClient.auth.getUser();
-      if (user?.id) {
-        userId = user.id;
-        useSessionedClient = true;
-      }
-    } catch { /* anonymous player — fall through to admin client */ }
+      if (user?.id) { userId = user.id; useSessionedClient = true; }
+    } catch { /* anonymous player */ }
 
-    // Authenticated: use sessioned client so auth.uid() is set inside the RPC
-    // Anonymous:     use admin client (no session to pass)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client: any = useSessionedClient ? sessionedClient! : createAdminClient();
 
-    const { data, error } = await client.rpc('execute_trade', {
-      p_device_id: deviceId,
-      p_nation_id: nationId,
-      p_mode:      mode,
-      p_quantity:  Math.floor(quantity),
-      p_user_id:   userId,
+    const { data, error } = await client.rpc('execute_competition_trade', {
+      p_competition_id: competitionId,
+      p_device_id:      deviceId,
+      p_team_id:        nationId,
+      p_mode:           mode,
+      p_quantity:       Math.floor(quantity),
+      p_user_id:        userId,
     });
 
     if (error) throw error;
@@ -82,18 +75,15 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     Sentry.captureException(err, { tags: { route: 'POST /api/trade' } });
     console.error('[POST /api/trade]', err);
-    return NextResponse.json(
-      { code: 'INTERNAL_ERROR', error: 'Erreur interne' },
-      { status: 500 },
-    );
+    return NextResponse.json({ code: 'INTERNAL_ERROR', error: 'Erreur interne' }, { status: 500 });
   }
 }
 
 function errorToCode(msg: string): string {
   const m = msg.toLowerCase();
-  if (m.includes('insufficient') || m.includes('insuffisant')) return 'INSUFFICIENT_FUNDS';
-  if (m.includes('eliminated') || m.includes('éliminé'))       return 'NATION_ELIMINATED';
-  if (m.includes('market') && m.includes('closed'))            return 'MARKET_CLOSED';
-  if (m.includes('not found') || m.includes('introuvable'))    return 'NOT_FOUND';
+  if (m.includes('insuffisant') || m.includes('insufficient')) return 'INSUFFICIENT_FUNDS';
+  if (m.includes('éliminé')     || m.includes('eliminated'))   return 'NATION_ELIMINATED';
+  if (m.includes('introuvable') || m.includes('not found'))    return 'NOT_FOUND';
+  if (m.includes('plafond'))                                   return 'CONCENTRATION_CAP';
   return 'TRADE_ERROR';
 }
