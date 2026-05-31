@@ -109,10 +109,9 @@ export function buildGroupStandingsUI(
     }));
   }
 
-  for (const [diStr, results] of Object.entries(matchResults)) {
-    const di = Number(diStr);
-    if (di >= 17) continue; // only group stage days
+  for (const [, results] of Object.entries(matchResults)) {
     for (const r of results) {
+      if (r.phase && r.phase !== 'Groups') continue; // skip KO results
       for (const g of groups) {
         const tA = gs[g].find(t => t.id === r.a);
         const tB = gs[g].find(t => t.id === r.b);

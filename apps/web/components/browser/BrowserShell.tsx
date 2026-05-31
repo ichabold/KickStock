@@ -529,8 +529,8 @@ function StandingsView({ onNationClick, onMatchClick }: {
   const teams        = useGameStore(s => (s as any)._teams) as TeamMeta[];
 
   const standings = useMemo(
-    () => buildGroupStandingsUI(matchResults, prices, eliminated),
-    [matchResults, prices, eliminated],
+    () => buildGroupStandingsUI(matchResults, prices, eliminated, teams),
+    [matchResults, prices, eliminated, teams],
   );
 
   const currentDay = bootstrap?.days.find(d => d.day_index === dayIndex);
