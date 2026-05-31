@@ -1,23 +1,22 @@
 /**
  * POST /api/game/advance
  *
- * Advances a competition by one day (simulation mode).
- * No longer depends on hardcoded CALENDAR or NATIONS — all data from DB.
+ * Simulation mode: advances a competition one day.
+ * Reads ALL matches (group + KO) from DB — no hardcoded tournament structure.
+ * Works for WC2022, WC2026, or any other competition in the DB.
  *
  * Body: { competitionId: number, dayIndex: number }
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient }         from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import * as Sentry from '@sentry/nextjs';
-import {
-  simulate, applyResult, genScore, genGoals,
-  buildMatchesForDay, buildR32Pool,
-} from '@kickstock/game-engine';
-import { DIV_RATES } from '@kickstock/constants';
+import * as Sentry                   from '@sentry/nextjs';
+import { simulate, applyResult, genScore, genGoals } from '@kickstock/game-engine';
+import { DIV_RATES }                 from '@kickstock/constants';
+import { buildKOQualifiers }         from '@/lib/ko-qualifiers';
 import type { StoredMatchResult, GameState } from '@kickstock/types';
 
-export const dynamic  = 'force-dynamic';
+export const dynamic     = 'force-dynamic';
 export const maxDuration = 60;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,14 +29,14 @@ interface GSRow {
   sf_pool: string[]; final_pool: string[]; third_pool: string[];
 }
 
-interface DayRow {
-  day_index: number; full_label: string; phase: string;
-  is_ko: boolean; div_key: string | null;
-}
-
 interface TeamRow {
   team_id: string; current_price: number; initial_price: number;
   teams: { strength: number; name: string; flag_emoji: string | null } | null;
+}
+
+interface DayRow {
+  day_index: number; full_label: string; phase: string;
+  is_ko: boolean; div_key: string | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -57,7 +56,7 @@ export async function POST(req: NextRequest) {
       userId = user?.id ?? null;
     } catch { /* fine */ }
 
-    // ── 1. Read competition game state ────────────────────────────────────────
+    // ── 1. Competition game state ─────────────────────────────────────────────
     const { data: gsRaw } = await A(admin)
       .from('competition_game_state')
       .select('*')
@@ -85,14 +84,14 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // ── 3. Load team data (prices + strengths) ────────────────────────────
+      // ── 3. Team data ──────────────────────────────────────────────────────
       const { data: teamRows } = await A(admin)
         .from('competition_teams')
         .select('team_id, current_price, initial_price, teams(strength, name, flag_emoji)')
         .eq('competition_id', competitionId);
 
       const teams = (teamRows ?? []) as TeamRow[];
-      const prices: Record<string, number> = {};
+      const prices:    Record<string, number> = {};
       const strengths: Record<string, number> = {};
 
       for (const t of teams) {
@@ -100,7 +99,7 @@ export async function POST(req: NextRequest) {
         strengths[t.team_id] = t.teams?.strength ?? 75;
       }
 
-      // ── 4. Load today's day metadata from competition_days ────────────────
+      // ── 4. Today's day metadata ───────────────────────────────────────────
       const { data: dayRaw } = await A(admin)
         .from('competition_days')
         .select('day_index, full_label, phase, is_ko, div_key')
@@ -109,20 +108,44 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
 
       const day = dayRaw as DayRow | null;
-
       if (!day) {
-        // No more days — tournament finished
-        await A(admin)
-          .from('competition_game_state')
-          .update({ advancing: false })
-          .eq('competition_id', competitionId);
+        await A(admin).from('competition_game_state')
+          .update({ advancing: false }).eq('competition_id', competitionId);
         return NextResponse.json({ finished: true });
       }
 
-      // ── 5. Load played match results ──────────────────────────────────────
-      const { data: playedRaw } = await A(admin)
+      // ── 5. All matches for today from DB (group + KO, competition-agnostic)
+      const { data: fixtureRows } = await A(admin)
         .from('matches')
-        .select('day_index, result_data')
+        .select('nation_a, nation_b, venue, phase')
+        .eq('competition_id', competitionId)
+        .eq('day_index', gs.current_day_index)
+        .is('played_at', null)
+        .not('api_status', 'in', '("PST","SUSP","CANC","ABD")');
+
+      const todayMatches = ((fixtureRows ?? []) as Array<{ nation_a: string; nation_b: string; venue: string | null; phase: string }>)
+        .filter(f => !gs.eliminated.includes(f.nation_a) && !gs.eliminated.includes(f.nation_b))
+        .map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }));
+
+      if (todayMatches.length === 0 && day.is_ko) {
+        // KO day with no playable matches — skip
+        const nd = gs.current_day_index + 1;
+        const { data: nextDay } = await A(admin)
+          .from('competition_days').select('phase')
+          .eq('competition_id', competitionId).eq('day_index', nd).maybeSingle();
+
+        await A(admin).from('competition_game_state').update({
+          current_day_index: nd,
+          current_phase: (nextDay as { phase: string } | null)?.phase ?? day.phase,
+          advancing: false, updated_at: new Date().toISOString(),
+        }).eq('competition_id', competitionId);
+
+        return NextResponse.json({ results: [], newDayIndex: nd, flash: {} });
+      }
+
+      // ── 6. Load played results (for pool state) ───────────────────────────
+      const { data: playedRaw } = await A(admin)
+        .from('matches').select('day_index, result_data')
         .eq('competition_id', competitionId)
         .not('played_at', 'is', null);
 
@@ -133,65 +156,16 @@ export async function POST(req: NextRequest) {
         matchResults[m.day_index].push(m.result_data as StoredMatchResult);
       }
 
-      // ── 6. Build today's matches ──────────────────────────────────────────
-      const engineState = {
-        prices, matchResults,
-        eliminated: gs.eliminated ?? [],
-        r32Pool:    gs.r32_pool   ?? [],
-        r16Pool:    gs.r16_pool   ?? [],
-        qfPool:     gs.qf_pool    ?? [],
-        sfPool:     gs.sf_pool    ?? [],
-        finalPool:  gs.final_pool ?? [],
-        thirdPool:  gs.third_pool ?? [],
-        champion:   gs.champion_id ?? null,
-      } as Partial<GameState>;
-
-      let todayMatches: Array<{ a: string; b: string; venue?: string }>;
-
-      if (!day.is_ko) {
-        // Group stage: load fixtures from matches table for this competition + day
-        const { data: fixtureRows } = await A(admin)
-          .from('matches')
-          .select('nation_a, nation_b, venue')
-          .eq('competition_id', competitionId)
-          .eq('day_index', gs.current_day_index)
-          .is('played_at', null);
-
-        todayMatches = ((fixtureRows ?? []) as Array<{ nation_a: string; nation_b: string; venue: string | null }>)
-          .filter(f => !engineState.eliminated!.includes(f.nation_a) && !engineState.eliminated!.includes(f.nation_b))
-          .map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }));
-      } else {
-        // KO stage: derive dynamic key from phase + position within phase
-        const dynamicKey = await deriveDynamicKey(admin, competitionId, day.phase, gs.current_day_index);
-        todayMatches = buildMatchesForDay(dynamicKey, engineState as GameState)
-          .filter(m => prices[m.a] !== undefined && prices[m.b] !== undefined);
-      }
-
-      if (todayMatches.length === 0 && day.is_ko) {
-        // Empty KO day — skip ahead
-        const nd = gs.current_day_index + 1;
-        const { data: nextDay } = await A(admin)
-          .from('competition_days')
-          .select('phase')
-          .eq('competition_id', competitionId)
-          .eq('day_index', nd)
-          .maybeSingle();
-
-        await A(admin)
-          .from('competition_game_state')
-          .update({ current_day_index: nd, current_phase: (nextDay as { phase: string } | null)?.phase ?? day.phase, advancing: false, updated_at: new Date().toISOString() })
-          .eq('competition_id', competitionId);
-
-        return NextResponse.json({ results: [], newDayIndex: nd, flash: {} });
-      }
-
       // ── 7. Simulate ───────────────────────────────────────────────────────
-      const newPrices:  Record<string, number>      = { ...prices };
-      const eliminated: string[]                     = [...(gs.eliminated ?? [])];
-      const flash:      Record<string, 'fu' | 'fd'> = {};
-      let r32Pool   = [...(gs.r32_pool   ?? [])], r16Pool   = [...(gs.r16_pool   ?? [])];
-      let qfPool    = [...(gs.qf_pool    ?? [])], sfPool    = [...(gs.sf_pool    ?? [])];
-      let finalPool = [...(gs.final_pool ?? [])], thirdPool = [...(gs.third_pool ?? [])];
+      const newPrices  = { ...prices };
+      const eliminated = [...gs.eliminated];
+      const flash:     Record<string, 'fu' | 'fd'> = {};
+      let r32Pool   = [...gs.r32_pool];
+      let r16Pool   = [...gs.r16_pool];
+      let qfPool    = [...gs.qf_pool];
+      let sfPool    = [...gs.sf_pool];
+      let finalPool = [...gs.final_pool];
+      let thirdPool = [...gs.third_pool];
       let champion: string | null = gs.champion_id ?? null;
 
       const results: StoredMatchResult[] = todayMatches.map((m) => {
@@ -219,8 +193,12 @@ export async function POST(req: NextRequest) {
         newPrices[m.a] = newPA; newPrices[m.b] = newPB;
         flash[m.a] = newPA > pA ? 'fu' : 'fd';
         flash[m.b] = newPB > pB ? 'fu' : 'fd';
-        if (elimId && !eliminated.includes(elimId)) { eliminated.push(elimId); newPrices[elimId] = 1; flash[elimId] = 'fd'; }
-        if (day.phase === '3rd' && loserId && !eliminated.includes(loserId)) { eliminated.push(loserId); newPrices[loserId] = 1; flash[loserId] = 'fd'; }
+        if (elimId && !eliminated.includes(elimId)) {
+          eliminated.push(elimId); newPrices[elimId] = 1; flash[elimId] = 'fd';
+        }
+        if (day.phase === '3rd' && loserId && !eliminated.includes(loserId)) {
+          eliminated.push(loserId); newPrices[loserId] = 1; flash[loserId] = 'fd';
+        }
 
         return {
           a: m.a, b: m.b, scoreA, scoreB,
@@ -232,28 +210,7 @@ export async function POST(req: NextRequest) {
         };
       });
 
-      // ── 8. R32 pool (after last group day) ────────────────────────────────
-      if (day.phase === 'Groups' && r32Pool.length === 0) {
-        const { data: lastGroupDay } = await A(admin)
-          .from('competition_days')
-          .select('day_index')
-          .eq('competition_id', competitionId)
-          .eq('phase', 'Groups')
-          .order('day_index', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if ((lastGroupDay as { day_index: number } | null)?.day_index === gs.current_day_index) {
-          const allRes = { ...matchResults, [gs.current_day_index]: results };
-          r32Pool = buildR32Pool(allRes as Record<number, StoredMatchResult[]>, eliminated);
-          const q = new Set(r32Pool.filter(Boolean));
-          for (const tid of Object.keys(prices)) {
-            if (!q.has(tid) && !eliminated.includes(tid)) { eliminated.push(tid); newPrices[tid] = 1; flash[tid] = 'fd'; }
-          }
-        }
-      }
-
-      // ── 9. KO pools ───────────────────────────────────────────────────────
+      // ── 8. KO pool tracking ───────────────────────────────────────────────
       for (const r of results) {
         if (!day.is_ko || !r.winnerId) continue;
         if (day.phase === 'R32'   && !r16Pool.includes(r.winnerId))   r16Pool.push(r.winnerId);
@@ -265,20 +222,55 @@ export async function POST(req: NextRequest) {
         }
         if (day.phase === 'Final') {
           champion = r.winnerId;
-          if (r.loserId && !eliminated.includes(r.loserId)) { eliminated.push(r.loserId); newPrices[r.loserId] = 1; }
+          if (r.loserId && !eliminated.includes(r.loserId)) {
+            eliminated.push(r.loserId); newPrices[r.loserId] = 1;
+          }
         }
       }
 
+      // ── 9. Last group day → compute KO qualifiers (competition-agnostic) ──
+      if (day.phase === 'Groups') {
+        const { data: lastGroupDay } = await A(admin)
+          .from('competition_days').select('day_index')
+          .eq('competition_id', competitionId).eq('phase', 'Groups')
+          .order('day_index', { ascending: false }).limit(1).maybeSingle();
+
+        if ((lastGroupDay as { day_index: number } | null)?.day_index === gs.current_day_index) {
+          const { data: nextDayForPhase } = await A(admin)
+            .from('competition_days').select('phase')
+            .eq('competition_id', competitionId)
+            .eq('day_index', gs.current_day_index + 1)
+            .maybeSingle();
+
+          const nextPhase = (nextDayForPhase as { phase: string } | null)?.phase ?? 'R16';
+          const allGroupResults = { ...matchResults, [gs.current_day_index]: results };
+
+          const { qualifiers, newEliminated } = await buildKOQualifiers(
+            competitionId, allGroupResults, eliminated, nextPhase,
+          );
+
+          // Teams newly eliminated → price to 1
+          for (const id of newEliminated) {
+            if (!eliminated.includes(id)) {
+              newPrices[id] = 1; flash[id] = 'fd';
+            }
+          }
+
+          eliminated.splice(0, eliminated.length, ...newEliminated);
+
+          if (nextPhase === 'R32') r32Pool = qualifiers;
+          else                     r16Pool = qualifiers;
+        }
+      }
+
+      // ── 10. Next day metadata ─────────────────────────────────────────────
       const newDayIndex = gs.current_day_index + 1;
       const { data: nextDayRow } = await A(admin)
-        .from('competition_days')
-        .select('phase')
-        .eq('competition_id', competitionId)
-        .eq('day_index', newDayIndex)
-        .maybeSingle();
+        .from('competition_days').select('phase')
+        .eq('competition_id', competitionId).eq('day_index', newDayIndex).maybeSingle();
       const newPhase = (nextDayRow as { phase: string } | null)?.phase ?? day.phase;
 
-      // ── 10. Persist simulated matches ─────────────────────────────────────
+      // ── 11. Persist simulated match results ───────────────────────────────
       const mUps = results.map((r, i) => ({
         id: `m_sim_${competitionId}_${gs.current_day_index}_${i}`,
         competition_id: competitionId,
@@ -289,7 +281,7 @@ export async function POST(req: NextRequest) {
       }));
       await A(admin).from('matches').upsert(mUps, { onConflict: 'id' });
 
-      // ── 11. Persist prices (competition-scoped) ───────────────────────────
+      // ── 12. Persist prices ────────────────────────────────────────────────
       for (const [teamId, price] of Object.entries(newPrices)) {
         await A(admin).rpc('update_competition_prices', {
           p_competition_id: competitionId,
@@ -299,7 +291,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── 12. Liquidate eliminated ──────────────────────────────────────────
+      // ── 13. Liquidate eliminated ──────────────────────────────────────────
       for (const r of results) {
         if (!r.elimId) continue;
         await A(admin).rpc('liquidate_competition_eliminated', {
@@ -309,7 +301,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── 13. Dividends ─────────────────────────────────────────────────────
+      // ── 14. Dividends ─────────────────────────────────────────────────────
       if (day.is_ko && day.div_key) {
         const rate = DIV_RATES[day.div_key] ?? 0;
         for (const r of results) {
@@ -343,19 +335,16 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // ── 14. Advance competition_game_state ────────────────────────────────
-      await A(admin)
-        .from('competition_game_state')
-        .update({
-          current_day_index: newDayIndex, current_phase: newPhase,
-          champion_id: champion, advancing: false, eliminated,
-          r32_pool: r32Pool, r16_pool: r16Pool, qf_pool: qfPool,
-          sf_pool: sfPool, final_pool: finalPool, third_pool: thirdPool,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('competition_id', competitionId);
+      // ── 15. Advance competition_game_state ────────────────────────────────
+      await A(admin).from('competition_game_state').update({
+        current_day_index: newDayIndex, current_phase: newPhase,
+        champion_id: champion, advancing: false, eliminated,
+        r32_pool: r32Pool, r16_pool: r16Pool, qf_pool: qfPool,
+        sf_pool: sfPool, final_pool: finalPool, third_pool: thirdPool,
+        updated_at: new Date().toISOString(),
+      }).eq('competition_id', competitionId);
 
-      // ── 15. Player updated cash ───────────────────────────────────────────
+      // ── 16. Player updated cash ───────────────────────────────────────────
       let newCash: number | null = null;
       if (deviceId || userId) {
         const { data: pid } = await A(admin).rpc('get_or_create_competition_portfolio', {
@@ -373,10 +362,8 @@ export async function POST(req: NextRequest) {
       });
 
     } catch (inner) {
-      await A(admin)
-        .from('competition_game_state')
-        .update({ advancing: false })
-        .eq('competition_id', competitionId);
+      await A(admin).from('competition_game_state')
+        .update({ advancing: false }).eq('competition_id', competitionId);
       throw inner;
     }
 
@@ -385,31 +372,4 @@ export async function POST(req: NextRequest) {
     console.error('[POST /api/game/advance]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-// ── Derive KO dynamic key from phase + position within that phase ─────────────
-async function deriveDynamicKey(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  admin: any,
-  competitionId: number,
-  phase: string,
-  dayIndex: number,
-): Promise<string> {
-  const { data: phaseDays } = await admin
-    .from('competition_days')
-    .select('day_index')
-    .eq('competition_id', competitionId)
-    .eq('phase', phase)
-    .order('day_index', { ascending: true });
-
-  const days = (phaseDays ?? []) as Array<{ day_index: number }>;
-  const pos  = days.findIndex(d => d.day_index === dayIndex);
-
-  if (phase === 'R32')   return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[pos]  ?? 'r32_1';
-  if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[pos]                      ?? 'r16_1';
-  if (phase === 'QF')    return (['qf_1','qf_2','qf_3'])[pos]                                 ?? 'qf_1';
-  if (phase === 'SF')    return pos === 0 ? 'sf_1' : 'sf_2';
-  if (phase === '3rd')   return '3rd';
-  if (phase === 'Final') return 'final';
-  return phase.toLowerCase();
 }
