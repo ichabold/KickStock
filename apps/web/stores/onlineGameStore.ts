@@ -165,11 +165,15 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     get().fetchState();
 
     const supabase = createClient();
+    const competitionId = get()._competitionId;
     const channel = supabase
-      .channel('ks_game_state')
+      .channel(`ks_game_state_${competitionId}`)
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'game_state' },
+        {
+          event: 'UPDATE', schema: 'public', table: 'competition_game_state',
+          filter: `competition_id=eq.${competitionId}`,
+        },
         () => {
           if (get().syncing) return;
           set({ syncing: true });
@@ -226,8 +230,11 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
       });
     } else {
       const gross   = price * quantity;
-      const fee     = isKO ? gross * 0.10 : gross * 0.05;
-      const net     = gross - (s.eliminated.includes(nationId) ? 0 : fee);
+      const isElim  = s.eliminated.includes(nationId);
+      const fee     = isElim || price <= 1
+        ? 0
+        : Math.max(gross * (isKO ? 0.05 : 0.10), 10);
+      const net     = gross - fee;
       const newHeld = Math.max(0, held - quantity);
       const newPort = { ...s.portfolio };
       const newAvgs = { ...s.avgCost };
