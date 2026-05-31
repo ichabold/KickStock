@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -10,6 +10,7 @@ import { useGameMode } from '@/hooks/useGameMode';
 import { fmt } from '@kickstock/game-engine';
 import { getPseudo, clearPseudo, isValidPseudoFormat, getOAuthPending, clearOAuthPending, saveOAuthPending } from '@/lib/pseudo';
 import { getDeviceId } from '@/lib/device';
+import { getCompetitionIdSync, setCompetitionId } from '@/stores/onlineGameStore';
 import BottomSheet from './BottomSheet';
 import EmailAuthModal from '@/components/auth/EmailAuthModal';
 
@@ -293,6 +294,9 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onClose, onSignOut }
         {mode === 'online' ? '🎲 Jouer en simulation →' : '⚡ Retour au mode Live →'}
       </button>
 
+      {/* ── Competition selector ─────────────────────────────────────────────── */}
+      <CompetitionSelector onClose={onClose} />
+
       <div style={s.menuDivider} />
       <button onClick={() => setChangePseudo(true)} style={s.resetBtn}>
         {t('changePseudo')}
@@ -316,6 +320,58 @@ function AccountMenu({ name, bestScore, avatarUrl, initial, onClose, onSignOut }
           currentPseudo={name}
           onClose={() => setChangePseudo(false)}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Competition selector ─────────────────────────────────────────────────────
+
+interface CompetitionItem { id: number; name: string; season: number; is_active: boolean }
+
+function CompetitionSelector({ onClose }: { onClose: () => void }) {
+  const [competitions, setCompetitions] = React.useState<CompetitionItem[]>([]);
+  const [open,         setOpen]         = React.useState(false);
+  const currentId = getCompetitionIdSync();
+
+  React.useEffect(() => {
+    fetch('/api/competition/list')
+      .then(r => r.json())
+      .then(d => setCompetitions(d.competitions ?? []))
+      .catch(() => {});
+  }, []);
+
+  if (competitions.length <= 1) return null;
+
+  const current = competitions.find(c => c.id === currentId) ?? competitions[0];
+
+  return (
+    <div style={{ padding: '6px 0' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ ...s.resetBtn, color: 'var(--text)', display: 'flex', justifyContent: 'space-between', width: '100%' }}
+      >
+        <span>🏆 {current?.name ?? 'Compétition'}</span>
+        <span style={{ color: 'var(--muted)', fontSize: 10 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 4, background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+          {competitions.map(c => (
+            <button
+              key={c.id}
+              onClick={() => { onClose(); setCompetitionId(c.id); }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left',
+                padding: '8px 12px', background: c.id === currentId ? 'rgba(255,219,0,.08)' : 'none',
+                border: 'none', color: c.id === currentId ? 'var(--gold)' : 'var(--text)',
+                fontSize: 11, fontWeight: c.id === currentId ? 700 : 400,
+                cursor: 'pointer', fontFamily: 'var(--font-body)',
+              }}
+            >
+              {c.id === currentId ? '● ' : '○ '}{c.name} ({c.season})
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

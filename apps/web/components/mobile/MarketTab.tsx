@@ -5,7 +5,11 @@ import { useTranslations } from 'next-intl';
 import NationCard from '@/components/shared/NationCard';
 import TradeModal from '@/components/shared/TradeModal';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
-import type { TradeMode, SortBy, TeamMeta, BootstrapData } from '@kickstock/types';
+import type { Nation, TradeMode, SortBy, TeamMeta, BootstrapData } from '@kickstock/types';
+
+function teamToNation(t: TeamMeta): Nation {
+  return { id: t.id, name: t.name, flag: t.flag, p: t.initialPrice, conf: t.confederation ?? '', str: t.strength, group: t.group };
+}
 import { useGameStore } from '@/stores/gameStore';
 import styles from './MarketTab.module.css';
 
@@ -14,7 +18,7 @@ export default function MarketTab() {
   const [filter,   setFilter]   = useState('');
   const [group,    setGroup]    = useState('ALL');
   const [sortBy,   setSortBy]   = useState<SortBy>('default');
-  const [modal,    setModal]    = useState<{ teamId: string; mode: TradeMode } | null>(null);
+  const [modal,    setModal]    = useState<{ nation: Nation; mode: TradeMode } | null>(null);
   const [nationId, setNationId] = useState<string | null>(null);
 
   const prices     = useGameStore(s => s.prices);
@@ -61,7 +65,7 @@ export default function MarketTab() {
     return list;
   }, [teams, group, filter, sortBy, prices, portfolio]);
 
-  const modalTeam = modal ? teams.find(t => t.id === modal.teamId) : null;
+  // (modal.nation already holds the full Nation object)
 
   if (!bootstrap) {
     return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>Chargement…</div>;
@@ -114,9 +118,9 @@ export default function MarketTab() {
         {filtered.map(n => (
           <NationCard
             key={n.id}
-            nationId={n.id}
-            onBuy={() => setModal({ teamId: n.id, mode: 'buy' })}
-            onSell={() => setModal({ teamId: n.id, mode: 'sell' })}
+            nation={teamToNation(n)}
+            onBuy={() => setModal({ nation: teamToNation(n), mode: 'buy' })}
+            onSell={() => setModal({ nation: teamToNation(n), mode: 'sell' })}
             onCardClick={() => setNationId(n.id)}
           />
         ))}
@@ -127,10 +131,10 @@ export default function MarketTab() {
         )}
       </div>
 
-      {modal && modalTeam && (
+      {modal && (
         <TradeModal
-          nationId={modal.teamId}
-          mode={modal.mode}
+          nation={modal.nation}
+          initMode={modal.mode}
           onClose={() => setModal(null)}
         />
       )}
