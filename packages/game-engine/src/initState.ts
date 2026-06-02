@@ -1,18 +1,8 @@
-import { NATIONS, INIT_CASH } from '@kickstock/constants';
+import { INIT_CASH } from '@kickstock/constants';
 import type { GameState, TeamMeta } from '@kickstock/types';
 
-/**
- * Initialises a fresh GameState.
- *
- * Preferred (API-driven): pass `teams` from the bootstrap endpoint.
- * Legacy fallback: if called with no args, uses the hardcoded NATIONS constant.
- * The fallback exists only to keep the server advance route working during migration.
- */
-export function initState(teams?: TeamMeta[]): GameState {
-  const src = teams ?? NATIONS.map(n => ({
-    id: n.id, name: n.name, flag: n.flag,
-    group: n.group, strength: n.str, initialPrice: n.p,
-  }));
+export function initState(teams: TeamMeta[]): GameState {
+  const src = teams;
 
   const prices: Record<string, number>       = {};
   const priceHistory: Record<string, number[]> = {};

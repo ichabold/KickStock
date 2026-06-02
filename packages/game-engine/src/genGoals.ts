@@ -1,26 +1,20 @@
-import { SCORER_POOL } from '@kickstock/constants';
-import type { Nation, Goal } from '@kickstock/types';
+import type { Goal } from '@kickstock/types';
 
-/**
- * Generates per-minute goal events with scorer names.
- * Handles 90min, extra time, and penalty shootouts separately.
- */
+interface TeamRef {
+  id:   string;
+  name: string;
+}
+
 export function genGoals(
   scoreA: number,
   scoreB: number,
-  nA: Nation,
-  nB: Nation,
+  nA: TeamRef,
+  nB: TeamRef,
   res90: string,
   etRes: string | null,
 ): Goal[] {
-  const nameA = () => {
-    const pool = SCORER_POOL[nA.id] ?? [nA.name];
-    return pool[Math.floor(Math.random() * pool.length)];
-  };
-  const nameB = () => {
-    const pool = SCORER_POOL[nB.id] ?? [nB.name];
-    return pool[Math.floor(Math.random() * pool.length)];
-  };
+  const nameA = () => nA.name;
+  const nameB = () => nB.name;
 
   const isETMatch = res90 === 'draw' && etRes != null;
   const score90A = isETMatch ? (etRes === 'A' ? scoreA - 1 : scoreA) : scoreA;

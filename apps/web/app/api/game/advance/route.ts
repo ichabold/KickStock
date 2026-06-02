@@ -182,8 +182,8 @@ export async function POST(req: NextRequest) {
         const [scoreA, scoreB] = genScore(sim.res, sim.res90, sim.etRes, sim.penWinner);
         const goals = genGoals(
           scoreA, scoreB,
-          { id: m.a, name: teamA?.teams?.name ?? m.a, flag: teamA?.teams?.flag_emoji ?? '', p: pA, str: strA, conf: '', group: '' },
-          { id: m.b, name: teamB?.teams?.name ?? m.b, flag: teamB?.teams?.flag_emoji ?? '', p: pB, str: strB, conf: '', group: '' },
+          { id: m.a, name: teamA?.teams?.name ?? m.a },
+          { id: m.b, name: teamB?.teams?.name ?? m.b },
           sim.res90, sim.etRes,
         );
         const winnerId = sim.res === 'draw' ? null : (sim.res === 'A' ? m.a : m.b);

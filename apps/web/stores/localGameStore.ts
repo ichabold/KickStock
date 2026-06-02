@@ -344,10 +344,11 @@ export const useLocalGameStore = create<LocalGameStore>()(
           const newPA          = Math.max(1, rawPA);
           const newPB          = Math.max(1, rawPB);
           const [scoreA, scoreB] = genScore(sim.res, sim.res90, sim.etRes, sim.penWinner);
-          // genGoals expects Nation-like shape — create minimal compat objects
-          const nACompat = { id: tA.id, name: tA.name, flag: tA.flag, p: tA.initialPrice, conf: '', str: tA.strength, group: tA.group };
-          const nBCompat = { id: tB.id, name: tB.name, flag: tB.flag, p: tB.initialPrice, conf: '', str: tB.strength, group: tB.group };
-          const goals    = genGoals(scoreA, scoreB, nACompat, nBCompat, sim.res90, sim.etRes);
+          const goals = genGoals(scoreA, scoreB,
+            { id: tA.id, name: tA.name },
+            { id: tB.id, name: tB.name },
+            sim.res90, sim.etRes,
+          );
           const winnerId = sim.res === 'draw' ? null : (sim.res === 'A' ? m.a : m.b);
           const loserId  = sim.res === 'draw' ? null : (sim.res === 'A' ? m.b : m.a);
           const elimId   = day.is_ko && day.phase !== 'SF' && day.phase !== '3rd' ? loserId : null;

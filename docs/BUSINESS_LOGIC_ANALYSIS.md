@@ -1645,96 +1645,106 @@ Table JSONB pour sync cross-device en mode offline. Un blob complet par utilisat
 | STEP 2 | Admin : `PATCH /api/admin/competitions/[id]/teams/[team_id]` + `TeamEditor.tsx` | ✅ |
 | STEP 3 | Admin : `POST/DELETE /api/admin/competitions/[id]/days/…` + `DayManager.tsx` + Section E | ✅ |
 | STEP 4 | `db/migrations/013_cleanup_legacy.sql` créé (⚠️ pas encore exécuté en prod) | ✅ fichier prêt |
-| STEP 5.2 | `trade.concentration.test.ts` — 6 tests cap 40% ✅ | ✅ |
-| STEP 5.3 | `dividends.test.ts` — 9 tests taux par phase ✅ | ✅ |
-| STEP 5.1 | `advanceDay.test.ts` — pipeline simulation offline | ❌ non implémenté |
+| STEP 5.2 | `trade.concentration.test.ts` — 6 tests cap 40% | ✅ |
+| STEP 5.3 | `dividends.test.ts` — 9 tests taux par phase | ✅ |
+| STEP 5.1 | `advanceDay.test.ts` — pipeline simulation offline | ❌ non implémenté (reporté vague 4) |
 
-### État final des constantes legacy dans `@kickstock/constants`
+**Vague 4 — NEXT_STEPS_V4.md (nettoyage final game-engine + tests)**
 
-| Constante | Statut | Usages restants |
-|-----------|--------|-----------------|
-| `NATIONS` | ⚠️ Legacy actif | `game-engine/src/initState.ts` (fallback si `teams` non fourni) — usage résiduel |
-| `CALENDAR` | ✅ Dead code | Aucun import actif — peut être supprimé du package |
-| `GROUPS` | ✅ Dead code | Aucun import actif — peut être supprimé du package |
-| `SCORER_POOL` | ⚠️ Legacy actif | `game-engine/src/genGoals.ts` — utilisé pour les noms de buteurs en simulation |
-| `INIT_CASH` | ✅ Conserver | `localGameStore.ts` (`baseState()`) — valeur métier correcte |
-| `DIV_RATES` | ✅ Conserver | `localGameStore.ts` + `buildKOMatches.ts` (re-export) |
-| `tokens` | ✅ Conserver | Design system |
+| Step | Qui | Description | Statut |
+|------|-----|-------------|--------|
+| STEP 1 | JY | Exécuter migration 013 en prod (Supabase SQL Editor) | ⏳ Action manuelle en attente |
+| STEP 2 | Code | `advanceDay.test.ts` — 4 tests, vitest.config.ts jsdom, jsdom installé | ✅ 4/4 tests passent |
+| STEP 3 | Code | `CALENDAR` + `GROUPS` supprimés de `@kickstock/constants` + import `CalendarDay` retiré | ✅ |
+| STEP 4 | Code | `genGoals.ts` : `Nation`+`SCORER_POOL` → `TeamRef { id, name }`. 3 appelants simplifiés | ✅ |
+| STEP 5 | Code | `initState.ts` : `teams` obligatoire, fallback `NATIONS` + import supprimés | ✅ |
 
-### Suite des tests Vitest — État courant
+### État actuel de `@kickstock/constants` — post-vague 4
 
-| Fichier | Tests | Couverture |
-|---------|-------|------------|
-| `lib/bootstrap.test.ts` | 3 | `deriveDynamicKey` — clés R32/SF/Final |
-| `stores/localGameStore.isolation.test.ts` | 1 | Isolation clé persist par compétition |
-| `app/api/game/reset/route.test.ts` | 1 | Smoke test 400 si compétitionId manquant |
-| `stores/trade.concentration.test.ts` | 6 | Cap 40% — 6 scénarios |
-| `lib/dividends.test.ts` | 9 | Taux dividende par phase + edge cases |
-| `stores/advanceDay.test.ts` | ❌ | Pipeline simulation offline — **non implémenté** |
-| **Total** | **20/21** | |
+| Export | Statut | Importé par |
+|--------|--------|-------------|
+| `TOKENS` | ✅ Actif | Design system (`tokens.ts`) |
+| `MOBILE_BREAKPOINT` | ✅ Actif | Composants de layout |
+| `NATIONS` | 🗑️ **Dead code** | **Aucun import actif** — à supprimer |
+| `DIV_RATES` | ✅ Actif | `localGameStore.ts`, `buildKOMatches.ts` (re-export) |
+| `INIT_CASH` | ✅ Actif | `localGameStore.ts` (`baseState()`) |
+| `CALENDAR` | ✅ **Supprimé** | — (vague 4 STEP 3) |
+| `GROUPS` | ✅ **Supprimé** | — (vague 4 STEP 3) |
+| `SCORER_POOL` | 🗑️ **Dead code** | **Aucun import actif** — à supprimer |
 
-### Couverture fonctionnelle par User Story — Bilan
+**`NATIONS` et `SCORER_POOL` sont les deux derniers exports dead code du package.** Leur suppression est la seule tâche code restante sur `@kickstock/constants`.
+
+### Suite des tests Vitest — État post-vague 4
+
+| Fichier | Tests | Statut | Couverture |
+|---------|-------|--------|------------|
+| `lib/bootstrap.test.ts` | 3 | ✅ | `deriveDynamicKey` — clés R32/SF/Final |
+| `stores/localGameStore.isolation.test.ts` | 1 | ✅ | Isolation clé persist par compétition |
+| `app/api/game/reset/route.test.ts` | 1 | ✅ | Smoke test 400 si compétitionId manquant |
+| `stores/trade.concentration.test.ts` | 6 | ✅ | Cap 40% — 6 scénarios |
+| `lib/dividends.test.ts` | 9 | ✅ | Taux dividende par phase + edge cases |
+| `stores/advanceDay.test.ts` | 4 | ✅ | Pipeline simulation offline |
+| **Total** | **24 / 24** | ✅ | |
+
+### Couverture fonctionnelle par User Story — Bilan post-vague 4
 
 | Domaine US | Couvert | Lacunes restantes |
 |------------|---------|-------------------|
 | Auth & onboarding (US-1) | ✅ | — |
-| i18n FR/EN (US-2) | ✅ | Tester switch en prod |
+| i18n FR/EN (US-2) | ✅ | Tester switch de langue en prod |
 | Multi-compétition (US-3) | ✅ | — |
 | Marché consultation (US-4) | ✅ | — |
 | Trading (US-5) | ✅ | — |
 | Portfolio (US-6) | ✅ | — |
 | Calendrier (US-7) | ✅ | — |
 | Standings (US-8) | ✅ | — |
-| Mode Simulation (US-9) | ✅ | Test pipeline `advanceDay` manquant |
+| Mode Simulation (US-9) | ✅ | — |
 | Mode Live (US-10) | ✅ | — |
-| Dividendes & Prix (US-11) | ✅ | Tests couverts |
+| Dividendes & Prix (US-11) | ✅ | — |
 | Fiche équipe (US-12) | ✅ | — |
 | Leaderboard (US-13) | ✅ | — |
 | Tutorial & Coach Marks (US-14) | ✅ | — |
 | UI Shell (US-15) | ✅ | — |
-| Admin gestion compétitions (US-16) | ✅ | Exécuter migration 013 en prod |
+| Admin gestion compétitions (US-16) | ✅ | ⏳ Migration 013 en prod (action JY) |
 | Infrastructure (US-17) | ✅ | — |
 
----
-
-## Next Steps recommandés — Vague 4
-
-### Priorité 1 — Exécuter la migration 013 en prod
-
-Le fichier `db/migrations/013_cleanup_legacy.sql` est prêt. Avant de l'exécuter :
-
-1. Lancer la requête de comptage incluse dans le fichier SQL sur la base de prod
-2. Confirmer que toutes les tables retournent 0 lignes
-3. Exécuter dans le Supabase SQL Editor (prod)
-4. Vérifier la liste des tables restantes avec la requête de contrôle post-migration
-
-### Priorité 2 — Test pipeline `advanceDay` (STEP 5.1 non implémenté)
-
-Le test `advanceDay.test.ts` a été spécifié dans `NEXT_STEPS_V3.md` mais n'a pas été implémenté. Le code du test est fourni dans ce document — il reste à le créer dans `apps/web/stores/advanceDay.test.ts`.
-
-### Priorité 3 — Supprimer `CALENDAR` et `GROUPS` du package `@kickstock/constants`
-
-Ces deux exports sont désormais dead code (aucun import actif). Les supprimer de `packages/constants/src/index.ts` et vérifier la compilation :
-
-```bash
-grep -rn "CALENDAR\|GROUPS" apps/ packages/ --include="*.ts" --include="*.tsx" | grep -v node_modules | grep -v ".d.ts"
-```
-
-### Priorité 4 — `genGoals.ts` : `SCORER_POOL` dynamique
-
-`game-engine/src/genGoals.ts` utilise `SCORER_POOL` hardcodé pour générer des noms de buteurs fictifs. Ce pool ne couvre que 22 équipes sur 48 ; pour les autres, il fallback sur le nom de l'équipe. Options :
-- Option A (rapide) : passer les noms de joueurs en paramètre de `genGoals` depuis la DB
-- Option B (simple) : garder le fallback sur le nom de l'équipe, acceptable pour une simulation
-
-### Priorité 5 — `initState.ts` : supprimer le fallback `NATIONS`
-
-`game-engine/src/initState.ts` a encore un fallback sur `NATIONS` quand `teams` n'est pas fourni. Vérifier tous les appelants de `initState()` et s'assurer qu'ils passent toujours `teams`, puis supprimer le fallback et l'import `NATIONS`.
+**État global : toutes les User Stories sont couvertes dans le code. Une seule action manuelle reste en attente (migration SQL 013 par JY).**
 
 ---
 
-*Document mis à jour le 2 juin 2026 — Version 3 (post NEXT_STEPS_V3.md)*
+## Next Steps recommandés — Vague 5
 
-Ces fallbacks ne sont atteints que si `buildKOMatches` est appelé sans l'argument `teams`. Depuis que les stores injectent toujours `_teams`, ce cas ne devrait plus se produire. Action : supprimer les fallbacks, rendre le paramètre `teams` obligatoire, et valider qu'aucun appelant ne l'omet.
+### Priorité 1 (JY) — Exécuter la migration 013 en production
+
+La seule action bloquante non-code. Procédure complète dans `NEXT_STEPS_V4.md` STEP 1.
+
+### Priorité 2 — Supprimer `NATIONS` et `SCORER_POOL` de `@kickstock/constants`
+
+Ce sont les deux derniers exports dead code du package. Après la vague 4 :
+- `NATIONS` n'est plus importé par aucun fichier TypeScript actif
+- `SCORER_POOL` n'est plus importé par aucun fichier TypeScript actif
+
+**Actions :** dans `packages/constants/src/index.ts` :
+1. Supprimer le bloc `export const NATIONS: Nation[] = [...]` (48 lignes)
+2. Supprimer le bloc `export const SCORER_POOL: Record<string, string[]> = {...}` (~30 lignes)
+3. Supprimer l'`import type { Nation } from '@kickstock/types'` (plus utilisé si NATIONS est supprimé)
+4. Vérifier `pnpm tsc --noEmit` dans le monorepo
+
+### Priorité 3 — Vérification manuelle i18n en production
+
+Tester le switch de langue FR → EN sur `kick-stock-web.vercel.app` :
+- Aller dans le menu avatar → cliquer "🇬🇧 English"
+- Vérifier que toute l'interface bascule en anglais
+- Recharger → vérifier que la langue persiste
+- Vérifier la détection automatique via `Accept-Language` (navigateur en anglais → interface EN au premier accès)
+
+### Priorité 4 — Qualité du code : retirer les `any` casts résiduels
+
+Les stores et composants utilisent des patterns `(s as any)._bootstrap` et `(s as any)._teams` pour accéder aux données bootstrap depuis `gameStore`. Ces casts existent car `useGameStore` est typé comme `typeof useLocalGameStore` (façade). Une solution propre serait d'étendre l'interface `GameState` pour inclure `_bootstrap` et `_teams` ou de créer une interface `ExtendedGameStore`.
+
+---
+
+*Document mis à jour le 2 juin 2026 — Version 4 (post NEXT_STEPS_V4.md)*
 
 ### Priorité 2 — Compléter l'interface admin (saisie manuelle des équipes)
 

@@ -1,4 +1,4 @@
-import type { Nation, CalendarDay } from '@kickstock/types';
+import type { Nation } from '@kickstock/types';
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 export const TOKENS = {
@@ -76,51 +76,11 @@ export const NATIONS: Nation[] = [
   {id:"PAN",name:"Panama",       flag:"🇵🇦",p:20,  conf:"CONCACAF",str:53,group:"L"},
 ];
 
-export const GROUPS = ["ALL","A","B","C","D","E","F","G","H","I","J","K","L"] as const;
-
 export const DIV_RATES: Record<string, number> = {
   r32: 0.10, r16: 0.15, qf: 0.20, sf: 0.30, final: 0.40, champion: 0.60,
 };
 
 export const INIT_CASH = 10_000;
-
-// ─── CALENDAR ─────────────────────────────────────────────────────────────────
-export const CALENDAR: CalendarDay[] = [
-  {date:"Jun 11",label:"Day 1 · Thu Jun 11",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"MEX",b:"RSA",venue:"Azteca, Mexico City"},{a:"KOR",b:"CZE",venue:"Akron, Guadalajara"}]},
-  {date:"Jun 12",label:"Day 2 · Fri Jun 12",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"CAN",b:"BIH",venue:"BMO Field, Toronto"},{a:"USA",b:"PAR",venue:"SoFi Stadium, LA"}]},
-  {date:"Jun 13",label:"Day 3 · Sat Jun 13",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"QAT",b:"SUI",venue:"Levi's, Santa Clara"},{a:"BRA",b:"MAR",venue:"MetLife, New York"},{a:"HAI",b:"SCO",venue:"Gillette, Boston"}]},
-  {date:"Jun 14",label:"Day 4 · Sun Jun 14",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"AUS",b:"TUR",venue:"BC Place, Vancouver"},{a:"GER",b:"CUW",venue:"NRG, Houston"},{a:"NED",b:"JPN",venue:"AT&T, Dallas"},{a:"CIV",b:"ECU",venue:"Lincoln, Phila."},{a:"SWE",b:"TUN",venue:"BBVA, Monterrey"}]},
-  {date:"Jun 15",label:"Day 5 · Mon Jun 15",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"ESP",b:"CPV",venue:"Benz, Atlanta"},{a:"BEL",b:"EGY",venue:"Lumen, Seattle"},{a:"KSA",b:"URU",venue:"Hard Rock, Miami"},{a:"IRN",b:"NZL",venue:"SoFi, LA"}]},
-  {date:"Jun 16",label:"Day 6 · Tue Jun 16",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"FRA",b:"SEN",venue:"MetLife, New York"},{a:"IRQ",b:"NOR",venue:"Gillette, Boston"},{a:"ARG",b:"ALG",venue:"Arrowhead, KC"}]},
-  {date:"Jun 17",label:"Day 7 · Wed Jun 17",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"AUT",b:"JOR",venue:"Levi's, Santa Clara"},{a:"POR",b:"COD",venue:"NRG, Houston"},{a:"ENG",b:"CRO",venue:"AT&T, Dallas"},{a:"GHA",b:"PAN",venue:"BMO, Toronto"},{a:"UZB",b:"COL",venue:"Azteca, Mexico City"}]},
-  {date:"Jun 18",label:"Day 8 · Thu Jun 18",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"CZE",b:"RSA",venue:"Benz, Atlanta"},{a:"SUI",b:"BIH",venue:"SoFi, LA"},{a:"CAN",b:"QAT",venue:"BC Place, Vancouver"},{a:"MEX",b:"KOR",venue:"Akron, Guadalajara"}]},
-  {date:"Jun 19",label:"Day 9 · Fri Jun 19",    phase:"Groups",isKO:false,divKey:null,matches:[{a:"USA",b:"AUS",venue:"Lumen, Seattle"},{a:"SCO",b:"MAR",venue:"Gillette, Boston"},{a:"BRA",b:"HAI",venue:"Lincoln, Phila."},{a:"TUR",b:"PAR",venue:"Levi's, Santa Clara"}]},
-  {date:"Jun 20",label:"Day 10 · Sat Jun 20",   phase:"Groups",isKO:false,divKey:null,matches:[{a:"NED",b:"SWE",venue:"NRG, Houston"},{a:"GER",b:"CIV",venue:"BMO, Toronto"},{a:"ECU",b:"CUW",venue:"Arrowhead, KC"}]},
-  {date:"Jun 21",label:"Day 11 · Sun Jun 21",   phase:"Groups",isKO:false,divKey:null,matches:[{a:"TUN",b:"JPN",venue:"BBVA, Monterrey"},{a:"ESP",b:"KSA",venue:"Benz, Atlanta"},{a:"BEL",b:"IRN",venue:"SoFi, LA"},{a:"URU",b:"CPV",venue:"Hard Rock, Miami"},{a:"NZL",b:"EGY",venue:"BC Place, Vancouver"}]},
-  {date:"Jun 22",label:"Day 12 · Mon Jun 22",   phase:"Groups",isKO:false,divKey:null,matches:[{a:"ARG",b:"AUT",venue:"AT&T, Dallas"},{a:"FRA",b:"IRQ",venue:"Lincoln, Phila."},{a:"NOR",b:"SEN",venue:"MetLife, New York"},{a:"JOR",b:"ALG",venue:"Levi's, Santa Clara"}]},
-  {date:"Jun 23",label:"Day 13 · Tue Jun 23",   phase:"Groups",isKO:false,divKey:null,matches:[{a:"POR",b:"UZB",venue:"NRG, Houston"},{a:"ENG",b:"GHA",venue:"Gillette, Boston"},{a:"PAN",b:"CRO",venue:"BMO, Toronto"},{a:"COL",b:"COD",venue:"Akron, Guadalajara"}]},
-  {date:"Jun 24",label:"Day 14 · Wed Jun 24 🔥",phase:"Groups",isKO:false,divKey:null,matches:[{a:"SUI",b:"CAN",venue:"BC Place"},{a:"BIH",b:"QAT",venue:"Lumen"},{a:"SCO",b:"BRA",venue:"Hard Rock"},{a:"MAR",b:"HAI",venue:"Benz"},{a:"CZE",b:"MEX",venue:"Azteca"},{a:"RSA",b:"KOR",venue:"BBVA"}]},
-  {date:"Jun 25",label:"Day 15 · Thu Jun 25 🔥",phase:"Groups",isKO:false,divKey:null,matches:[{a:"CUW",b:"CIV",venue:"Lincoln"},{a:"ECU",b:"GER",venue:"MetLife"},{a:"JPN",b:"SWE",venue:"AT&T"},{a:"TUN",b:"NED",venue:"Arrowhead"},{a:"TUR",b:"USA",venue:"SoFi"},{a:"PAR",b:"AUS",venue:"Levi's"}]},
-  {date:"Jun 26",label:"Day 16 · Fri Jun 26 🔥",phase:"Groups",isKO:false,divKey:null,matches:[{a:"NOR",b:"FRA",venue:"Gillette"},{a:"SEN",b:"IRQ",venue:"BMO"},{a:"CPV",b:"KSA",venue:"NRG"},{a:"URU",b:"ESP",venue:"Akron"},{a:"EGY",b:"IRN",venue:"Lumen"},{a:"NZL",b:"BEL",venue:"BC Place"}]},
-  {date:"Jun 27",label:"Day 17 · Sat Jun 27 🔥",phase:"Groups",isKO:false,divKey:null,matches:[{a:"PAN",b:"ENG",venue:"MetLife"},{a:"CRO",b:"GHA",venue:"Lincoln"},{a:"COL",b:"POR",venue:"Hard Rock"},{a:"COD",b:"UZB",venue:"Benz"},{a:"ALG",b:"AUT",venue:"Arrowhead"},{a:"JOR",b:"ARG",venue:"AT&T"}]},
-  {date:"Jun 28",label:"R32 · Sun Jun 28",  phase:"R32",isKO:true,divKey:"r32",dynamic:"r32_28",matches:[]},
-  {date:"Jun 29",label:"R32 · Mon Jun 29",  phase:"R32",isKO:true,divKey:"r32",dynamic:"r32_29",matches:[]},
-  {date:"Jun 30",label:"R32 · Tue Jun 30",  phase:"R32",isKO:true,divKey:"r32",dynamic:"r32_30",matches:[]},
-  {date:"Jul 1", label:"R32 · Wed Jul 1",   phase:"R32",isKO:true,divKey:"r32",dynamic:"r32_1", matches:[]},
-  {date:"Jul 2", label:"R32 · Thu Jul 2",   phase:"R32",isKO:true,divKey:"r32",dynamic:"r32_2", matches:[]},
-  {date:"Jul 3", label:"R32 · Fri Jul 3",   phase:"R32",isKO:true,divKey:"r32",dynamic:"r32_3", matches:[]},
-  {date:"Jul 4", label:"R16 · Sat Jul 4",   phase:"R16",isKO:true,divKey:"r16",dynamic:"r16_1", matches:[]},
-  {date:"Jul 5", label:"R16 · Sun Jul 5",   phase:"R16",isKO:true,divKey:"r16",dynamic:"r16_2", matches:[]},
-  {date:"Jul 6", label:"R16 · Mon Jul 6",   phase:"R16",isKO:true,divKey:"r16",dynamic:"r16_3", matches:[]},
-  {date:"Jul 7", label:"R16 · Tue Jul 7",   phase:"R16",isKO:true,divKey:"r16",dynamic:"r16_4", matches:[]},
-  {date:"Jul 9", label:"QF · Thu Jul 9",    phase:"QF", isKO:true,divKey:"qf", dynamic:"qf_1",  matches:[]},
-  {date:"Jul 10",label:"QF · Fri Jul 10",   phase:"QF", isKO:true,divKey:"qf", dynamic:"qf_2",  matches:[]},
-  {date:"Jul 11",label:"QF · Sat Jul 11",   phase:"QF", isKO:true,divKey:"qf", dynamic:"qf_3",  matches:[]},
-  {date:"Jul 14",label:"SF · Tue Jul 14",   phase:"SF", isKO:true,divKey:"sf", dynamic:"sf_1",  matches:[]},
-  {date:"Jul 15",label:"SF · Wed Jul 15",   phase:"SF", isKO:true,divKey:"sf", dynamic:"sf_2",  matches:[]},
-  {date:"Jul 18",label:"3rd Place · Sat Jul 18",  phase:"3rd",  isKO:true,divKey:null,  dynamic:"3rd",   matches:[]},
-  {date:"Jul 19",label:"🏆 FINAL · Sun Jul 19",   phase:"Final",isKO:true,divKey:"final",dynamic:"final",matches:[]},
-];
 
 // ─── SCORER POOL ──────────────────────────────────────────────────────────────
 export const SCORER_POOL: Record<string, string[]> = {

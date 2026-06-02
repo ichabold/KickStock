@@ -124,8 +124,8 @@ export async function POST(req: NextRequest) {
       const [scoreA, scoreB] = genScore(sim.res, sim.res90, sim.etRes, sim.penWinner);
       const goals = genGoals(
         scoreA, scoreB,
-        { id: match.nation_a, name: tA?.teams?.name ?? match.nation_a, flag: tA?.teams?.flag_emoji ?? '', p: pA, str: strA, conf: '', group: '' },
-        { id: match.nation_b, name: tB?.teams?.name ?? match.nation_b, flag: tB?.teams?.flag_emoji ?? '', p: pB, str: strB, conf: '', group: '' },
+        { id: match.nation_a, name: tA?.teams?.name ?? match.nation_a },
+        { id: match.nation_b, name: tB?.teams?.name ?? match.nation_b },
         sim.res90, sim.etRes,
       );
 
