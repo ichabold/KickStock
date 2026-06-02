@@ -17,10 +17,8 @@ export default function ScheduleTab() {
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams        = useGameStore(s => (s as any)._teams)     as TeamMeta[];
+  const bootstrap = useGameStore(s => s._bootstrap);
+  const teams     = useGameStore(s => s._teams);
 
   const gN = (id: string) => teams.find(t => t.id === id);
 

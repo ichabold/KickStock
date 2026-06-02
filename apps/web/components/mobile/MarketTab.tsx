@@ -25,10 +25,8 @@ export default function MarketTab() {
   const portfolio  = useGameStore(s => s.portfolio);
   const eliminated = useGameStore(s => s.eliminated);
   const txLog      = useGameStore(s => s.txLog);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams      = useGameStore(s => (s as any)._teams)     as TeamMeta[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap  = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  const teams     = useGameStore(s => s._teams);
+  const bootstrap = useGameStore(s => s._bootstrap);
 
   const isFirstRun = Object.values(portfolio).every(q => q === 0) && txLog.length === 0;
 

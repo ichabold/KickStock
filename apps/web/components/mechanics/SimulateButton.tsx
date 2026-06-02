@@ -19,8 +19,7 @@ export function SimulateButton({ onResults, onNoResults, className, label }: Pro
   const dayIndex   = useGameStore(s => s.dayIndex);
   const advanceDay = useGameStore(s => s.advanceDay);
   const resetGame  = useGameStore(s => s.resetGame);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap  = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  const bootstrap = useGameStore(s => s._bootstrap);
 
   const day = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
 

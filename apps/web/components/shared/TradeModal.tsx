@@ -27,8 +27,7 @@ export default function TradeModal({ nation, initMode, onClose }: Props) {
   const eliminated = useGameStore(s => s.eliminated);
   const trade      = useGameStore(s => s.trade);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap  = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  const bootstrap = useGameStore(s => s._bootstrap);
   const currentDay = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
 
   const price      = prices[nation.id] ?? nation.p;

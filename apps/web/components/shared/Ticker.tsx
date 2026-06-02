@@ -11,8 +11,7 @@ export default function Ticker() {
   const t = useTranslations('ticker');
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const teams = useGameStore(s => s._teams);
   const [nationId, setNationId] = useState<string | null>(null);
 
   const items = useMemo(() => {

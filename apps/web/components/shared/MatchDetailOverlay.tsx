@@ -14,8 +14,7 @@ interface Props {
 }
 
 export default function MatchDetailOverlay({ result, dayLabel, onClose, onNationClick }: Props) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const teams = useGameStore(s => s._teams);
   const gN = (id: string) => (teams ?? []).find(t => t.id === id);
   const t = useTranslations('matchDetail');
   const { scoreA, scoreB, res, res90, etRes, penWinner, penA, penB, isUpset, venue, goals = [] } = result;

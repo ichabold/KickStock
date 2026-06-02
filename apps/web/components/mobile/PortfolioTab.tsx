@@ -23,8 +23,7 @@ export default function PortfolioTab() {
   const avgCost   = useGameStore(s => s.avgCost);
   const eliminated = useGameStore(s => s.eliminated);
   const txLog     = useGameStore(s => s.txLog);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const teams = useGameStore(s => s._teams);
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)

@@ -66,8 +66,7 @@ export default function MobileShell() {
 
   const dayIndex  = useGameStore(s => s.dayIndex);
   const champion  = useGameStore(s => s.champion);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap = useGameStore(s => (s as any)._bootstrap);
+  const bootstrap = useGameStore(s => s._bootstrap);
   const { mode }  = useGameMode();
   const isOnline  = mode === 'online';
 

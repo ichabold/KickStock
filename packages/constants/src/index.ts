@@ -1,5 +1,3 @@
-import type { Nation } from '@kickstock/types';
-
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 export const TOKENS = {
   bg:       '#0A0A0A',
@@ -24,86 +22,8 @@ export const TOKENS = {
 
 export const MOBILE_BREAKPOINT = 600; // px
 
-// ─── 48 NATIONS ───────────────────────────────────────────────────────────────
-export const NATIONS: Nation[] = [
-  {id:"MEX",name:"Mexico",       flag:"🇲🇽",p:25,  conf:"CONCACAF",str:72,group:"A"},
-  {id:"RSA",name:"S. Africa",    flag:"🇿🇦",p:10,  conf:"CAF",     str:49,group:"A"},
-  {id:"KOR",name:"South Korea",  flag:"🇰🇷",p:20,  conf:"AFC",     str:63,group:"A"},
-  {id:"CZE",name:"Czechia",      flag:"🇨🇿",p:20,  conf:"UEFA",    str:61,group:"A"},
-  {id:"CAN",name:"Canada",       flag:"🇨🇦",p:25,  conf:"CONCACAF",str:68,group:"B"},
-  {id:"BIH",name:"Bosnia",       flag:"🇧🇦",p:20,  conf:"UEFA",    str:58,group:"B"},
-  {id:"QAT",name:"Qatar",        flag:"🇶🇦",p:10,  conf:"AFC",     str:48,group:"B"},
-  {id:"SUI",name:"Switzerland",  flag:"🇨🇭",p:25,  conf:"UEFA",    str:70,group:"B"},
-  {id:"BRA",name:"Brazil",       flag:"🇧🇷",p:200, conf:"CONMEBOL",str:88,group:"C"},
-  {id:"MAR",name:"Morocco",      flag:"🇲🇦",p:20,  conf:"CAF",     str:66,group:"C"},
-  {id:"HAI",name:"Haiti",        flag:"🇭🇹",p:10,  conf:"CONCACAF",str:42,group:"C"},
-  {id:"SCO",name:"Scotland",     flag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿",p:20,  conf:"UEFA",    str:60,group:"C"},
-  {id:"USA",name:"USA",          flag:"🇺🇸",p:50,  conf:"CONCACAF",str:76,group:"D"},
-  {id:"PAR",name:"Paraguay",     flag:"🇵🇾",p:20,  conf:"CONMEBOL",str:62,group:"D"},
-  {id:"AUS",name:"Australia",    flag:"🇦🇺",p:20,  conf:"AFC",     str:58,group:"D"},
-  {id:"TUR",name:"Türkiye",      flag:"🇹🇷",p:20,  conf:"UEFA",    str:66,group:"D"},
-  {id:"GER",name:"Germany",      flag:"🇩🇪",p:100, conf:"UEFA",    str:84,group:"E"},
-  {id:"CUW",name:"Curaçao",      flag:"🇨🇼",p:10,  conf:"CONCACAF",str:40,group:"E"},
-  {id:"CIV",name:"Ivory Coast",  flag:"🇨🇮",p:20,  conf:"CAF",     str:60,group:"E"},
-  {id:"ECU",name:"Ecuador",      flag:"🇪🇨",p:25,  conf:"CONMEBOL",str:65,group:"E"},
-  {id:"NED",name:"Netherlands",  flag:"🇳🇱",p:75,  conf:"UEFA",    str:82,group:"F"},
-  {id:"JPN",name:"Japan",        flag:"🇯🇵",p:25,  conf:"AFC",     str:68,group:"F"},
-  {id:"SWE",name:"Sweden",       flag:"🇸🇪",p:20,  conf:"UEFA",    str:64,group:"F"},
-  {id:"TUN",name:"Tunisia",      flag:"🇹🇳",p:20,  conf:"CAF",     str:55,group:"F"},
-  {id:"BEL",name:"Belgium",      flag:"🇧🇪",p:50,  conf:"UEFA",    str:80,group:"G"},
-  {id:"EGY",name:"Egypt",        flag:"🇪🇬",p:20,  conf:"CAF",     str:58,group:"G"},
-  {id:"IRN",name:"Iran",         flag:"🇮🇷",p:20,  conf:"AFC",     str:56,group:"G"},
-  {id:"NZL",name:"New Zealand",  flag:"🇳🇿",p:10,  conf:"OFC",     str:44,group:"G"},
-  {id:"ESP",name:"Spain",        flag:"🇪🇸",p:200, conf:"UEFA",    str:92,group:"H"},
-  {id:"CPV",name:"Cape Verde",   flag:"🇨🇻",p:10,  conf:"CAF",     str:48,group:"H"},
-  {id:"KSA",name:"Saudi Arabia", flag:"🇸🇦",p:10,  conf:"AFC",     str:52,group:"H"},
-  {id:"URU",name:"Uruguay",      flag:"🇺🇾",p:35,  conf:"CONMEBOL",str:74,group:"H"},
-  {id:"FRA",name:"France",       flag:"🇫🇷",p:200, conf:"UEFA",    str:93,group:"I"},
-  {id:"SEN",name:"Senegal",      flag:"🇸🇳",p:25,  conf:"CAF",     str:68,group:"I"},
-  {id:"NOR",name:"Norway",       flag:"🇳🇴",p:25,  conf:"UEFA",    str:69,group:"I"},
-  {id:"IRQ",name:"Iraq",         flag:"🇮🇶",p:10,  conf:"AFC",     str:46,group:"I"},
-  {id:"ARG",name:"Argentina",    flag:"🇦🇷",p:200, conf:"CONMEBOL",str:91,group:"J"},
-  {id:"ALG",name:"Algeria",      flag:"🇩🇿",p:20,  conf:"CAF",     str:57,group:"J"},
-  {id:"AUT",name:"Austria",      flag:"🇦🇹",p:20,  conf:"UEFA",    str:62,group:"J"},
-  {id:"JOR",name:"Jordan",       flag:"🇯🇴",p:10,  conf:"AFC",     str:46,group:"J"},
-  {id:"POR",name:"Portugal",     flag:"🇵🇹",p:100, conf:"UEFA",    str:86,group:"K"},
-  {id:"COD",name:"DR Congo",     flag:"🇨🇩",p:10,  conf:"CAF",     str:48,group:"K"},
-  {id:"UZB",name:"Uzbekistan",   flag:"🇺🇿",p:10,  conf:"AFC",     str:44,group:"K"},
-  {id:"COL",name:"Colombia",     flag:"🇨🇴",p:25,  conf:"CONMEBOL",str:70,group:"K"},
-  {id:"ENG",name:"England",      flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",p:200, conf:"UEFA",    str:90,group:"L"},
-  {id:"CRO",name:"Croatia",      flag:"🇭🇷",p:35,  conf:"UEFA",    str:74,group:"L"},
-  {id:"GHA",name:"Ghana",        flag:"🇬🇭",p:20,  conf:"CAF",     str:57,group:"L"},
-  {id:"PAN",name:"Panama",       flag:"🇵🇦",p:20,  conf:"CONCACAF",str:53,group:"L"},
-];
-
 export const DIV_RATES: Record<string, number> = {
   r32: 0.10, r16: 0.15, qf: 0.20, sf: 0.30, final: 0.40, champion: 0.60,
 };
 
 export const INIT_CASH = 10_000;
-
-// ─── SCORER POOL ──────────────────────────────────────────────────────────────
-export const SCORER_POOL: Record<string, string[]> = {
-  BRA:["Vinicius Jr.","Rodrygo","Endrick","Paquetá","Raphinha"],
-  FRA:["Mbappé","Griezmann","Dembélé","Camavinga","Tchouaméni"],
-  ARG:["Messi","Álvarez","Di María","Mac Allister","De Paul"],
-  ESP:["Yamal","Morata","Pedri","Williams","Olmo"],
-  ENG:["Bellingham","Kane","Saka","Foden","Rice"],
-  GER:["Wirtz","Havertz","Gnabry","Müller","Kimmich"],
-  POR:["Ronaldo","Bruno F.","Rúben N.","Leão","Vitinha"],
-  NED:["Van Dijk","Gakpo","Simons","Dumfries","Reijnders"],
-  BEL:["De Bruyne","Lukaku","Trossard","Carrasco","Doku"],
-  MAR:["En-Nesyri","Ziyech","Ounahi","Hakimi","Saïss"],
-  USA:["Pulisic","Reyna","Adams","Weah","Musah"],
-  MEX:["Álvarez","Lozano","Antuna","Herrera","Sánchez"],
-  URU:["Núñez","Bentancur","Valverde","De Arrascaeta","Pellistri"],
-  COL:["Luis Díaz","Falcao","Cuadrado","Arias","Borré"],
-  JPN:["Kubo","Mitoma","Doan","Ueda","Kamada"],
-  KOR:["Son","Lee Kang-in","Hwang","Kim Min-jae","Cho"],
-  SUI:["Shaqiri","Seferovic","Akanji","Freuler","Rieder"],
-  CRO:["Modrić","Kovačić","Kramarić","Pašalić","Gvardiol"],
-  SEN:["Mané","Dia","Gueye","Sabaly","Diatta"],
-  NOR:["Haaland","Ødegaard","Sörloth","Ajer","Berge"],
-  GHA:["Kudus","Partey","Ayew","Sulemana","Salisu"],
-  CAN:["Davies","David","Larin","Hoilett","Buchanan"],
-};

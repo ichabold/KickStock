@@ -49,10 +49,8 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
   const avgCost      = useGameStore(s => s.avgCost);
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams        = useGameStore(s => (s as any)._teams)     as TeamMeta[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  const teams     = useGameStore(s => s._teams);
+  const bootstrap = useGameStore(s => s._bootstrap);
 
   const teamMeta = (teams ?? []).find(t => t.id === nationId);
   if (!teamMeta) return null;

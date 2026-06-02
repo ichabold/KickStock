@@ -1705,46 +1705,45 @@ Table JSONB pour sync cross-device en mode offline. Un blob complet par utilisat
 | Leaderboard (US-13) | ✅ | — |
 | Tutorial & Coach Marks (US-14) | ✅ | — |
 | UI Shell (US-15) | ✅ | — |
-| Admin gestion compétitions (US-16) | ✅ | ⏳ Migration 013 en prod (action JY) |
+| Admin gestion compétitions (US-16) | ✅ | — |
 | Infrastructure (US-17) | ✅ | — |
 
-**État global : toutes les User Stories sont couvertes dans le code. Une seule action manuelle reste en attente (migration SQL 013 par JY).**
+**État global : toutes les User Stories sont couvertes dans le code. Toutes les actions de migration sont terminées.**
+
+### Note sur la visibilité des équipes en production
+
+Les équipes sont toujours visibles sur les écrans Home et Market après la migration 013 — **c'est le comportement attendu et correct**. La migration 013 a supprimé uniquement les tables legacy vides (`nations`, `positions`, `trades`…). Les tables actives `teams` et `competition_teams` contiennent les données de compétition et ne sont pas touchées. Les équipes affichées viennent désormais exclusivement de la base de données via `/api/competition/bootstrap`, et non plus du code TypeScript hardcodé `NATIONS`.
 
 ---
 
 ## Next Steps recommandés — Vague 5
 
-### Priorité 1 (JY) — Exécuter la migration 013 en production
+### Priorité 1 — Supprimer `NATIONS` et `SCORER_POOL` de `@kickstock/constants`
 
-La seule action bloquante non-code. Procédure complète dans `NEXT_STEPS_V4.md` STEP 1.
-
-### Priorité 2 — Supprimer `NATIONS` et `SCORER_POOL` de `@kickstock/constants`
-
-Ce sont les deux derniers exports dead code du package. Après la vague 4 :
-- `NATIONS` n'est plus importé par aucun fichier TypeScript actif
-- `SCORER_POOL` n'est plus importé par aucun fichier TypeScript actif
+Ce sont les deux derniers exports dead code du package. Après la vague 4, plus aucun fichier TypeScript actif ne les importe.
 
 **Actions :** dans `packages/constants/src/index.ts` :
 1. Supprimer le bloc `export const NATIONS: Nation[] = [...]` (48 lignes)
 2. Supprimer le bloc `export const SCORER_POOL: Record<string, string[]> = {...}` (~30 lignes)
-3. Supprimer l'`import type { Nation } from '@kickstock/types'` (plus utilisé si NATIONS est supprimé)
-4. Vérifier `pnpm tsc --noEmit` dans le monorepo
+3. Supprimer l'`import type { Nation } from '@kickstock/types'` en tête de fichier (plus utilisé)
+4. Vérifier la compilation : `pnpm tsc --noEmit` dans le monorepo
 
-### Priorité 3 — Vérification manuelle i18n en production
+Après cette action, `@kickstock/constants` n'exportera plus que : `TOKENS`, `MOBILE_BREAKPOINT`, `DIV_RATES`, `INIT_CASH` — quatre exports tous actifs et utiles.
+
+### Priorité 2 (JY) — Vérification manuelle i18n en production
 
 Tester le switch de langue FR → EN sur `kick-stock-web.vercel.app` :
-- Aller dans le menu avatar → cliquer "🇬🇧 English"
-- Vérifier que toute l'interface bascule en anglais
-- Recharger → vérifier que la langue persiste
-- Vérifier la détection automatique via `Accept-Language` (navigateur en anglais → interface EN au premier accès)
+- Menu avatar → cliquer "🇬🇧 English" → vérifier que toute l'interface bascule en anglais
+- Recharger la page → vérifier que la langue persiste (cookie `NEXT_LOCALE`)
+- Ouvrir avec un navigateur configuré en anglais → vérifier la détection automatique via `Accept-Language`
 
-### Priorité 4 — Qualité du code : retirer les `any` casts résiduels
+### Priorité 3 — Qualité du code : typage propre du store facade
 
-Les stores et composants utilisent des patterns `(s as any)._bootstrap` et `(s as any)._teams` pour accéder aux données bootstrap depuis `gameStore`. Ces casts existent car `useGameStore` est typé comme `typeof useLocalGameStore` (façade). Une solution propre serait d'étendre l'interface `GameState` pour inclure `_bootstrap` et `_teams` ou de créer une interface `ExtendedGameStore`.
+Les stores et composants utilisent `(s as any)._bootstrap` et `(s as any)._teams` pour accéder aux données bootstrap depuis `gameStore`. Ces casts existent car `useGameStore` est typé comme `typeof useLocalGameStore` (façade générique). Une solution propre serait d'exporter une interface `BootstrapSlice` depuis le store et de l'utiliser pour typer les accès.
 
 ---
 
-*Document mis à jour le 2 juin 2026 — Version 4 (post NEXT_STEPS_V4.md)*
+*Document mis à jour le 2 juin 2026 — Version 5 (post migration 013 exécutée en prod)*
 
 ### Priorité 2 — Compléter l'interface admin (saisie manuelle des équipes)
 

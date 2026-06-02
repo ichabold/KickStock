@@ -24,12 +24,29 @@ import {
   useLocalGameStore,
   buildMatchesForCurrentDay as localBuildMatches,
 } from './localGameStore';
-
-const mode = getGameModeSync();
+import type { BootstrapData, TeamMeta } from '@kickstock/types';
 
 export { fmt, pctOf };
 
-// Cast to localGameStore's type (superset of GameState — both stores implement it)
+const mode = getGameModeSync();
+
+/**
+ * Fields present on both LocalGameStore and OnlineGameStore that components
+ * access via the shared useGameStore facade.
+ *
+ * Declaring them here makes useGameStore properly typed, eliminating the need
+ * for (s as any)._bootstrap and (s as any)._teams casts throughout the app.
+ */
+export interface BootstrapSlice {
+  _bootstrap:        BootstrapData | null;
+  _teams:            TeamMeta[];
+  bootstrapLoading:  boolean;
+  bootstrapError:    boolean;
+}
+
+// Cast to localGameStore's full type (superset of GameState — both stores implement it)
+// The BootstrapSlice fields are part of LocalGameStore and are safe to access
+// without (s as any) casts.
 export const useGameStore = (
   mode === 'online' ? useOnlineGameStore : useLocalGameStore
 ) as typeof useLocalGameStore;

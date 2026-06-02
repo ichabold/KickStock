@@ -110,8 +110,7 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
 
 // ─── Shared: clickable team name ───────────────────────────────────────────────
 function TeamName({ id, color, onNationClick }: { id: string; color?: string; onNationClick: (id: string) => void }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const teams = useGameStore(s => s._teams);
   const n = teams.find(t => t.id === id);
   return (
     <button
@@ -136,10 +135,8 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams     = useGameStore(s => (s as any)._teams)     as TeamMeta[];
+  const bootstrap = useGameStore(s => s._bootstrap);
+  const teams     = useGameStore(s => s._teams);
   const curDay    = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
   const prevDay   = bootstrap?.days.find(d => d.day_index === dayIndex - 1) ?? null;
   const prevResults  = matchResults[dayIndex - 1] ?? [];
@@ -225,8 +222,7 @@ function MarketView({ onTrade, onNationClick }: {
   const [filter, setFilter] = useState('');
   const [group, setGroup]   = useState('ALL');
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams  = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const teams  = useGameStore(s => s._teams);
   const groups = useMemo(() => ['ALL', ...[...new Set(teams.map(t => t.group).filter(Boolean))].sort()], [teams]);
 
   const filtered = useMemo(() =>
@@ -264,8 +260,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  const bootstrap = useGameStore(s => s._bootstrap);
 
   return (
     <div className="view-sched">
@@ -406,8 +401,7 @@ function PortfolioView({ onTrade, onNationClick }: {
   const avgCost   = useGameStore(s => s.avgCost);
   const eliminated = useGameStore(s => s.eliminated);
   const txLog     = useGameStore(s => s.txLog);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const teams = useGameStore(s => s._teams);
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)
@@ -523,10 +517,8 @@ function StandingsView({ onNationClick, onMatchClick }: {
   const r32Pool      = useGameStore(s => s.r32Pool);
   const portfolio    = useGameStore(s => s.portfolio);
   const champion     = useGameStore(s => s.champion);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams        = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const bootstrap = useGameStore(s => s._bootstrap);
+  const teams     = useGameStore(s => s._teams);
 
   const standings = useMemo(
     () => buildGroupStandingsUI(matchResults, prices, eliminated, teams),
@@ -701,8 +693,7 @@ function BracketView({ onNationClick, onMatchClick }: {
   const dayIndex     = useGameStore(s => s.dayIndex);
   const r32Pool      = useGameStore(s => s.r32Pool);
   const state        = useGameStore(s => s);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  const bootstrap = useGameStore(s => s._bootstrap);
 
   const phases = [
     { label: 'HUITIÈMES DE FINALE · R32', key: 'R32' },
@@ -1014,10 +1005,8 @@ export default function BrowserShell() {
   const resetGame = useGameStore(s => s.resetGame);
   const champion  = useGameStore(s => s.champion);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bootstrap = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams     = useGameStore(s => (s as any)._teams)     as TeamMeta[];
+  const bootstrap = useGameStore(s => s._bootstrap);
+  const teams     = useGameStore(s => s._teams);
 
   const day = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
 

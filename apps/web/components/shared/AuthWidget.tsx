@@ -237,7 +237,10 @@ function LanguageSwitcher() {
   function setLocale(locale: string) {
     document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=31536000; SameSite=Lax`;
     setOpen(false);
-    router.refresh();
+    // router.refresh() ne suffit pas : le root layout (NextIntlClientProvider)
+    // est mis en cache par Next.js et ne recharge pas les messages i18n sans
+    // un vrai rechargement de page.
+    window.location.reload();
   }
 
   return (

@@ -29,8 +29,7 @@ export function usePortfolioTotals(): PortfolioTotals {
   const portfolio = useGameStore(s => s.portfolio);
   const avgCost   = useGameStore(s => s.avgCost);
   const bestScore = useGameStore(s => s.bestScore);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const teams = useGameStore(s => s._teams);
 
   const held = Object.entries(portfolio).filter(([, q]) => q > 0);
 
