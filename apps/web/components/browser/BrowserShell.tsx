@@ -1119,6 +1119,7 @@ export default function BrowserShell() {
           results={animResults}
           portfolio={portfolio}
           prices={prices}
+          teams={teams}
           onDone={() => {
             setShowAnim(false);
             setSimResults(animResults);

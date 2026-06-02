@@ -2,11 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { NATIONS, CALENDAR } from '@kickstock/constants';
 import { fmt, pctOf } from '@kickstock/game-engine';
 import { useGameStore } from '@/stores/gameStore';
 import TradeModal from './TradeModal';
-import type { Nation, TradeMode } from '@kickstock/types';
+import type { Nation, TeamMeta, BootstrapData, TradeMode } from '@kickstock/types';
 import styles from './NationDetailOverlay.module.css';
 
 interface Props {
@@ -50,38 +49,45 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
   const avgCost      = useGameStore(s => s.avgCost);
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams        = useGameStore(s => (s as any)._teams)     as TeamMeta[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap    = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
 
-  const nation = NATIONS.find(n => n.id === nationId);
-  if (!nation) return null;
+  const teamMeta = (teams ?? []).find(t => t.id === nationId);
+  if (!teamMeta) return null;
 
-  const price  = prices[nationId] ?? nation.p;
+  // Build Nation-compatible object for TradeModal (which expects Nation type)
+  const nation: Nation = { id: teamMeta.id, name: teamMeta.name, flag: teamMeta.flag, p: teamMeta.initialPrice, conf: teamMeta.confederation ?? '', str: teamMeta.strength, group: teamMeta.group };
+
+  const price  = prices[nationId] ?? teamMeta.initialPrice;
   const held   = portfolio[nationId] ?? 0;
-  const avg    = avgCost[nationId] ?? nation.p;
+  const avg    = avgCost[nationId] ?? teamMeta.initialPrice;
   const isElim = eliminated.includes(nationId);
-  const ch     = pctOf(price, nation.p);
+  const ch     = pctOf(price, teamMeta.initialPrice);
   const val    = held * price;
   const pnl    = (price - avg) * held;
 
   // Build price history from matchResults
   const history = useMemo(() => {
     const h: { label: string; price: number; delta: number; matchInfo: null | {
-      opp: Nation | undefined; scoreFor: number; scoreAgainst: number;
+      opp: TeamMeta | undefined; scoreFor: number; scoreAgainst: number;
       isWin: boolean; isDraw: boolean; isUpset: boolean;
       etRes: string | null; penWinner: string | null;
       penFor: number; penAgainst: number;
-    } }[] = [{ label: t('initialPrice'), price: nation.p, delta: 0, matchInfo: null }];
+    } }[] = [{ label: t('initialPrice'), price: teamMeta.initialPrice, delta: 0, matchInfo: null }];
 
-    let lastP = nation.p;
+    let lastP = teamMeta.initialPrice;
     Object.entries(matchResults)
       .sort(([a], [b]) => +a - +b)
       .forEach(([diStr, results]) => {
-        const day = CALENDAR[Number(diStr)];
+        const day = bootstrap?.days.find(d => d.day_index === Number(diStr)) ?? null;
         results.forEach(r => {
           if (r.a !== nationId && r.b !== nationId) return;
           const isA    = r.a === nationId;
           const newP   = isA ? r.newPA : r.newPB;
           const oppId  = isA ? r.b : r.a;
-          const opp    = NATIONS.find(n => n.id === oppId);
+          const opp    = (teams ?? []).find(t => t.id === oppId);
           const isWin  = isA ? r.res === 'A' : r.res === 'B';
           const isDraw = r.res === 'draw';
           const scoreFor = isA ? r.scoreA : r.scoreB;
@@ -89,7 +95,7 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
           const penFor     = isA ? r.penA : r.penB;
           const penAgainst = isA ? r.penB : r.penA;
           h.push({
-            label: day?.label?.split('·')[1]?.trim() || day?.date || '',
+            label: day?.date_label || '',
             price: newP,
             delta: newP - lastP,
             matchInfo: {
@@ -102,7 +108,7 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
         });
       });
     return h;
-  }, [matchResults, nationId, nation.p]);
+  }, [matchResults, nationId, teamMeta.initialPrice, bootstrap, teams]);
 
   const sparkPrices = history.map(h => h.price);
 

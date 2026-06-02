@@ -57,6 +57,7 @@ export default function SimulateTab({ onDone }: Props) {
         results={results}
         portfolio={portfolio}
         prices={prices}
+        teams={teams}
         onDone={() => setView('done')}
       />
     );

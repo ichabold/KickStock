@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import type { Nation, TradeMode } from '@kickstock/types';
 import { calcTax, fmt, pctOf } from '@kickstock/game-engine';
-import { CALENDAR } from '@kickstock/constants';
+import type { BootstrapData } from '@kickstock/types';
 import { useGameStore } from '@/stores/gameStore';
 import styles from './TradeModal.module.css';
 
@@ -27,10 +27,14 @@ export default function TradeModal({ nation, initMode, onClose }: Props) {
   const eliminated = useGameStore(s => s.eliminated);
   const trade      = useGameStore(s => s.trade);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap  = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
+  const currentDay = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
+
   const price      = prices[nation.id] ?? nation.p;
   const held       = portfolio[nation.id] ?? 0;
-  const isKO       = CALENDAR[dayIndex]?.isKO ?? false;
-  const isCapPhase = ['Groups', 'R32'].includes(CALENDAR[dayIndex]?.phase ?? '');
+  const isKO       = currentDay?.is_ko ?? false;
+  const isCapPhase = ['Groups', 'R32'].includes(currentDay?.phase ?? '');
   const isElim     = eliminated.includes(nation.id);
 
   const totVal = useMemo(() =>

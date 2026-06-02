@@ -1,21 +1,10 @@
-import { NATIONS, GROUPS, DIV_RATES } from '@kickstock/constants';
+import { DIV_RATES } from '@kickstock/constants';
 import type { Match, GameState, StoredMatchResult, TeamMeta } from '@kickstock/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Resolves the team list: uses injected teams if provided, falls back to NATIONS. */
-function resolveTeams(teams?: TeamMeta[]): TeamMeta[] {
-  if (teams && teams.length > 0) return teams;
-  // Legacy fallback — will be removed once all callers inject teams
-  return NATIONS.map(n => ({
-    id: n.id, name: n.name, flag: n.flag,
-    group: n.group, strength: n.str, initialPrice: n.p,
-  }));
-}
-
 function resolveGroups(teams: TeamMeta[]): string[] {
-  const gs = [...new Set(teams.map(t => t.group).filter(Boolean))].sort();
-  return gs.length > 0 ? gs : GROUPS.slice(1);
+  return [...new Set(teams.map(t => t.group).filter(Boolean))].sort();
 }
 
 // ─── GROUP STANDINGS ──────────────────────────────────────────────────────────
@@ -35,9 +24,9 @@ function cmp(a: StandingEntry, b: StandingEntry): number {
 export function deriveGroupStandings(
   matchResults: Record<number, StoredMatchResult[]>,
   eliminated:   string[],
-  teams?:       TeamMeta[],
+  teams:        TeamMeta[],
 ): Record<string, string[]> {
-  const allTeams = resolveTeams(teams);
+  const allTeams = teams;
   const groups   = resolveGroups(allTeams);
   const gs: Record<string, StandingEntry[]> = {};
 
@@ -94,9 +83,9 @@ export function buildGroupStandingsUI(
   matchResults: Record<number, StoredMatchResult[]>,
   prices:       Record<string, number>,
   eliminated:   string[],
-  teams?:       TeamMeta[],
+  teams:        TeamMeta[],
 ): Record<string, StandingRow[]> {
-  const allTeams = resolveTeams(teams);
+  const allTeams = teams;
   const groups   = resolveGroups(allTeams);
   const gs: Record<string, StandingRow[]> = {};
 
@@ -139,9 +128,9 @@ export function buildGroupStandingsUI(
 export function buildR32Pool(
   matchResults: Record<number, StoredMatchResult[]>,
   eliminated:   string[],
-  teams?:       TeamMeta[],
+  teams:        TeamMeta[],
 ): string[] {
-  const allTeams  = resolveTeams(teams);
+  const allTeams  = teams;
   const standings = deriveGroupStandings(matchResults, eliminated, allTeams);
 
   const winner  = (g: string) => standings[g]?.[0] ?? null;

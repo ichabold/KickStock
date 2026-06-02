@@ -5,7 +5,8 @@
  * localStorage per competition (24h TTL).
  */
 
-import type { BootstrapData, TeamMeta } from '@kickstock/types';
+import { buildMatchesForDay } from '@kickstock/game-engine';
+import type { BootstrapData, GameState, Match, TeamMeta } from '@kickstock/types';
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -68,6 +69,35 @@ export async function getBootstrap(competitionId = 1): Promise<BootstrapData | n
 export async function refreshBootstrap(competitionId = 1): Promise<BootstrapData | null> {
   if (typeof window !== 'undefined') localStorage.removeItem(cacheKey(competitionId));
   return getBootstrap(competitionId);
+}
+
+export function deriveDynamicKey(phase: string, dayIndex: number, bootstrap: BootstrapData): string {
+  const koDays     = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
+  const posInPhase = koDays.findIndex(d => d.day_index === dayIndex);
+  if (phase === 'R32')   return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[posInPhase] ?? 'r32_1';
+  if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[posInPhase] ?? 'r16_1';
+  if (phase === 'QF')    return (['qf_1','qf_2','qf_3'])[posInPhase] ?? 'qf_1';
+  if (phase === 'SF')    return posInPhase === 0 ? 'sf_1' : 'sf_2';
+  if (phase === '3rd')   return '3rd';
+  if (phase === 'Final') return 'final';
+  return phase.toLowerCase();
+}
+
+export function buildMatchesForCurrentDayFromBootstrap(
+  state:     GameState,
+  bootstrap: BootstrapData | null,
+): Match[] {
+  if (!bootstrap) return [];
+  const day = bootstrap.days.find(d => d.day_index === state.dayIndex) ?? null;
+  if (!day) return [];
+
+  if (!day.is_ko) {
+    return bootstrap.group_fixtures
+      .filter(f => f.day_index === state.dayIndex)
+      .filter(f => !state.eliminated.includes(f.nation_a) && !state.eliminated.includes(f.nation_b))
+      .map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }));
+  }
+  return buildMatchesForDay(deriveDynamicKey(day.phase, state.dayIndex, bootstrap), state);
 }
 
 export function bootstrapToTeams(data: BootstrapData): TeamMeta[] {

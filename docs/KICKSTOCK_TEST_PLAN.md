@@ -200,9 +200,9 @@ pnpm --filter @kickstock/game-engine test
 | HAUTE-1 | UUID v4 non validé dans `/api/trade` | 🟠 MAJEUR | **Partiellement corrigé** — validé dans `/api/game/state` et `/api/auth/guest` seulement |
 | HAUTE-2 | Vue `leaderboard` expose `portfolios.id` | 🟠 MAJEUR | **À vérifier en base** |
 | MOYENNE | Messages d'erreur internes côté client | 🟡 MINEUR | **Corrigé** ✅ |
-| BUG-TAX-ONLINE | `onlineGameStore` taux de taxe inversés | 🔴 BLOQUANT | **Non corrigé** — optimistic update affiche des frais erronés |
+| BUG-TAX-ONLINE | `onlineGameStore` taux de taxe inversés | 🔴 BLOQUANT | **Corrigé** ✅ — `stores/onlineGameStore.ts` |
 
-> **Règle de release :** CRITIQUE-1, CRITIQUE-2 et BUG-TAX-ONLINE doivent être corrigés avant toute mise en production.
+> **Règle de release :** CRITIQUE-1 et CRITIQUE-2 doivent être corrigés avant toute mise en production.
 
 ---
 
@@ -425,27 +425,37 @@ wait
 
 ---
 
-#### SEC-TRADE-05 — Bug taux inversés dans `onlineGameStore` (BUG-TAX-ONLINE)
+#### SEC-TRADE-05 — Frais de vente dans `onlineGameStore` — test de non-régression (BUG-TAX-ONLINE corrigé)
 
-**Localisation :** `apps/web/stores/onlineGameStore.ts`, ligne 213
+**Localisation :** `apps/web/stores/onlineGameStore.ts`
 
+**Correctif appliqué :**
 ```typescript
-// Code actuel (INCORRECT) :
+// Avant (incorrect) :
 const fee = isKO ? gross * 0.10 : gross * 0.05;
+const net = gross - (s.eliminated.includes(nationId) ? 0 : fee);
 
-// Code correct (aligné avec calcTax) :
-const fee = isKO ? gross * 0.05 : gross * 0.10;
-// + appliquer Math.max(fee, 10) quand price > 1
-// + fee = 0 si eliminated
+// Après (correct, aligné avec calcTax) :
+const isElim = s.eliminated.includes(nationId);
+const fee    = isElim || price <= 1
+  ? 0
+  : Math.max(gross * (isKO ? 0.05 : 0.10), 10);
+const net    = gross - fee;
 ```
 
-**Impact :** L'optimistic update dans `onlineGameStore.trade()` affiche des frais erronés (groupes trop bas, KO trop élevés). La valeur réelle du RPC `execute_trade` est correcte — seul l'affichage côté client diverge jusqu'au prochain `fetchState`.
+**Test de non-régression :**
 
-**Test de régression :**
-1. Mode online, jour 5 (groupes), vente de 10 actions BRA à 200 KC.
-2. Immédiatement après le trade, observer `store.cash`.
-3. Attendu avec le correctif : `cash += 1800 KC` (net = 2000 − 200 = 1800).
-4. Comportement actuel (bugué) : `cash += 1900 KC` (net = 2000 − 100 = 1900).
+| Scénario | Phase | Qté | Prix | Brut | Fee attendu | Net attendu | Cash delta |
+|----------|-------|-----|------|------|-------------|-------------|------------|
+| Vente normale | Groupes (jour ≤ 16) | 10 | 200 | 2 000 | max(200, 10) = **200 KC** | **1 800 KC** | +1 800 KC |
+| Vente minimum | Groupes | 1 | 50 | 50 | max(5, 10) = **10 KC** | **40 KC** | +40 KC |
+| Vente KO | KO (jour ≥ 17) | 10 | 200 | 2 000 | max(100, 10) = **100 KC** | **1 900 KC** | +1 900 KC |
+| Nation éliminée | Peu importe | 5 | 1 | 5 | **0 KC** | **5 KC** | +5 KC |
+
+**Procédure :**
+1. Mode online, jour 5 (groupes), vendre 10 actions BRA à 200 KC.
+2. Observer `store.cash` immédiatement après le trade (avant le prochain `fetchState`).
+3. **Attendu :** `cash += 1 800 KC`. Si `result.newCash` est retourné par le RPC, cette valeur prime sur le calcul local.
 
 ---
 
@@ -798,12 +808,12 @@ curl -s https://kickstock.app/api/competition/bootstrap | jq '{
 **Titre :** Vente — taxe phase KO (5%, min 10 KC)  
 **Pré-requis :** Jour 20, 10 actions GER à 100 KC
 
-| | ONLINE (RPC) | OFFLINE (calcTax) |
-|--|-------------|-------------------|
+| | ONLINE (RPC + optimistic) | OFFLINE (calcTax) |
+|--|--------------------------|-------------------|
 | Fee | max(1000×0.05, 10) = **50 KC** | **50 KC** |
 | Net | **950 KC** | **950 KC** |
 
-> **BUG-TAX-ONLINE :** L'update optimiste dans `onlineGameStore` calcule `isKO ? gross*0.10 : gross*0.05` → affiche **100 KC** de frais au lieu de 50 KC. Le RPC est correct. L'écart est corrigé au prochain `fetchState`.
+Les deux modes sont désormais alignés — BUG-TAX-ONLINE corrigé ✅.
 
 ---
 
@@ -1214,7 +1224,7 @@ Post-match, l'onglet LIVE affiche "Déverrouillage dans X min" calculé à parti
 #### UI-SHARED-01 — `TradeModal` — même résultat financier online/offline
 
 Même scénario en mode online et offline : fee identique selon `calcTax`. Cash débité identique.
-> Note : tant que BUG-TAX-ONLINE est ouvert, le résultat *affiché* peut diverger (optimistic update online incorrect), mais le résultat *persisté* en base est correct.
+L'optimistic update de `onlineGameStore` est désormais aligné avec `calcTax` (BUG-TAX-ONLINE corrigé ✅).
 
 #### UI-SHARED-02 — `AuthWidget` compact vs normal
 
@@ -1306,22 +1316,25 @@ WHERE competition_id = <id> ORDER BY group_code;
 |----|-------|----------|---------|--------|
 | CRITIQUE-1 | `/api/game/advance` sans authentification | 🔴 BLOQUANT | `app/api/game/advance/route.ts` | Non corrigé |
 | CRITIQUE-2 | RLS `portfolios_select_device` expose tous les portfolios anonymes | 🔴 BLOQUANT | `db/FULL_SETUP.sql` | À vérifier en base |
-| BUG-TAX-ONLINE | Taux de taxe inversés dans l'optimistic update | 🔴 BLOQUANT | `stores/onlineGameStore.ts:213` | Non corrigé |
+| BUG-TAX-ONLINE | Taux de taxe inversés dans l'optimistic update | 🔴 BLOQUANT | `stores/onlineGameStore.ts` | **Corrigé** ✅ |
 | HAUTE-1 | UUID v4 non validé dans `/api/trade` | 🟠 MAJEUR | `app/api/trade/route.ts` | Partiellement corrigé |
 | HAUTE-2 | Vue `leaderboard` expose `portfolios.id` | 🟠 MAJEUR | Vue SQL Supabase | À vérifier en base |
 | MOYENNE | Messages d'erreur internes côté client | 🟡 MINEUR | Les 3 routes API | Corrigé ✅ |
 | BUG-CAP-OFFLINE | Plafond 40% absent du `localGameStore` | 🟡 MINEUR | `stores/localGameStore.ts` | Non corrigé |
 | TODO-TRADE-LOCK | Vérification `trade_lock_until` dans `/api/trade` | 🟡 MINEUR | `app/api/trade/route.ts` | Non implémenté |
 
-**Correctif BUG-TAX-ONLINE :**
+**BUG-TAX-ONLINE — Corrigé ✅** (`stores/onlineGameStore.ts`)
 ```typescript
-// stores/onlineGameStore.ts, dans la branche sell (ligne ~213)
 // Avant (incorrect) :
 const fee = isKO ? gross * 0.10 : gross * 0.05;
-// Après (correct, aligné avec calcTax) :
-const fee = s.eliminated.includes(nationId) || price <= 1
+const net = gross - (s.eliminated.includes(nationId) ? 0 : fee);
+
+// Après (appliqué) :
+const isElim = s.eliminated.includes(nationId);
+const fee    = isElim || price <= 1
   ? 0
   : Math.max(gross * (isKO ? 0.05 : 0.10), 10);
+const net    = gross - fee;
 ```
 
 **Correctif HAUTE-1 :**

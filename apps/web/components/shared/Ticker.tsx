@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { NATIONS } from '@kickstock/constants';
+import type { TeamMeta } from '@kickstock/types';
 import { useGameStore } from '@/stores/gameStore';
 import NationDetailOverlay from './NationDetailOverlay';
 import styles from './Ticker.module.css';
@@ -11,15 +11,17 @@ export default function Ticker() {
   const t = useTranslations('ticker');
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
   const [nationId, setNationId] = useState<string | null>(null);
 
   const items = useMemo(() => {
-    return [...NATIONS].sort((a, b) => {
+    return [...(teams ?? [])].sort((a, b) => {
       const heldA = (portfolio[a.id] ?? 0) > 0 ? 1 : 0;
       const heldB = (portfolio[b.id] ?? 0) > 0 ? 1 : 0;
       return heldB - heldA;
     });
-  }, [portfolio]);
+  }, [teams, portfolio]);
 
   const doubled = [...items, ...items];
 
@@ -28,9 +30,9 @@ export default function Ticker() {
       <div className={styles.wrap} aria-label={t('ariaLabel')}>
         <div className={styles.ticker}>
           {doubled.map((n, i) => {
-            const p    = prices[n.id] ?? n.p;
-            const pct  = ((p - n.p) / n.p * 100).toFixed(1);
-            const up   = p >= n.p;
+            const p    = prices[n.id] ?? n.initialPrice;
+            const pct  = ((p - n.initialPrice) / n.initialPrice * 100).toFixed(1);
+            const up   = p >= n.initialPrice;
             const held = (portfolio[n.id] ?? 0) > 0;
             return (
               <button

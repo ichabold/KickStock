@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { NATIONS } from '@kickstock/constants';
+import type { TeamMeta } from '@kickstock/types';
 import { fmt, pctOf } from '@kickstock/game-engine';
 import { useGameStore } from '@/stores/gameStore';
 import { usePortfolioTotals } from '@/components/mechanics';
@@ -23,13 +23,15 @@ export default function PortfolioTab() {
   const avgCost   = useGameStore(s => s.avgCost);
   const eliminated = useGameStore(s => s.eliminated);
   const txLog     = useGameStore(s => s.txLog);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
 
   const holdings = Object.entries(portfolio)
     .filter(([, q]) => q > 0)
     .map(([id, qty]) => {
-      const nation  = NATIONS.find(n => n.id === id);
+      const nation  = (teams ?? []).find(t => t.id === id);
       const price   = prices[id] ?? 0;
-      const avg     = avgCost[id] ?? nation?.p ?? 0;
+      const avg     = avgCost[id] ?? nation?.initialPrice ?? 0;
       const value   = price * qty;
       const invested = avg * qty;
       const pl      = value - invested;

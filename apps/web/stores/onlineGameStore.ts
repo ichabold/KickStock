@@ -14,9 +14,9 @@
 
 import { create } from 'zustand';
 import { getDeviceId }                    from '@/lib/device';
-import { fetchGameState, apiTrade, apiAdvanceDay } from '@/lib/api';
-import { pctOf, fmt, buildMatchesForDay } from '@kickstock/game-engine';
-import { getBootstrap, bootstrapToTeams } from '@/lib/bootstrap';
+import { fetchGameState, apiTrade, apiAdvanceDay, apiReset } from '@/lib/api';
+import { pctOf, fmt } from '@kickstock/game-engine';
+import { getBootstrap, bootstrapToTeams, deriveDynamicKey, buildMatchesForCurrentDayFromBootstrap } from '@/lib/bootstrap';
 import { createClient }                   from '@/lib/supabase/client';
 import type {
   GameState, TradeMode, StoredMatchResult, Match,
@@ -65,7 +65,7 @@ interface OnlineGameStore extends GameState {
   stopSync:         () => void;
   trade:            (mode: TradeMode, nationId: string, quantity: number) => Promise<string | null>;
   advanceDay:       () => Promise<AdvanceDayResult | null>;
-  resetGame:        () => void;
+  resetGame:        () => Promise<void>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -130,23 +130,19 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   // ── fetchState ───────────────────────────────────────────────────────────────
   fetchState: async () => {
     await get().loadBootstrap();
-    const teams = get()._teams;
-
     const deviceId = getDeviceId();
     const competitionId = get()._competitionId;
     try {
       const data = await fetchGameState(deviceId, competitionId);
-      const enriched = data.txLog.map(t => {
-        const team = teams.find(x => x.id === t.name) ?? null;
-        return { ...t, flag: team?.flag ?? '', name: team?.name ?? t.name };
-      });
       set({
         cash: data.cash, portfolio: data.portfolio, avgCost: data.avgCost,
         prices: data.prices, priceHistory: data.priceHistory,
         dayIndex: data.dayIndex, eliminated: data.eliminated, champion: data.champion,
         matchResults: data.matchResults, r32Pool: data.r32Pool, r16Pool: data.r16Pool,
         qfPool: data.qfPool, sfPool: data.sfPool, finalPool: data.finalPool,
-        thirdPool: data.thirdPool, txLog: enriched, bestScore: data.bestScore,
+        thirdPool: data.thirdPool,
+        txLog: data.txLog,
+        bestScore: data.bestScore,
         loading: false, syncing: false, error: null,
       });
     } catch (err) {
@@ -205,9 +201,10 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     const team  = s._teams.find(t => t.id === nationId);
     if (!team) return 'Nation introuvable';
 
-    const price = s.prices[nationId] ?? team.initialPrice;
-    const held  = s.portfolio[nationId] ?? 0;
-    const isKO  = s.dayIndex >= 17;
+    const price      = s.prices[nationId] ?? team.initialPrice;
+    const held       = s.portfolio[nationId] ?? 0;
+    const currentDay = s._bootstrap?.days.find(d => d.day_index === s.dayIndex) ?? null;
+    const isKO       = currentDay?.is_ko ?? (s.dayIndex >= 17);
 
     if (mode === 'buy') {
       if (s.eliminated.includes(nationId)) return 'Nation éliminée 💀';
@@ -220,18 +217,22 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     if (result.error) return result.error;
 
     if (mode === 'buy') {
+      const confirmedPrice = result.price ?? price;
       const prevAvg = s.avgCost[nationId] ?? team.initialPrice;
-      const newAvg  = held === 0 ? price : (held * prevAvg + quantity * price) / (held + quantity);
+      const newAvg  = held === 0
+        ? confirmedPrice
+        : (held * prevAvg + quantity * confirmedPrice) / (held + quantity);
       set({
-        cash:      result.newCash ?? Math.round((s.cash - price * quantity) * 10) / 10,
+        cash:      result.newCash ?? Math.round((s.cash - confirmedPrice * quantity) * 10) / 10,
         portfolio: { ...s.portfolio, [nationId]: held + quantity },
         avgCost:   { ...s.avgCost, [nationId]: Math.round(newAvg * 10) / 10 },
-        txLog:     [{ dir: 'buy' as const, flag: team.flag, name: team.name, qty: quantity, price, day: s.dayIndex }, ...s.txLog].slice(0, 100),
+        txLog:     [{ dir: 'buy' as const, flag: team.flag, name: team.name, qty: quantity, price: confirmedPrice, day: s.dayIndex }, ...s.txLog].slice(0, 100),
       });
     } else {
-      const gross   = price * quantity;
+      const confirmedPrice = result.price ?? price;
+      const gross   = confirmedPrice * quantity;
       const isElim  = s.eliminated.includes(nationId);
-      const fee     = isElim || price <= 1
+      const fee     = isElim || confirmedPrice <= 1
         ? 0
         : Math.max(gross * (isKO ? 0.05 : 0.10), 10);
       const net     = gross - fee;
@@ -243,7 +244,7 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
       set({
         cash:      result.newCash ?? Math.round((s.cash + net) * 10) / 10,
         portfolio: newPort, avgCost: newAvgs,
-        txLog:     [{ dir: 'sell' as const, flag: team.flag, name: team.name, qty: quantity, price, day: s.dayIndex }, ...s.txLog].slice(0, 100),
+        txLog:     [{ dir: 'sell' as const, flag: team.flag, name: team.name, qty: quantity, price: confirmedPrice, day: s.dayIndex }, ...s.txLog].slice(0, 100),
       });
     }
     return null;
@@ -254,49 +255,42 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     const s = get();
     const response = await apiAdvanceDay(getDeviceId(), s._competitionId, s.dayIndex);
     if (!response?.results) return null;
+
     set({
-      prices: response.prices, eliminated: response.eliminated,
-      r32Pool: response.r32Pool, r16Pool: response.r16Pool,
-      qfPool: response.qfPool, sfPool: response.sfPool,
-      finalPool: response.finalPool, thirdPool: response.thirdPool,
-      champion: response.champion, dayIndex: response.newDayIndex,
-      cash: response.newCash ?? s.cash,
+      prices:      response.prices,
+      eliminated:  response.eliminated,
+      r32Pool:     response.r32Pool,
+      r16Pool:     response.r16Pool,
+      qfPool:      response.qfPool,
+      sfPool:      response.sfPool,
+      finalPool:   response.finalPool,
+      thirdPool:   response.thirdPool,
+      champion:    response.champion,
+      dayIndex:    response.newDayIndex,
+      cash:        response.newCash ?? s.cash,
       matchResults: { ...s.matchResults, [s.dayIndex]: response.results },
     });
+
+    // Réconcilier portfolio et avgCost (éliminations/liquidations en DB)
+    get().fetchState().catch(() => {});
+
     return { results: response.results, flash: response.flash };
   },
 
   // ── resetGame ────────────────────────────────────────────────────────────────
-  resetGame: () => { set({ ...baseState(), loading: false }); },
+  resetGame: async () => {
+    const { _competitionId } = get();
+    set({ loading: true });
+    try {
+      await apiReset(getDeviceId(), _competitionId);
+    } catch { /* best-effort */ }
+    await get().fetchState();
+  },
 }));
 
 // ── buildMatchesForCurrentDay — exported for UI tabs ─────────────────────────
 export function buildMatchesForCurrentDay(
   state: GameState & { _bootstrap?: BootstrapData | null }
 ): Match[] {
-  const bootstrap = state._bootstrap ?? null;
-  const day       = getDay(bootstrap, state.dayIndex);
-  if (!day) return [];
-
-  if (!day.is_ko) {
-    return getGroupFixtures(bootstrap, state.dayIndex).filter(
-      m => !state.eliminated.includes(m.a) && !state.eliminated.includes(m.b)
-    );
-  }
-  return buildMatchesForDay(
-    deriveDynamicKey(day.phase, state.dayIndex, bootstrap!),
-    state as GameState
-  );
-}
-
-function deriveDynamicKey(phase: string, dayIndex: number, bootstrap: BootstrapData): string {
-  const koDays     = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
-  const posInPhase = koDays.findIndex(d => d.day_index === dayIndex);
-  if (phase === 'R32') return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[posInPhase] ?? 'r32_1';
-  if (phase === 'R16') return (['r16_1','r16_2','r16_3','r16_4'])[posInPhase] ?? 'r16_1';
-  if (phase === 'QF')  return (['qf_1','qf_2','qf_3'])[posInPhase] ?? 'qf_1';
-  if (phase === 'SF')  return posInPhase === 0 ? 'sf_1' : 'sf_2';
-  if (phase === '3rd') return '3rd';
-  if (phase === 'Final') return 'final';
-  return phase.toLowerCase();
+  return buildMatchesForCurrentDayFromBootstrap(state as GameState, state._bootstrap ?? null);
 }

@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { CALENDAR } from '@kickstock/constants';
 import { useGameStore } from '@/stores/gameStore';
-import type { StoredMatchResult } from '@kickstock/types';
+import type { StoredMatchResult, BootstrapData } from '@kickstock/types';
 
 interface Props {
   onResults: (results: StoredMatchResult[]) => void;
@@ -20,9 +19,12 @@ export function SimulateButton({ onResults, onNoResults, className, label }: Pro
   const dayIndex   = useGameStore(s => s.dayIndex);
   const advanceDay = useGameStore(s => s.advanceDay);
   const resetGame  = useGameStore(s => s.resetGame);
-  const day        = CALENDAR[dayIndex];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const bootstrap  = useGameStore(s => (s as any)._bootstrap) as BootstrapData | null;
 
-  const defaultLabel = day ? t('simulate', { label: day.label }) : t('newGame');
+  const day = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
+
+  const defaultLabel = day ? t('simulate', { label: day.date_label }) : t('newGame');
 
   async function handleClick() {
     if (loading) return;

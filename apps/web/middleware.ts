@@ -60,6 +60,19 @@ export async function middleware(request: NextRequest) {
     return applyLocaleCookie(NextResponse.redirect(url), request);
   }
 
+  // Protect /admin — must be authenticated and have role=admin in app_metadata
+  if (request.nextUrl.pathname.startsWith('/admin')) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      return applyLocaleCookie(NextResponse.redirect(url), request);
+    }
+    const isAdmin = user.app_metadata?.role === 'admin';
+    if (!isAdmin) {
+      return new NextResponse('Forbidden', { status: 403 });
+    }
+  }
+
   return applyLocaleCookie(supabaseResponse, request);
 }
 

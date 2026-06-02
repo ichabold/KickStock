@@ -146,7 +146,8 @@
     "sortPriceDesc": "PRIX ▼",
     "sortPriceAsc": "PRIX ▲",
     "sortPerf": "PERF %",
-    "sortPortfolio": "PORTEFEUILLE"
+    "sortPortfolio": "PORTEFEUILLE",
+    "hint": "Commence par acheter des actions sur les nations que tu penses les plus fortes !"
   },
   "portfolio": {
     "totalValue": "VALEUR TOTALE",

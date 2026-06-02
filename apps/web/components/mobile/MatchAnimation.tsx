@@ -1,19 +1,17 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { NATIONS, SCORER_POOL } from '@kickstock/constants';
 import { fmt } from '@kickstock/game-engine';
-import type { StoredMatchResult } from '@kickstock/types';
+import type { StoredMatchResult, TeamMeta } from '@kickstock/types';
 import styles from './MatchAnimation.module.css';
 
 interface Props {
-  results: StoredMatchResult[];
+  results:   StoredMatchResult[];
   portfolio: Record<string, number>;
-  prices: Record<string, number>;
-  onDone: () => void;
+  prices:    Record<string, number>;
+  teams:     TeamMeta[];
+  onDone:    () => void;
 }
-
-const gN = (id: string) => NATIONS.find(n => n.id === id);
 
 const PHASE_LABEL: Record<string, string> = {
   Groups: 'GROUP STAGE', R32: 'ROUND OF 32', R16: 'ROUND OF 16',
@@ -59,7 +57,7 @@ function isPenDecided(played: PenKick[], targetA: number, targetB: number): bool
   return scoredA === targetA && scoredB === targetB;
 }
 
-export default function MatchAnimation({ results, portfolio, prices, onDone }: Props) {
+export default function MatchAnimation({ results, portfolio, prices, teams, onDone }: Props) {
   const [idx, setIdx] = useState(0);
   const m = results[idx];
 
@@ -71,19 +69,21 @@ export default function MatchAnimation({ results, portfolio, prices, onDone }: P
   }
 
   return <SingleMatch key={idx} result={m} matchNum={idx + 1} total={results.length}
-    portfolio={portfolio} prices={prices} onNext={nextMatch} />;
+    portfolio={portfolio} prices={prices} teams={teams} onNext={nextMatch} />;
 }
 
 function SingleMatch({
-  result, matchNum, total, portfolio, prices, onNext,
+  result, matchNum, total, portfolio, prices, teams, onNext,
 }: {
-  result: StoredMatchResult;
-  matchNum: number;
-  total: number;
+  result:    StoredMatchResult;
+  matchNum:  number;
+  total:     number;
   portfolio: Record<string, number>;
-  prices: Record<string, number>;
-  onNext: () => void;
+  prices:    Record<string, number>;
+  teams:     TeamMeta[];
+  onNext:    () => void;
 }) {
+  const gN = (id: string) => (teams ?? []).find(t => t.id === id);
   const nA = gN(result.a)!;
   const nB = gN(result.b)!;
 
@@ -175,8 +175,8 @@ function SingleMatch({
   const startPens = useCallback(() => {
     setWhistle(false);
     setPenEvents([]);
-    const poolA = SCORER_POOL[result.a] ?? [nA.name];
-    const poolB = SCORER_POOL[result.b] ?? [nB.name];
+    const poolA = [nA.name];
+    const poolB = [nB.name];
     const kicks: PenKick[] = [];
     let cA = 0, cB = 0, rA = 0, rB = 0;
     const tgt = { A: result.penA, B: result.penB };
@@ -289,7 +289,7 @@ function SingleMatch({
   const nxtTeam: 'A' | 'B' | null = phase === 'pens' && penEvents.length < result.penA + result.penB + 2
     ? (lastPen ? (lastPen.team === 'A' ? 'B' : 'A') : 'A')
     : null;
-  const nxtPool = nxtTeam === 'A' ? (SCORER_POOL[result.a] ?? [nA.name]) : nxtTeam === 'B' ? (SCORER_POOL[result.b] ?? [nB.name]) : [];
+  const nxtPool = nxtTeam === 'A' ? [nA.name] : nxtTeam === 'B' ? [nB.name] : [];
   const nxtName = nxtTeam ? nxtPool[penEvents.filter(k => k.team === nxtTeam).length % nxtPool.length] : '';
 
   const resClasses = [

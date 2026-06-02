@@ -20,7 +20,15 @@ import {
 import { DIV_RATES, INIT_CASH }  from '@kickstock/constants';
 import { syncBestScore }          from '@/hooks/useAuth';
 import { createClient }           from '@/lib/supabase/client';
-import { getBootstrap, bootstrapToTeams } from '@/lib/bootstrap';
+import { getBootstrap, bootstrapToTeams, deriveDynamicKey, buildMatchesForCurrentDayFromBootstrap } from '@/lib/bootstrap';
+
+const COMPETITION_KEY = 'kickstock:competition';
+
+function getLocalCompetitionId(): number {
+  if (typeof window === 'undefined') return 1;
+  const stored = localStorage.getItem(COMPETITION_KEY);
+  return stored ? parseInt(stored, 10) : 1;
+}
 import type {
   GameState, TradeMode, StoredMatchResult, Match,
   TeamMeta, BootstrapData, BootstrapDay,
@@ -137,7 +145,8 @@ export const useLocalGameStore = create<LocalGameStore>()(
         if (current._bootstrap || current.bootstrapLoading) return;
 
         set({ bootstrapLoading: true, bootstrapError: false });
-        const data = await getBootstrap();
+        const competitionId = getLocalCompetitionId();
+        const data = await getBootstrap(competitionId);
 
         if (!data) {
           set({ bootstrapLoading: false, bootstrapError: true });
@@ -223,8 +232,9 @@ export const useLocalGameStore = create<LocalGameStore>()(
         const team = s._teams.find(t => t.id === nationId);
         if (!team) return 'Nation introuvable';
 
-        const price = s.prices[nationId] ?? team.initialPrice;
-        const isKO  = s.dayIndex >= 17;
+        const price      = s.prices[nationId] ?? team.initialPrice;
+        const currentDay = s._bootstrap?.days.find(d => d.day_index === s.dayIndex) ?? null;
+        const isKO       = currentDay?.is_ko ?? (s.dayIndex >= 17);
 
         if (mode === 'buy') {
           if (s.eliminated.includes(nationId)) return 'Nation éliminée 💀';
@@ -457,9 +467,10 @@ export const useLocalGameStore = create<LocalGameStore>()(
 
       // ── resetGame ────────────────────────────────────────────────────────────
       resetGame: () => {
-        const { _teams } = get();
+        const { _teams, bestScore } = get();
         set({
           ...baseState(),
+          bestScore,
           prices:       emptyPrices(_teams),
           priceHistory: emptyHistory(_teams),
           loading: false, syncing: false, error: null, _pollId: null,
@@ -467,7 +478,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
       },
     }),
     {
-      name: 'ks-game-state',
+      name: `ks-game-state-${getLocalCompetitionId()}`,
       storage: createJSONStorage(() => {
         if (typeof window === 'undefined') {
           return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
@@ -486,45 +497,9 @@ export const useLocalGameStore = create<LocalGameStore>()(
   ),
 );
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Derives the "dynamic" key used by buildMatchesForDay from phase + day context.
- * This maps the abstract phase/day position to the pool-slice string.
- */
-function deriveDynamicKey(phase: string, dayIndex: number, bootstrap: BootstrapData): string {
-  const koDays = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
-  const posInPhase = koDays.findIndex(d => d.day_index === dayIndex);
-
-  if (phase === 'R32') {
-    const keys = ['r32_28', 'r32_29', 'r32_30', 'r32_1', 'r32_2', 'r32_3'];
-    return keys[posInPhase] ?? 'r32_1';
-  }
-  if (phase === 'R16') {
-    const keys = ['r16_1', 'r16_2', 'r16_3', 'r16_4'];
-    return keys[posInPhase] ?? 'r16_1';
-  }
-  if (phase === 'QF') {
-    const keys = ['qf_1', 'qf_2', 'qf_3'];
-    return keys[posInPhase] ?? 'qf_1';
-  }
-  if (phase === 'SF')    return posInPhase === 0 ? 'sf_1' : 'sf_2';
-  if (phase === '3rd')   return '3rd';
-  if (phase === 'Final') return 'final';
-  return phase.toLowerCase();
-}
-
 // ── buildMatchesForCurrentDay — exported for SimulateTab UI ──────────────────
-export function buildMatchesForCurrentDay(state: GameState & { _bootstrap?: BootstrapData | null; _teams?: TeamMeta[] }): Match[] {
-  const bootstrap = state._bootstrap ?? null;
-  const dayIndex  = state.dayIndex;
-  const day       = getDay(bootstrap, dayIndex);
-  if (!day) return [];
-
-  if (!day.is_ko) {
-    return getGroupFixtures(bootstrap, dayIndex).filter(m =>
-      !state.eliminated.includes(m.a) && !state.eliminated.includes(m.b)
-    );
-  }
-  return buildMatchesForDay(deriveDynamicKey(day.phase, dayIndex, bootstrap!), state as GameState);
+export function buildMatchesForCurrentDay(
+  state: GameState & { _bootstrap?: BootstrapData | null; _teams?: TeamMeta[] }
+): Match[] {
+  return buildMatchesForCurrentDayFromBootstrap(state as GameState, state._bootstrap ?? null);
 }

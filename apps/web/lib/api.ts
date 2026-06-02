@@ -98,10 +98,22 @@ export async function apiTrade(
   mode:          'buy' | 'sell',
   nationId:      string,
   quantity:      number,
-): Promise<{ error: string | null; newCash?: number; newHeld?: number }> {
+): Promise<{ error: string | null; newCash?: number; newHeld?: number; price?: number }> {
   return apiFetch(
     '/api/trade',
     { method: 'POST', body: JSON.stringify({ competitionId, nationId, mode, quantity }) },
+    deviceId,
+    competitionId,
+  );
+}
+
+export async function apiReset(
+  deviceId:      string,
+  competitionId: number,
+): Promise<{ ok: boolean; error?: string }> {
+  return apiFetch(
+    '/api/game/reset',
+    { method: 'POST', body: JSON.stringify({ competitionId }) },
     deviceId,
     competitionId,
   );

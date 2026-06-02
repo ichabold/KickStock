@@ -1,8 +1,8 @@
 'use client';
 
-import { NATIONS } from '@kickstock/constants';
 import { pctOf } from '@kickstock/game-engine';
 import { useGameStore } from '@/stores/gameStore';
+import type { TeamMeta } from '@kickstock/types';
 
 export interface PortfolioTotals {
   /** Current cash balance */
@@ -23,26 +23,14 @@ export interface PortfolioTotals {
   bestScore: number | null;
 }
 
-/**
- * MECHANIC HOOK — portfolio totals calculation.
- *
- * Shared between MobileShell and BrowserShell (PortfolioTab, PortfolioView,
- * topbar stats). Guarantees that cash, P&L, and total value are computed
- * with the exact same formula on both platforms:
- *
- *   portVal  = Σ (qty[id] × prices[id])
- *   invested = Σ (qty[id] × avgCost[id] ?? nation.p)  — fallback to IPO price
- *   totalVal = cash + portVal
- *   pl       = portVal - invested
- *
- * Do NOT add shell-specific logic here.
- */
 export function usePortfolioTotals(): PortfolioTotals {
   const cash      = useGameStore(s => s.cash);
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
   const avgCost   = useGameStore(s => s.avgCost);
   const bestScore = useGameStore(s => s.bestScore);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams     = useGameStore(s => (s as any)._teams) as TeamMeta[];
 
   const held = Object.entries(portfolio).filter(([, q]) => q > 0);
 
@@ -52,7 +40,8 @@ export function usePortfolioTotals(): PortfolioTotals {
   );
 
   const invested = held.reduce((a, [id, q]) => {
-    const cost = avgCost[id] ?? NATIONS.find(n => n.id === id)?.p ?? 0;
+    const initialPrice = teams?.find(t => t.id === id)?.initialPrice ?? 0;
+    const cost = avgCost[id] ?? initialPrice;
     return a + q * cost;
   }, 0);
 

@@ -1,9 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { NATIONS } from '@kickstock/constants';
 import { fmt, pctOf } from '@kickstock/game-engine';
-import type { StoredMatchResult } from '@kickstock/types';
+import type { StoredMatchResult, TeamMeta } from '@kickstock/types';
+import { useGameStore } from '@/stores/gameStore';
 import styles from './MatchDetailOverlay.module.css';
 
 interface Props {
@@ -13,9 +13,10 @@ interface Props {
   onNationClick?: (id: string) => void;
 }
 
-const gN = (id: string) => NATIONS.find(n => n.id === id);
-
 export default function MatchDetailOverlay({ result, dayLabel, onClose, onNationClick }: Props) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teams = useGameStore(s => (s as any)._teams) as TeamMeta[];
+  const gN = (id: string) => (teams ?? []).find(t => t.id === id);
   const t = useTranslations('matchDetail');
   const { scoreA, scoreB, res, res90, etRes, penWinner, penA, penB, isUpset, venue, goals = [] } = result;
   const nA     = gN(result.a);

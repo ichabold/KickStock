@@ -146,7 +146,8 @@
     "sortPriceDesc": "PRICE ▼",
     "sortPriceAsc": "PRICE ▲",
     "sortPerf": "PERF %",
-    "sortPortfolio": "PORTFOLIO"
+    "sortPortfolio": "PORTFOLIO",
+    "hint": "Start by buying shares in the nations you think are strongest!"
   },
   "portfolio": {
     "totalValue": "TOTAL VALUE",
