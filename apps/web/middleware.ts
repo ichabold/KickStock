@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const SUPPORTED_LOCALES = ['en', 'fr'] as const;
 const LOCALE_COOKIE = 'NEXT_LOCALE';
+const LOCALE_HEADER = 'X-NEXT-INTL-LOCALE'; // consumed by next-intl v4 getRequestLocale()
 const LOCALE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 function detectLocale(request: NextRequest): string {
@@ -14,19 +15,47 @@ function detectLocale(request: NextRequest): string {
     : 'en';
 }
 
-function applyLocaleCookie(response: NextResponse, request: NextRequest): NextResponse {
-  if (request.cookies.get(LOCALE_COOKIE)) return response;
+/**
+ * Resolves the current locale: cookie wins, then Accept-Language, then 'en'.
+ * If no cookie exists yet, also sets it on the response.
+ */
+function resolveAndApplyLocale(
+  response: NextResponse,
+  request: NextRequest,
+): { response: NextResponse; locale: string } {
+  // /api/set-locale sets its own cookie — don't interfere
+  if (request.nextUrl.pathname === '/api/set-locale') {
+    const existing = request.cookies.get(LOCALE_COOKIE)?.value ?? detectLocale(request);
+    return { response, locale: existing };
+  }
+
+  const existing = request.cookies.get(LOCALE_COOKIE)?.value;
+  if (existing) return { response, locale: existing };
+
+  // First visit: detect from Accept-Language and persist in cookie
   const locale = detectLocale(request);
   response.cookies.set(LOCALE_COOKIE, locale, {
     path: '/',
     maxAge: LOCALE_MAX_AGE,
     sameSite: 'lax',
   });
-  return response;
+  return { response, locale };
 }
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  // Inject X-NEXT-INTL-LOCALE header so next-intl v4 getRequestLocale() works
+  // without needing to re-read the cookie inside getRequestConfig.
+  const cookieLocale = request.cookies.get(LOCALE_COOKIE)?.value;
+  const locale = SUPPORTED_LOCALES.includes(cookieLocale as (typeof SUPPORTED_LOCALES)[number])
+    ? cookieLocale!
+    : detectLocale(request);
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(LOCALE_HEADER, locale);
+
+  let supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,7 +67,11 @@ export async function middleware(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
+          // Re-snapshot request.headers AFTER cookie mutations so server components
+          // on this request can read the fresh Supabase session token.
+          const updatedHeaders = new Headers(request.headers);
+          updatedHeaders.set(LOCALE_HEADER, locale);
+          supabaseResponse = NextResponse.next({ request: { headers: updatedHeaders } });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
@@ -57,7 +90,8 @@ export async function middleware(request: NextRequest) {
   )) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
-    return applyLocaleCookie(NextResponse.redirect(url), request);
+    const { response: withCookie } = resolveAndApplyLocale(NextResponse.redirect(url), request);
+    return withCookie;
   }
 
   // Protect /admin — must be authenticated and have role=admin in app_metadata
@@ -65,7 +99,8 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = '/login';
-      return applyLocaleCookie(NextResponse.redirect(url), request);
+      const { response: withCookie } = resolveAndApplyLocale(NextResponse.redirect(url), request);
+      return withCookie;
     }
     const isAdmin = user.app_metadata?.role === 'admin';
     if (!isAdmin) {
@@ -73,7 +108,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return applyLocaleCookie(supabaseResponse, request);
+  const { response: final } = resolveAndApplyLocale(supabaseResponse, request);
+  return final;
 }
 
 export const config = {

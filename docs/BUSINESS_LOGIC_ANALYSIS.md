@@ -1739,34 +1739,75 @@ Tester le switch de langue FR → EN sur `kick-stock-web.vercel.app` :
 
 ### Priorité 3 — Qualité du code : typage propre du store facade
 
-Les stores et composants utilisent `(s as any)._bootstrap` et `(s as any)._teams` pour accéder aux données bootstrap depuis `gameStore`. Ces casts existent car `useGameStore` est typé comme `typeof useLocalGameStore` (façade générique). Une solution propre serait d'exporter une interface `BootstrapSlice` depuis le store et de l'utiliser pour typer les accès.
+~~Les stores et composants utilisent `(s as any)._bootstrap` et `(s as any)._teams`~~ → **✅ CORRIGÉ (Vague 5 STEP 2)** : interface `BootstrapSlice` exportée depuis `gameStore.ts`, tous les 30 casts `(s as any)` supprimés dans 14 fichiers.
 
 ---
 
-*Document mis à jour le 2 juin 2026 — Version 5 (post migration 013 exécutée en prod)*
+## État du projet — Version 6 (2 juin 2026, soir)
 
-### Priorité 2 — Compléter l'interface admin (saisie manuelle des équipes)
+### Toutes les corrections appliquées — récapitulatif final
 
-La page `/admin/competitions/[id]` permet d'importer les équipes depuis l'API-Football, mais pas de les éditer manuellement (forcer FIFA, changer le groupe, corriger le prix initial). Ajouter :
-- Un formulaire inline d'édition par équipe dans la table (strength, group_code, initial_price)
-- Un `PATCH /api/admin/competitions/[id]/teams/[team_id]` pour mettre à jour
+**Vague 5 — NEXT_STEPS_V5.md (nettoyage final constants + typage store)**
 
-### Priorité 3 — Configurer les journées (`competition_days`) depuis l'admin
+| Step | Qui | Description | Statut |
+|------|-----|-------------|--------|
+| STEP 1 | Code | `NATIONS` + `SCORER_POOL` + `import Nation` supprimés de `@kickstock/constants` | ✅ |
+| STEP 2 | Code | 30 casts `(s as any)` supprimés — `BootstrapSlice` interface exportée | ✅ |
+| STEP 3 (JY) | JY | Test switch de langue FR/EN en production | 🔴 BUG ACTIF |
 
-La table `competition_days` (day_index, full_label, phase, is_ko, div_key) est actuellement alimentée uniquement via le cron `sync-fixtures`. Il manque une interface pour créer/modifier les journées manuellement, ce qui est bloquant pour créer une compétition sans passer par l'API-Football.
+### État final de `@kickstock/constants`
 
-### Priorité 4 — Nettoyage SQL legacy (migration 013)
+Le package ne contient plus que 4 exports actifs :
 
-Créer `db/migrations/013_cleanup_legacy.sql` pour supprimer :
-- RPC `execute_trade` (remplacé par `execute_competition_trade`)
-- RPC `get_or_create_portfolio` (remplacé par `get_or_create_competition_portfolio`)
-- Table `nations` (remplacée par `teams` + `competition_teams`)
-- Table `positions` (remplacée par `holdings`)
-- Table `trades` (remplacée par `transactions`)
-- Table `price_history` (remplacée par `competition_prices`)
-- Trigger `trg_sync_nation_price` (obsolète)
+```typescript
+TOKENS           // design system (couleurs, typographie, espacements, animations)
+MOBILE_BREAKPOINT // 600px — seuil responsive
+DIV_RATES        // { r32:0.10, r16:0.15, qf:0.20, sf:0.30, final:0.40, champion:0.60 }
+INIT_CASH        // 10_000 KC — capital de départ
+```
 
-⚠️ Vérifier que ces tables sont bien vides en prod avant de les supprimer.
+Toutes les données WC2026 hardcodées (`NATIONS` 48 équipes, `CALENDAR` 35 jours, `GROUPS`, `SCORER_POOL`) ont été supprimées. L'app est entièrement agnostique à la compétition.
+
+### État final des tests Vitest
+
+| Fichier | Tests | Couverture |
+|---------|-------|------------|
+| `lib/bootstrap.test.ts` | 3 | `deriveDynamicKey` R32/SF/Final |
+| `stores/localGameStore.isolation.test.ts` | 1 | Isolation persist par compétition |
+| `app/api/game/reset/route.test.ts` | 1 | Smoke test reset API |
+| `stores/trade.concentration.test.ts` | 6 | Cap 40% — 6 scénarios |
+| `lib/dividends.test.ts` | 9 | Taux dividende par phase |
+| `stores/advanceDay.test.ts` | 4 | Pipeline simulation offline |
+| **Total** | **24 / 24** | ✅ tous verts |
+
+### Bug actif — Switch de langue i18n
+
+**Symptôme :** cliquer FR→EN dans le menu avatar ne change pas la langue en production.
+
+**Tentatives effectuées :**
+1. `router.refresh()` → Next.js Router Cache sert le layout mis en cache ❌
+2. `document.cookie` + `window.location.reload()` → même problème ❌
+3. Server Action (`cookies().set` + `redirect()`) → intercepté par Router Cache ❌
+4. API route `/api/set-locale` avec HTTP 302 + `Set-Cookie` → `window.location.href` → à débugger
+
+**Hypothèse root cause :** le middleware Supabase crée un nouveau `NextResponse.next({ request })` lors de la session refresh, ce qui pourrait interférer avec les cookies de réponse. À investiguer avec les DevTools (onglet Network → vérifier les `Set-Cookie` headers).
+
+**Strings hardcodées restantes dans `BrowserShell.tsx`** (non encore i18n'd) :
+- "JOURNÉE PRÉCÉDENTE", "JOURNÉE COURANTE", "ACTIONS · MATCHS DU JOUR"
+- "TOUS LES MATCHS — PHASE DE GROUPES", "PHASE KO"
+- "HISTORIQUE DES TRANSACTIONS", "CLASSEMENTS DE GROUPE", "Équipe"
+- "Phase KO — matchs déterminés dynamiquement", "Mise à jour auto toutes les 30s"
+- "Pens X–Y" (scores tirs au but dans BrowserShell + StandingsTab mobile)
+- "HISTORIQUE DES PRIX" dans `NationDetailOverlay`
+
+### Migration SQL 013 — ✅ Exécutée en production
+
+Tables legacy supprimées : `nations`, `positions`, `trades`, `price_history`, `game_state`, `nation_prices`, `group_standings`, `knockout_pools`, `holdings_history`, `dividends`, `groups`.
+RPCs supprimés : `execute_trade`, `get_or_create_portfolio`, `distribute_dividends`, `liquidate_eliminated`.
+
+---
+
+*Document mis à jour le 2 juin 2026 — Version 6 (fin de journée)*
 
 ### Priorité 5 — Tests supplémentaires
 

@@ -179,6 +179,11 @@ export default function AuthWidget({ compact = false }: Props) {
       >
         {compact ? t('loginCompact') : t('loginDesktop')}
       </button>
+      {!compact && (
+        <div style={{ marginTop: 8 }}>
+          <LanguageSwitcher />
+        </div>
+      )}
       {emailAuthOpen && (
         <EmailAuthModal onClose={() => setEmailAuthOpen(false)} />
       )}
@@ -591,6 +596,9 @@ function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void
       </div>
 
       <div style={s.migrationNote}>{t('migrationNote')}</div>
+      <div style={{ marginTop: 8 }}>
+        <LanguageSwitcher />
+      </div>
     </div>
   );
 }

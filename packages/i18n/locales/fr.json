@@ -140,7 +140,19 @@
     "myPositions": "MES POSITIONS",
     "marketHeader": "MARCHÉ · VOS NATIONS",
     "noMatchToday": "Aucun match aujourd'hui ou phase KO",
-    "noScores": "Aucun score enregistré."
+    "noScores": "Aucun score enregistré.",
+    "portfolioValue": "PORTEFEUILLE",
+    "cashAvailable": "CASH DISPO",
+    "positions": "POSITIONS",
+    "matchdayLabel": "JOURNÉE",
+    "previousMatchday": "JOURNÉE PRÉCÉDENTE · {label}",
+    "currentMatchday": "JOURNÉE COURANTE · {label}",
+    "todayMatchesHeader": "ACTIONS · MATCHS DU JOUR",
+    "bestScoresTab": "MEILLEURS SCORES",
+    "liveCompetitionTab": "COMPÉTITION LIVE",
+    "eliminatedBadge": "💀 ÉLIMINÉ · 1 KC",
+    "refresh": "↻ ACTUALISER",
+    "rankingAutoRefresh": "Mise à jour auto toutes les 30s"
   },
   "market": {
     "onboardingTitle": "Bienvenue sur KickStock ⚽",
@@ -175,6 +187,7 @@
     "newGameButton": "NOUVELLE PARTIE",
     "dividendsReceived": "🎁 DIVIDENDES REÇUS",
     "viewSchedule": "VOIR LE CALENDRIER →",
+    "viewMarket": "VOIR LE MARCHÉ →",
     "exposure": "⚡ EXPOSITION",
     "vs": "VS",
     "venue": "📍 {venue}",
@@ -189,7 +202,12 @@
     "next": "PROCHAIN",
     "dynamicKO": "🎯 Matchs déterminés dynamiquement",
     "upcoming": "Matchs à venir",
-    "aet": "AET"
+    "aet": "AET",
+    "allGroupMatches": "TOUS LES MATCHS — PHASE DE GROUPES",
+    "koPhase": "PHASE KO",
+    "koDynamic": "Phase KO — matchs déterminés dynamiquement",
+    "tbd": "À déterminer",
+    "upcomingBadge": "À venir"
   },
   "standings": {
     "groupStandings": "CLASSEMENT DES GROUPES",
@@ -202,7 +220,18 @@
     "thirdPlace": "🥉 PETITE FINALE",
     "champion": "{nation} — CHAMPION 🏆",
     "aet": "⚡ AET",
-    "upset": "🚀 UPSET!"
+    "upset": "🚀 UPSET!",
+    "groupHeader": "GROUPE {group}",
+    "colTeam": "Équipe",
+    "colW": "V",
+    "colWTitle": "Victoires",
+    "colN": "N",
+    "colNTitle": "Nuls",
+    "colL": "D",
+    "colLTitle": "Défaites",
+    "colPts": "Pts",
+    "colPtsTitle": "Points",
+    "colPrice": "Prix KC"
   },
   "trade": {
     "subtitle": "Groupe {group} · {held} actions détenues",

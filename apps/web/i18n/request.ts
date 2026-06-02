@@ -1,10 +1,13 @@
 import { getRequestConfig } from 'next-intl/server';
-import { cookies }          from 'next/headers';
 import { resolveLocale }    from '@kickstock/i18n';
 
-export default getRequestConfig(async () => {
-  const cookieStore = await cookies();
-  const locale      = resolveLocale(cookieStore.get('NEXT_LOCALE')?.value);
+/**
+ * next-intl v4: locale comes from `requestLocale` which resolves to the
+ * X-NEXT-INTL-LOCALE header injected by middleware.ts.
+ * No need to re-read cookies here — middleware is the single source of truth.
+ */
+export default getRequestConfig(async ({ requestLocale }) => {
+  const locale = resolveLocale(await requestLocale);
 
   const messages = locale === 'fr'
     ? (await import('@kickstock/i18n/locales/fr.json')).default

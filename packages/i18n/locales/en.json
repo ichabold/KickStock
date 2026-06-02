@@ -140,7 +140,19 @@
     "myPositions": "MY POSITIONS",
     "marketHeader": "MARKET · YOUR TEAMS",
     "noMatchToday": "No matches today or KO phase",
-    "noScores": "No scores recorded."
+    "noScores": "No scores recorded.",
+    "portfolioValue": "PORTFOLIO",
+    "cashAvailable": "CASH AVAIL.",
+    "positions": "POSITIONS",
+    "matchdayLabel": "MATCHDAY",
+    "previousMatchday": "PREVIOUS MATCHDAY · {label}",
+    "currentMatchday": "CURRENT MATCHDAY · {label}",
+    "todayMatchesHeader": "TODAY'S MATCHES",
+    "bestScoresTab": "BEST SCORES",
+    "liveCompetitionTab": "LIVE COMPETITION",
+    "eliminatedBadge": "💀 ELIMINATED · 1 KC",
+    "refresh": "↻ REFRESH",
+    "rankingAutoRefresh": "Auto-refresh every 30s"
   },
   "market": {
     "onboardingTitle": "Welcome to KickStock ⚽",
@@ -175,6 +187,7 @@
     "newGameButton": "NEW GAME",
     "dividendsReceived": "🎁 DIVIDENDS RECEIVED",
     "viewSchedule": "VIEW SCHEDULE →",
+    "viewMarket": "VIEW MARKET →",
     "exposure": "⚡ EXPOSURE",
     "vs": "VS",
     "venue": "📍 {venue}",
@@ -189,7 +202,12 @@
     "next": "NEXT",
     "dynamicKO": "🎯 Matches determined dynamically",
     "upcoming": "Upcoming matches",
-    "aet": "AET"
+    "aet": "AET",
+    "allGroupMatches": "ALL MATCHES — GROUP STAGE",
+    "koPhase": "KO PHASE",
+    "koDynamic": "KO phase — dynamically determined",
+    "tbd": "TBD",
+    "upcomingBadge": "Upcoming"
   },
   "standings": {
     "groupStandings": "GROUP STANDINGS",
@@ -202,7 +220,18 @@
     "thirdPlace": "🥉 THIRD PLACE",
     "champion": "{nation} — CHAMPION 🏆",
     "aet": "⚡ AET",
-    "upset": "🚀 UPSET!"
+    "upset": "🚀 UPSET!",
+    "groupHeader": "GROUP {group}",
+    "colTeam": "Team",
+    "colW": "W",
+    "colWTitle": "Wins",
+    "colN": "D",
+    "colNTitle": "Draws",
+    "colL": "L",
+    "colLTitle": "Losses",
+    "colPts": "Pts",
+    "colPtsTitle": "Points",
+    "colPrice": "Price KC"
   },
   "trade": {
     "subtitle": "Group {group} · {held} shares held",

@@ -55,6 +55,7 @@ function Spark({ history, up }: { history: number[]; up: boolean }) {
 function StockTile({ nation, onBuy, onSell, onCardClick }: {
   nation: TeamMeta; onBuy: () => void; onSell: () => void; onCardClick?: () => void;
 }) {
+  const ts = useTranslations('shell');
   const legacyNation = teamToNation(nation);
   const history  = useGameStore(s => s.priceHistory[nation.id] ?? []);
   const held     = useGameStore(s => s.portfolio[nation.id] ?? 0);
@@ -92,7 +93,7 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
       <Spark history={history} up={up}/>
 
       {isElim
-        ? <div className="bdis">💀 ÉLIMINÉ · 1 KC</div>
+        ? <div className="bdis">{ts('eliminatedBadge')}</div>
         : /* TradeActions — mechanic atom, same disabled logic as NationCard */
           <TradeActions
             nation={legacyNation}
@@ -133,7 +134,8 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
   onNationClick: (id: string) => void;
   onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
 }) {
-  const ts = useTranslations('shell');
+  const ts   = useTranslations('shell');
+  const tsch = useTranslations('schedule');
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
@@ -155,7 +157,7 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
       <div className="home-l">
         {prevResults.length > 0 && (
           <>
-            <div className="day-hdr"><span className="dot" style={{background:'var(--muted)'}}/>JOURNÉE PRÉCÉDENTE · {prevDay?.full_label}</div>
+            <div className="day-hdr"><span className="dot" style={{background:'var(--muted)'}}/>{ts('previousMatchday', { label: prevDay?.full_label ?? '' })}</div>
             <div className="matches-scroll">
               {prevResults.map((r, i) => {
                 const winA = r.res === 'A', winB = r.res === 'B';
@@ -182,7 +184,7 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
         )}
         {curDay && (
           <>
-            <div className="day-hdr"><span className="dot" style={{background:'var(--gold)'}}/>JOURNÉE COURANTE · {curDay.full_label}</div>
+            <div className="day-hdr"><span className="dot" style={{background:'var(--gold)'}}/>{ts('currentMatchday', { label: curDay.full_label })}</div>
             <div className="matches-scroll">
               {todayMatches.length > 0 ? todayMatches.map((m, i) => (
                 <div key={i} className="mrow">
@@ -192,16 +194,16 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
                     <TeamName id={m.b} onNationClick={onNationClick}/>
                   </div>
                   {m.venue && <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>}
-                  <div className="mbadge soon">À venir</div>
+                  <div className="mbadge soon">{tsch('upcomingBadge')}</div>
                 </div>
               )) : <div style={{padding: '12px', fontSize: 11, color: 'var(--di)'}}>Phase KO — matchs déterminés dynamiquement</div>}
             </div>
           </>
         )}
-        {!curDay && <div style={{padding: 24, textAlign: 'center', color: 'var(--gold)', fontFamily: 'Bebas Neue', fontSize: 28, letterSpacing: 4}}>🏆 TOURNOI TERMINÉ</div>}
+        {!curDay && <div style={{padding: 24, textAlign: 'center', color: 'var(--gold)', fontFamily: 'Bebas Neue', fontSize: 28, letterSpacing: 4}}>{ts('tournamentEnded')}</div>}
       </div>
       <div className="home-r">
-        <div className="hr2">ACTIONS · MATCHS DU JOUR</div>
+        <div className="hr2">{ts('todayMatchesHeader')}</div>
         {todayNations.length > 0
           ? <div className="tiles-grid">
               {todayNations.map(n => <StockTile key={n.id} nation={n}
@@ -259,6 +261,8 @@ function ScheduleView({ onNationClick, onMatchClick }: {
   onNationClick: (id: string) => void;
   onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
 }) {
+  const tsch = useTranslations('schedule');
+  const tst  = useTranslations('standings');
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
@@ -267,7 +271,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
   return (
     <div className="view-sched">
       <div className="sched-l">
-        <div className="day-hdr">TOUS LES MATCHS — PHASE DE GROUPES</div>
+        <div className="day-hdr">{tsch('allGroupMatches')}</div>
         <div className="matches-scroll">
           {bootstrap?.days.filter(d => !d.is_ko).map((day) => {
             const di       = day.day_index;
@@ -313,7 +317,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                         <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>
                       ) : null}
                       <div className={`mbadge ${isPast ? 'done' : isCur ? 'soon' : ''}`}>
-                        {isPast ? 'FT' : isCur ? 'Prochain' : 'À venir'}
+                        {isPast ? 'FT' : isCur ? tsch('next') : tsch('upcomingBadge')}
                       </div>
                     </div>
                   );
@@ -324,13 +328,13 @@ function ScheduleView({ onNationClick, onMatchClick }: {
         </div>
       </div>
       <div className="sched-r">
-        <div className="day-hdr">PHASE KO</div>
+        <div className="day-hdr">{tsch('koPhase')}</div>
         {(['R32','R16','QF','SF','3rd','Final'] as const).map(phase => {
           const phaseDays = bootstrap?.days.filter(d => d.phase === phase) ?? [];
           if (!phaseDays.length) return null;
           const phaseLabels: Record<string, string> = {
-            R32: 'HUITIÈMES · R32', R16: 'SEIZIÈMES · R16', QF: 'QUARTS DE FINALE',
-            SF: 'DEMI-FINALES', '3rd': 'TROISIÈME PLACE', Final: '🏆 FINALE',
+            R32: tst('r32'), R16: tst('r16'), QF: tst('quarterFinals'),
+            SF: tst('semiFinals'), '3rd': tst('thirdPlace'), Final: tst('final'),
           };
           return (
             <div className="elim-section" key={phase}>
@@ -374,9 +378,9 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                       );
                     }) : (
                       <div className="ko-teams">
-                        <span className="tbd-t">À déterminer</span>
+                        <span className="tbd-t">{tsch('tbd')}</span>
                         <span className="ko-vs">vs</span>
-                        <span className="tbd-t">À déterminer</span>
+                        <span className="tbd-t">{tsch('tbd')}</span>
                       </div>
                     )}
                   </div>
@@ -429,10 +433,10 @@ function PortfolioView({ onTrade, onNationClick }: {
       <div className="port-l">
         <div className="port-hdr">{ts('myPositions')}</div>
         <div className="port-sum">
-          <div className="ps-item"><div className="ps-l">TOTAL</div><div className="ps-v g">{fmt(totalValue)} KC</div></div>
-          <div className="ps-item"><div className="ps-l">INVESTI</div><div className="ps-v">{fmt(invested)} KC</div></div>
-          <div className="ps-item"><div className="ps-l">P&amp;L</div><div className={`ps-v${totalPl >= 0 ? ' gn' : ' ls'}`}>{totalPl >= 0 ? '+' : ''}{fmt(totalPl)} KC</div></div>
-          <div className="ps-item"><div className="ps-l">CASH</div><div className="ps-v">{fmt(cash)} KC</div></div>
+          <div className="ps-item"><div className="ps-l">{ts('total')}</div><div className="ps-v g">{fmt(totalValue)} KC</div></div>
+          <div className="ps-item"><div className="ps-l">{tp('invested')}</div><div className="ps-v">{fmt(invested)} KC</div></div>
+          <div className="ps-item"><div className="ps-l">{tp('pnl')}</div><div className={`ps-v${totalPl >= 0 ? ' gn' : ' ls'}`}>{totalPl >= 0 ? '+' : ''}{fmt(totalPl)} KC</div></div>
+          <div className="ps-item"><div className="ps-l">{ts('cash')}</div><div className="ps-v">{fmt(cash)} KC</div></div>
         </div>
         {bestScore !== null && (
           <div style={{marginBottom:12,padding:'8px 12px',background:'rgba(255,219,0,.06)',border:'1px solid var(--gold-dk)',borderRadius:6,fontSize:10,color:'var(--gold)',fontWeight:700,letterSpacing:1}}>
@@ -478,17 +482,17 @@ function PortfolioView({ onTrade, onNationClick }: {
         {/* Tx log */}
         {txLog.length > 0 && (
           <div style={{marginTop: 16, borderTop: '1px solid var(--bd)', paddingTop: 12}}>
-            <div style={{fontSize:8,letterSpacing:2,color:'var(--di)',fontWeight:700,marginBottom:8}}>HISTORIQUE DES TRANSACTIONS</div>
+            <div style={{fontSize:8,letterSpacing:2,color:'var(--di)',fontWeight:700,marginBottom:8}}>{tp('txHistory')}</div>
             {txLog.slice(0, 15).map((tx, i) => (
               <div key={i} style={{display:'grid',gridTemplateColumns:'28px 18px 1fr 22px auto 20px',gap:4,alignItems:'center',padding:'4px 0',borderBottom:'1px solid rgba(255,255,255,.04)',fontSize:10}}>
                 <span style={{fontSize:8,fontWeight:700,padding:'2px 4px',borderRadius:3,textAlign:'center',background:tx.dir==='buy'?'rgba(0,255,135,.12)':'rgba(255,60,60,.12)',color:tx.dir==='buy'?'var(--gain)':'var(--loss)'}}>
-                  {tx.dir === 'buy' ? 'ACH' : 'VTE'}
+                  {tx.dir === 'buy' ? tp('txBuy') : tp('txSell')}
                 </span>
                 <span style={{fontSize:13,textAlign:'center'}}>{tx.flag}</span>
                 <span style={{fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tx.name}</span>
                 <span style={{color:'var(--di)',textAlign:'right',fontFamily:'JetBrains Mono',fontSize:9}}>×{tx.qty}</span>
                 <span style={{fontFamily:'JetBrains Mono',fontWeight:600,textAlign:'right'}}>{fmt(tx.price)} KC</span>
-                <span style={{color:'var(--di)',fontSize:8,textAlign:'right',fontFamily:'JetBrains Mono'}}>J{tx.day + 1}</span>
+                <span style={{color:'var(--di)',fontSize:8,textAlign:'right',fontFamily:'JetBrains Mono'}}>{tp('txDay', { day: tx.day + 1 })}</span>
               </div>
             ))}
           </div>
@@ -503,7 +507,7 @@ function PortfolioView({ onTrade, onNationClick }: {
             onCardClick={() => onNationClick(h.id)}
           />)}
         </div>
-        {holdings.length === 0 && <div style={{textAlign:'center',padding:60,color:'var(--di)',fontSize:12}}>Achetez des actions dans la vue MARKET</div>}
+        {holdings.length === 0 && <div style={{textAlign:'center',padding:60,color:'var(--di)',fontSize:12}}>{tp('emptyHint')}</div>}
       </div>
     </div>
   );
@@ -514,6 +518,7 @@ function StandingsView({ onNationClick, onMatchClick }: {
   onNationClick: (id: string) => void;
   onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
 }) {
+  const tst = useTranslations('standings');
   const prices       = useGameStore(s => s.prices);
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
@@ -546,8 +551,8 @@ function StandingsView({ onNationClick, onMatchClick }: {
 
   const koPhases = ['R32', 'R16', 'QF', 'SF', 'Final', '3rd'] as const;
   const koLabels: Record<string,string> = {
-    R32: 'HUITIÈMES · R32', R16: 'SEIZIÈMES · R16', QF: 'QUARTS DE FINALE',
-    SF: 'DEMI-FINALES', Final: '🏆 FINALE', '3rd': '🥉 PETITE FINALE',
+    R32: tst('r32'), R16: tst('r16'), QF: tst('quarterFinals'),
+    SF: tst('semiFinals'), Final: tst('final'), '3rd': tst('thirdPlace'),
   };
 
   return (
@@ -607,19 +612,19 @@ function StandingsView({ onNationClick, onMatchClick }: {
       )}
 
       {/* Group standings */}
-      <div style={{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:3,color:'var(--mu)',marginBottom:10}}>CLASSEMENTS DE GROUPE</div>
+      <div style={{fontFamily:'Bebas Neue',fontSize:14,letterSpacing:3,color:'var(--mu)',marginBottom:10}}>{tst('groupStandings')}</div>
       <div className="std-grid">
         {Object.entries(standings).map(([g, standTeams]) => (
           <div className="grp-card" key={g}>
-            <div className="grp-hdr">GROUPE {g}</div>
+            <div className="grp-hdr">{tst('groupHeader', { group: g })}</div>
             <table className="grp-table">
               <thead><tr>
-                <th>Équipe</th>
-                <th className="mono" title="Victoires">V</th>
-                <th className="mono" title="Nuls">N</th>
-                <th className="mono" title="Défaites">D</th>
-                <th className="mono" title="Points">Pts</th>
-                <th className="mono">Prix KC</th>
+                <th>{tst('colTeam')}</th>
+                <th className="mono" title={tst('colWTitle')}>{tst('colW')}</th>
+                <th className="mono" title={tst('colNTitle')}>{tst('colN')}</th>
+                <th className="mono" title={tst('colLTitle')}>{tst('colL')}</th>
+                <th className="mono" title={tst('colPtsTitle')}>{tst('colPts')}</th>
+                <th className="mono">{tst('colPrice')}</th>
               </tr></thead>
               <tbody>
                 {standTeams.map((t, i) => {
@@ -693,19 +698,21 @@ function BracketView({ onNationClick, onMatchClick }: {
   onNationClick: (id: string) => void;
   onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
 }) {
+  const tst = useTranslations('standings');
+  const tsch = useTranslations('schedule');
   const matchResults = useGameStore(s => s.matchResults);
   const dayIndex     = useGameStore(s => s.dayIndex);
   const r32Pool      = useGameStore(s => s.r32Pool);
   const state        = useGameStore(s => s);
   const bootstrap = useGameStore(s => s._bootstrap);
 
-  const phases = [
-    { label: 'HUITIÈMES DE FINALE · R32', key: 'R32' },
-    { label: 'QUARTS DE FINALE',          key: 'QF'  },
-    { label: 'DEMI-FINALES',              key: 'SF'  },
-    { label: 'TROISIÈME PLACE',           key: '3rd' },
-    { label: '🏆 FINALE',                 key: 'Final' },
-  ] as const;
+  const phases: { label: string; key: 'R32' | 'QF' | 'SF' | '3rd' | 'Final' }[] = [
+    { label: tst('r32'),           key: 'R32'   },
+    { label: tst('quarterFinals'), key: 'QF'    },
+    { label: tst('semiFinals'),    key: 'SF'    },
+    { label: tst('thirdPlace'),    key: '3rd'   },
+    { label: tst('final'),         key: 'Final' },
+  ];
 
   return (
     <div className="bkt-wrap">
@@ -764,8 +771,8 @@ function BracketView({ onNationClick, onMatchClick }: {
                   return (
                     <div key={di} className="bkt-m upcoming" style={isFinal ? {background:'rgba(255,219,0,.03)',borderColor:'rgba(255,219,0,.35)'} : {}}>
                       <div className="bkt-meta">{day.full_label}{isCur ? ' ▶' : ''}</div>
-                      <div className="bkt-t"><span className="tbd">À déterminer</span></div>
-                      <div className="bkt-t"><span className="tbd">À déterminer</span></div>
+                      <div className="bkt-t"><span className="tbd">{tsch('tbd')}</span></div>
+                      <div className="bkt-t"><span className="tbd">{tsch('tbd')}</span></div>
                     </div>
                   );
                 }
@@ -858,8 +865,8 @@ function RankingView() {
       </div>
 
       <div className="rnk-tabs">
-        <button className="rtab on">MEILLEURS SCORES</button>
-        <button className="rtab" style={{opacity:.5,cursor:'not-allowed'}} title="Phase 3">COMPÉTITION LIVE</button>
+        <button className="rtab on">{ts('bestScoresTab')}</button>
+        <button className="rtab" style={{opacity:.5,cursor:'not-allowed'}} title="Phase 3">{ts('liveCompetitionTab')}</button>
       </div>
 
       {loading && <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:11}}>{tc('loading')}</div>}
@@ -911,9 +918,9 @@ function RankingView() {
 
       <div style={{textAlign:'center',marginTop:12}}>
         <button onClick={refresh} style={{background:'none',border:'1px solid #222',color:'#444',padding:'5px 14px',borderRadius:5,fontSize:9,letterSpacing:1,cursor:'pointer',fontFamily:'var(--font-body)'}}>
-          ↻ ACTUALISER
+          {ts('refresh')}
         </button>
-        <div style={{fontSize:8,color:'#333',marginTop:6}}>Mise à jour auto toutes les 30s</div>
+        <div style={{fontSize:8,color:'#333',marginTop:6}}>{ts('rankingAutoRefresh')}</div>
       </div>
     </div>
   );
@@ -953,6 +960,7 @@ function _OldRankingView() {
 type ViewId = 'home' | 'schedule' | 'market' | 'portfolio' | 'standings' | 'bracket' | 'ranking';
 
 export default function BrowserShell() {
+  const ts  = useTranslations('shell');
   const tsi = useTranslations('simulate');
   const [view,         setView]         = useState<ViewId>('home');
   const [modal,        setModal]        = useState<{nation: Nation; mode: TradeMode} | null>(null);
@@ -1064,11 +1072,11 @@ export default function BrowserShell() {
         <header className="topbar">
           <div className="tb-title">{view.toUpperCase()}</div>
           <div className="tb-stats">
-            <div className="tbs"><div className="tbs-l">Portefeuille</div><div className="tbs-v g">{fmt(totVal)} KC</div></div>
-            <div className="tbs"><div className="tbs-l">Cash dispo</div><div className="tbs-v">{fmt(cash)} KC</div></div>
+            <div className="tbs"><div className="tbs-l">{ts('portfolioValue')}</div><div className="tbs-v g">{fmt(totVal)} KC</div></div>
+            <div className="tbs"><div className="tbs-l">{ts('cashAvailable')}</div><div className="tbs-v">{fmt(cash)} KC</div></div>
             <div className="tbs"><div className="tbs-l">P&amp;L</div><div className={`tbs-v ${pl >= 0 ? 'gn' : 'ls'}`}>{pl >= 0 ? '▲ +' : '▼ '}{fmt(Math.abs(pl))}</div></div>
-            <div className="tbs"><div className="tbs-l">Positions</div><div className="tbs-v">{positions}</div></div>
-            <div className="tbs"><div className="tbs-l">Journée</div><div className="tbs-v">J·{dayIndex+1}</div></div>
+            <div className="tbs"><div className="tbs-l">{ts('positions')}</div><div className="tbs-v">{positions}</div></div>
+            <div className="tbs"><div className="tbs-l">{ts('matchdayLabel')}</div><div className="tbs-v">J·{dayIndex+1}</div></div>
           </div>
           <div className="tb-r">
             {champion && (
@@ -1166,7 +1174,7 @@ export default function BrowserShell() {
                 })}
               </div>
             )}
-            <button className="res-close" onClick={() => setSimResults(null)}>VOIR LE MARCHÉ →</button>
+            <button className="res-close" onClick={() => setSimResults(null)}>{tsi('viewMarket')}</button>
           </div>
         </div>
       )}
