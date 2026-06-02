@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { setLocaleCookie } from '@/app/actions/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameStore } from '@/stores/gameStore';
 import { useGameMode } from '@/hooks/useGameMode';
@@ -230,17 +231,17 @@ function Avatar({ initial, size, url }: { initial: string; size: number; url?: s
 // ─── Language switcher ────────────────────────────────────────────────────────
 
 function LanguageSwitcher() {
-  const t = useTranslations('authWidget');
-  const router = useRouter();
+  const t        = useTranslations('authWidget');
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  function setLocale(locale: string) {
-    document.cookie = `NEXT_LOCALE=${locale}; path=/; max-age=31536000; SameSite=Lax`;
+  async function handleLocale(locale: string) {
     setOpen(false);
-    // router.refresh() ne suffit pas : le root layout (NextIntlClientProvider)
-    // est mis en cache par Next.js et ne recharge pas les messages i18n sans
-    // un vrai rechargement de page.
-    window.location.reload();
+    // Server Action: sets NEXT_LOCALE cookie server-side and redirects.
+    // More reliable than document.cookie + window.location.reload() because
+    // the cookie is written in the HTTP response headers, guaranteeing that
+    // the root layout re-executes with the correct locale.
+    await setLocaleCookie(locale, pathname ?? '/');
   }
 
   return (
@@ -250,8 +251,8 @@ function LanguageSwitcher() {
       </button>
       {open && (
         <div style={s.langMenu}>
-          <button onClick={() => setLocale('fr')} style={s.langOption}>{t('languageFr')}</button>
-          <button onClick={() => setLocale('en')} style={s.langOption}>{t('languageEn')}</button>
+          <button onClick={() => handleLocale('fr')} style={s.langOption}>{t('languageFr')}</button>
+          <button onClick={() => handleLocale('en')} style={s.langOption}>{t('languageEn')}</button>
         </div>
       )}
     </div>
