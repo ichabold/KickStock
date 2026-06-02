@@ -136,7 +136,11 @@
     "cash": "CASH",
     "total": "TOTAL",
     "tournamentEndedChampion": "🏆 FIN · {champion}",
-    "tournamentEnded": "🏆 TOURNOI TERMINÉ"
+    "tournamentEnded": "🏆 TOURNOI TERMINÉ",
+    "myPositions": "MES POSITIONS",
+    "marketHeader": "MARCHÉ · VOS NATIONS",
+    "noMatchToday": "Aucun match aujourd'hui ou phase KO",
+    "noScores": "Aucun score enregistré."
   },
   "market": {
     "onboardingTitle": "Bienvenue sur KickStock ⚽",
@@ -275,7 +279,14 @@
     "closeLabel": "Fermer"
   },
   "nationDetail": {
-    "initialPrice": "Départ"
+    "initialPrice": "Départ",
+    "noMatchesPlayed": "Aucun match joué"
+  },
+  "live": {
+    "loading": "Chargement…",
+    "noMatchToday": "Aucun match aujourd'hui",
+    "nextMatchHint": "Prochain match : voir le calendrier →",
+    "inPlay": "EN JEU"
   },
   "ticker": {
     "ariaLabel": "Cours en direct"

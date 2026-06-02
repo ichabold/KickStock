@@ -176,7 +176,7 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
         {/* Match history */}
         <div className={styles.histTitle}>HISTORIQUE DES PRIX</div>
         {history.length === 1 && (
-          <div className={styles.histEmpty}>Aucun match joué</div>
+          <div className={styles.histEmpty}>{t('noMatchesPlayed')}</div>
         )}
         {history.map((h, i) => (
           <div key={i} className={styles.histRow}>

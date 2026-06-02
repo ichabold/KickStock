@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { useGameStore, fmt } from '@/stores/gameStore';
 import styles from './PlayButton.module.css';
 
@@ -40,6 +41,8 @@ export default function LiveTab() {
   const [teams,     setTeams]     = useState<Record<string, TeamInfo>>({});
   const [loading,   setLoading]   = useState(true);
   const [now,       setNow]       = useState(new Date());
+
+  const t = useTranslations('live');
 
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
@@ -77,7 +80,7 @@ export default function LiveTab() {
     return (
       <div className={styles.wrap}>
         <div className={styles.dayLabel}>⚡ LIVE</div>
-        <div className={styles.phase} style={{ color: 'var(--muted)' }}>Chargement…</div>
+        <div className={styles.phase} style={{ color: 'var(--muted)' }}>{t('loading')}</div>
       </div>
     );
   }
@@ -87,10 +90,10 @@ export default function LiveTab() {
       <div className={styles.wrap}>
         <div className={styles.dayLabel}>⚡ LIVE</div>
         <div className={styles.phase} style={{ color: 'var(--muted)', marginTop: 24 }}>
-          Aucun match aujourd'hui
+          {t('noMatchToday')}
         </div>
         <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 8 }}>
-          Prochain match : voir le calendrier →
+          {t('nextMatchHint')}
         </div>
       </div>
     );
@@ -116,7 +119,7 @@ export default function LiveTab() {
           const statusBadge = isDone
             ? `${m.score_a}–${m.score_b}`
             : isLive
-              ? 'EN JEU'
+              ? t('inPlay')
               : minsToKO > 0
                 ? `-${minsToKO}min`
                 : 'BIENTÔT';

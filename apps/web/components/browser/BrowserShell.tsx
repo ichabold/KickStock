@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { useGameStore, fmt, pctOf, buildMatchesForCurrentDay } from '@/stores/gameStore';
 import { buildGroupStandingsUI } from '@kickstock/game-engine';
 import TradeModal from '@/components/shared/TradeModal';
@@ -132,6 +133,7 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
   onNationClick: (id: string) => void;
   onMatchClick: (r: StoredMatchResult, dayLabel: string) => void;
 }) {
+  const ts = useTranslations('shell');
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
   const state        = useGameStore(s => s);
@@ -207,7 +209,7 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
                 onCardClick={() => onNationClick(n.id)}
               />)}
             </div>
-          : <div style={{padding: 40, textAlign: 'center', color: 'var(--di)', fontSize: 12}}>Aucun match aujourd&apos;hui ou phase KO</div>
+          : <div style={{padding: 40, textAlign: 'center', color: 'var(--di)', fontSize: 12}}>{ts('noMatchToday')}</div>
         }
       </div>
     </div>
@@ -393,6 +395,8 @@ function PortfolioView({ onTrade, onNationClick }: {
   onTrade: (n: TeamMeta, m: TradeMode) => void;
   onNationClick: (id: string) => void;
 }) {
+  const ts = useTranslations('shell');
+  const tp = useTranslations('portfolio');
   // usePortfolioTotals — mechanic hook, same formula as MobileShell PortfolioTab
   const { cash, portVal, invested, totalVal: totalValue, pl: totalPl, bestScore } = usePortfolioTotals();
 
@@ -423,7 +427,7 @@ function PortfolioView({ onTrade, onNationClick }: {
   return (
     <div className="view-port">
       <div className="port-l">
-        <div className="port-hdr">MES POSITIONS</div>
+        <div className="port-hdr">{ts('myPositions')}</div>
         <div className="port-sum">
           <div className="ps-item"><div className="ps-l">TOTAL</div><div className="ps-v g">{fmt(totalValue)} KC</div></div>
           <div className="ps-item"><div className="ps-l">INVESTI</div><div className="ps-v">{fmt(invested)} KC</div></div>
@@ -432,16 +436,16 @@ function PortfolioView({ onTrade, onNationClick }: {
         </div>
         {bestScore !== null && (
           <div style={{marginBottom:12,padding:'8px 12px',background:'rgba(255,219,0,.06)',border:'1px solid var(--gold-dk)',borderRadius:6,fontSize:10,color:'var(--gold)',fontWeight:700,letterSpacing:1}}>
-            🏆 MEILLEUR SCORE : {fmt(bestScore)} KC
+            {tp('bestScore', { score: fmt(bestScore!) })}
           </div>
         )}
         {hasElimHeld && (
           <div style={{width:'100%',padding:'8px',background:'rgba(255,60,60,.08)',border:'1px solid var(--loss-dk)',borderRadius:6,color:'var(--loss)',fontSize:11,fontWeight:700,letterSpacing:1,marginBottom:10,textAlign:'center'}}>
-            💀 Nations éliminées — liquidation automatique
+            {tp('eliminatedNotice')}
           </div>
         )}
         {holdings.length === 0
-          ? <div style={{textAlign:'center',padding:40,color:'var(--di)',fontSize:12}}>Aucune position ouverte</div>
+          ? <div style={{textAlign:'center',padding:40,color:'var(--di)',fontSize:12}}>{tp('emptyTitle')}</div>
           : holdings.map(h => (
               <div key={h.id} className="pos-row" style={{opacity: h.isElim ? 0.5 : 1, cursor: 'pointer'}}
                 onClick={() => onNationClick(h.id)}
@@ -491,7 +495,7 @@ function PortfolioView({ onTrade, onNationClick }: {
         )}
       </div>
       <div className="port-r">
-        <div className="port-hdr">MARCHÉ · VOS NATIONS</div>
+        <div className="port-hdr">{ts('marketHeader')}</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:7}}>
           {holdings.map(h => h.n && <StockTile key={h.id} nation={h.n}
             onBuy={() => h.n && onTrade(h.n, 'buy')}
@@ -808,6 +812,8 @@ function BracketView({ onNationClick, onMatchClick }: {
 
 // ─── RankingView ──────────────────────────────────────────────────────────────
 function RankingView() {
+  const ts = useTranslations('shell');
+  const tc = useTranslations('common');
   const { entries, loading, refresh } = useLeaderboard(50);
   const { user, profile } = useAuth();
   const cash      = useGameStore(s => s.cash);
@@ -837,17 +843,17 @@ function RankingView() {
       {/* My score card */}
       <div style={{background:'rgba(255,219,0,.04)',border:'1px solid var(--gold-dk)',borderRadius:9,padding:'12px 16px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div>
-          <div style={{fontSize:9,letterSpacing:2,color:'var(--dim)',fontWeight:700,marginBottom:3}}>MON SCORE EN COURS</div>
+          <div style={{fontSize:9,letterSpacing:2,color:'var(--dim)',fontWeight:700,marginBottom:3}}>{ts('total')}</div>
           <div style={{fontFamily:'var(--font-mono)',fontSize:20,fontWeight:700,color:'var(--gold)'}}>{fmt(myTotal)} KC</div>
-          {myBest && <div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>Meilleur : {fmt(myBest)} KC</div>}
+          {myBest && <div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>🏆 {fmt(myBest)} KC</div>}
         </div>
         {!user && !guestPseudo
           ? <a href="/login" style={{background:'rgba(255,219,0,.12)',border:'1px solid var(--gold-dk)',color:'var(--gold)',padding:'6px 14px',borderRadius:6,fontSize:11,fontWeight:700,letterSpacing:1,textDecoration:'none'}}>
-              ⚽ SE CONNECTER
+              ⚽ LOGIN
             </a>
           : myRank
             ? <div style={{fontFamily:'var(--font-display)',fontSize:32,letterSpacing:2,color:'var(--gold)'}}>#{myRank}</div>
-            : <div style={{fontSize:10,color:'var(--dim)'}}>Finissez une partie pour apparaître</div>
+            : <div style={{fontSize:10,color:'var(--dim)'}}>{ts('tournamentEnded')}</div>
         }
       </div>
 
@@ -856,13 +862,12 @@ function RankingView() {
         <button className="rtab" style={{opacity:.5,cursor:'not-allowed'}} title="Phase 3">COMPÉTITION LIVE</button>
       </div>
 
-      {loading && <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:11}}>Chargement…</div>}
+      {loading && <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:11}}>{tc('loading')}</div>}
 
       {!loading && entries.length === 0 && (
         <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:12}}>
           <div style={{fontSize:32,marginBottom:8}}>🏆</div>
-          <div>Aucun score enregistré.</div>
-          <div style={{marginTop:4,color:'#333',fontSize:10}}>Connecte-toi et joue une partie pour apparaître ici.</div>
+          <div>{ts('noScores')}</div>
         </div>
       )}
 
@@ -896,8 +901,8 @@ function RankingView() {
             <div className="rnk-rank">?</div>
             <div className="rnk-av">?</div>
             <div className="rnk-info">
-              <div className="rnk-name">Vous</div>
-              <div className="rnk-sub">Connectez-vous pour apparaître</div>
+              <div className="rnk-name">–</div>
+              <div className="rnk-sub">{ts('myPositions')}</div>
             </div>
             <div className="rnk-val">{fmt(myTotal)} KC</div>
           </div>
@@ -948,6 +953,7 @@ function _OldRankingView() {
 type ViewId = 'home' | 'schedule' | 'market' | 'portfolio' | 'standings' | 'bracket' | 'ranking';
 
 export default function BrowserShell() {
+  const tsi = useTranslations('simulate');
   const [view,         setView]         = useState<ViewId>('home');
   const [modal,        setModal]        = useState<{nation: Nation; mode: TradeMode} | null>(null);
   const [simResults,   setSimResults]   = useState<StoredMatchResult[] | null>(null);
@@ -1120,7 +1126,7 @@ export default function BrowserShell() {
       {simResults  && !showAnim && (
         <div className="res-overlay" onClick={() => setSimResults(null)}>
           <div className="res-box" onClick={e => e.stopPropagation()}>
-            <div className="res-title">RÉSULTATS</div>
+            <div className="res-title">{tsi('simulateButton')}</div>
             <div className="res-matches">
               {simResults.map((r, i) => {
                 const tA = teams.find(t => t.id === r.a);
@@ -1140,7 +1146,7 @@ export default function BrowserShell() {
                     </button>
                     <button style={{background:'none',border:'none',cursor:'pointer',color:r.res==='B'?'var(--gold)':'var(--mu)',fontFamily:'inherit',fontSize:'inherit'}}
                       onClick={() => { setSimResults(null); onNationClick(r.b); }}>{tB?.flag} {tB?.name?.toUpperCase()}</button>
-                    {r.elimId && <span className="res-elim">💀 {tElim?.name?.toUpperCase()} éliminé</span>}
+                    {r.elimId && <span className="res-elim">{tsi('eliminated', { nation: tElim?.name?.toUpperCase() ?? r.elimId })}</span>}
                     {r.isUpset && <span className="res-upbadge">🚀 UPSET!</span>}
                   </div>
                 );
@@ -1148,7 +1154,7 @@ export default function BrowserShell() {
             </div>
             {simResults.filter(r => r.divCash > 0).length > 0 && (
               <div className="res-divs">
-                <div className="res-divtitle">🎁 DIVIDENDES REÇUS</div>
+                <div className="res-divtitle">{tsi('dividendsReceived')}</div>
                 {simResults.filter(r => r.divCash > 0).map((r, i) => {
                   const divTeam = teams.find(t => t.id === (r.winnerId ?? r.a));
                   return (

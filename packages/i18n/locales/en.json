@@ -136,7 +136,11 @@
     "cash": "CASH",
     "total": "TOTAL",
     "tournamentEndedChampion": "🏆 END · {champion}",
-    "tournamentEnded": "🏆 TOURNAMENT ENDED"
+    "tournamentEnded": "🏆 TOURNAMENT ENDED",
+    "myPositions": "MY POSITIONS",
+    "marketHeader": "MARKET · YOUR TEAMS",
+    "noMatchToday": "No matches today or KO phase",
+    "noScores": "No scores recorded."
   },
   "market": {
     "onboardingTitle": "Welcome to KickStock ⚽",
@@ -275,7 +279,14 @@
     "closeLabel": "Close"
   },
   "nationDetail": {
-    "initialPrice": "Start"
+    "initialPrice": "Start",
+    "noMatchesPlayed": "No matches played"
+  },
+  "live": {
+    "loading": "Loading…",
+    "noMatchToday": "No matches today",
+    "nextMatchHint": "Next match: see schedule →",
+    "inPlay": "LIVE"
   },
   "ticker": {
     "ariaLabel": "Live prices"

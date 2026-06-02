@@ -9,7 +9,8 @@ import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import styles from './ScheduleTab.module.css';
 
 export default function ScheduleTab() {
-  const t = useTranslations('schedule');
+  const t  = useTranslations('schedule');
+  const tc = useTranslations('common');
   const [matchDetail, setMatchDetail] = useState<{ result: StoredMatchResult; dayLabel: string } | null>(null);
   const [nationId,    setNationId]    = useState<string | null>(null);
 
@@ -23,7 +24,7 @@ export default function ScheduleTab() {
   const gN = (id: string) => teams.find(t => t.id === id);
 
   if (!bootstrap) {
-    return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>Chargement…</div>;
+    return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>{tc('loading')}</div>;
   }
 
   return (

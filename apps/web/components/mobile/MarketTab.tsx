@@ -14,7 +14,8 @@ import { useGameStore } from '@/stores/gameStore';
 import styles from './MarketTab.module.css';
 
 export default function MarketTab() {
-  const t = useTranslations('market');
+  const t  = useTranslations('market');
+  const tc = useTranslations('common');
   const [filter,   setFilter]   = useState('');
   const [group,    setGroup]    = useState('ALL');
   const [sortBy,   setSortBy]   = useState<SortBy>('default');
@@ -66,7 +67,7 @@ export default function MarketTab() {
   // (modal.nation already holds the full Nation object)
 
   if (!bootstrap) {
-    return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>Chargement…</div>;
+    return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>{tc('loading')}</div>;
   }
 
   return (
