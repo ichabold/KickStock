@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { setLocaleCookie } from '@/app/actions/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameStore } from '@/stores/gameStore';
 import { useGameMode } from '@/hooks/useGameMode';
@@ -231,17 +230,17 @@ function Avatar({ initial, size, url }: { initial: string; size: number; url?: s
 // ─── Language switcher ────────────────────────────────────────────────────────
 
 function LanguageSwitcher() {
-  const t        = useTranslations('authWidget');
-  const pathname = usePathname();
+  const t = useTranslations('authWidget');
   const [open, setOpen] = useState(false);
 
-  async function handleLocale(locale: string) {
+  function handleLocale(locale: string) {
     setOpen(false);
-    // Server Action: sets NEXT_LOCALE cookie server-side and redirects.
-    // More reliable than document.cookie + window.location.reload() because
-    // the cookie is written in the HTTP response headers, guaranteeing that
-    // the root layout re-executes with the correct locale.
-    await setLocaleCookie(locale, pathname ?? '/');
+    // Navigate to the locale API route which sets the cookie via HTTP response
+    // headers (Set-Cookie) and redirects back. This is a real HTTP redirect —
+    // it bypasses the Next.js Router Cache entirely, guaranteeing the root
+    // layout re-executes with the correct locale.
+    const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `/api/set-locale?locale=${locale}&redirect=${redirect}`;
   }
 
   return (
