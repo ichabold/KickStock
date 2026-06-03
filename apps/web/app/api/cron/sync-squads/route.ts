@@ -32,11 +32,13 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient();
 
-  // ── Load all teams in active competitions ───────────────────────────────────
-  const { data: competitions } = await adm(admin)
-    .from('competitions')
-    .select('id, season')
-    .eq('is_active', true);
+  // ── Load competitions ───────────────────────────────────────────────────────
+  const url        = new URL(req.url);
+  const specificId = url.searchParams.get('competition_id');
+  const compQuery  = adm(admin).from('competitions').select('id, season');
+  const { data: competitions } = specificId
+    ? await compQuery.eq('id', parseInt(specificId, 10)).limit(1)
+    : await compQuery.eq('is_active', true);
 
   if (!competitions || (competitions as unknown[]).length === 0) {
     return Response.json({ skipped: true, reason: 'no active competitions' });

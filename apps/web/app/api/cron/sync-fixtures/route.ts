@@ -39,11 +39,18 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient();
 
-  // ── Load active competitions ────────────────────────────────────────────────
-  const { data: competitions, error: compErr } = await adm(admin)
+  // ── Load competitions ───────────────────────────────────────────────────────
+  // If competition_id is provided (admin manual sync), target that specific
+  // competition regardless of is_active status. Otherwise run on all active.
+  const url            = new URL(req.url);
+  const specificId     = url.searchParams.get('competition_id');
+  const compQuery      = adm(admin)
     .from('competitions')
-    .select('id, league_id, season, name, start_date')
-    .eq('is_active', true);
+    .select('id, league_id, season, name, start_date');
+
+  const { data: competitions, error: compErr } = specificId
+    ? await compQuery.eq('id', parseInt(specificId, 10)).limit(1)
+    : await compQuery.eq('is_active', true);
 
   if (compErr) {
     Sentry.captureException(compErr, { tags: { cron: 'sync-fixtures' } });

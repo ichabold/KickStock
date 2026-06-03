@@ -43,8 +43,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // ── Internal call to the cron route (server-side, CRON_SECRET stays private)
+  // Pass competition_id so the cron processes this specific competition
+  // even if it's not yet active.
   const origin = new URL(req.url).origin;
-  const response = await fetch(`${origin}${path}`, {
+  const competitionId = params.id;
+  const cronUrl = `${origin}${path}?competition_id=${competitionId}`;
+  const response = await fetch(cronUrl, {
     method: 'GET',
     headers: { Authorization: `Bearer ${secret}` },
   });
