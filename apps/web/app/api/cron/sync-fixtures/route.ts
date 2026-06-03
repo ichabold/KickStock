@@ -103,10 +103,18 @@ export async function GET(req: Request) {
           if (tErr) throw new Error(`teams upsert [${t.id}]: ${tErr.message}`);
         }
 
-        // ── 2. Upsert competition_teams (group_code only — initial_price seeded below)
+        // ── 2. Upsert competition_teams
+        // N'écrase group_code que si l'API en fournit un non-null —
+        // évite de remettre null quand l'API ne renseigne pas encore les groupes.
         for (const ct of [compTeamA, compTeamB]) {
+          const row: Record<string, unknown> = {
+            competition_id: ct.competition_id,
+            team_id:        ct.team_id,
+          };
+          if (ct.group_code !== null) row.group_code = ct.group_code;
+
           const { error: ctErr } = await adm(admin).from('competition_teams').upsert(
-            { competition_id: ct.competition_id, team_id: ct.team_id, group_code: ct.group_code },
+            row,
             { onConflict: 'competition_id,team_id', ignoreDuplicates: false }
           );
           if (ctErr) throw new Error(`competition_teams upsert [${ct.team_id}]: ${ctErr.message}`);
