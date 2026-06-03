@@ -84,6 +84,16 @@ export default function CompetitionActions({ competitionId, isActive, currentDay
     );
   }
 
+  function syncSchedule() {
+    call('Sync Schedule', () =>
+      fetch(`/api/admin/competitions/${competitionId}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'schedule' }),
+      }),
+    );
+  }
+
   function simulateDay() {
     call(`Simulate Day ${currentDayIndex}`, () =>
       fetch('/api/admin/simulate-day', {
@@ -138,6 +148,10 @@ export default function CompetitionActions({ competitionId, isActive, currentDay
 
         <button style={btn('#888')} disabled={!!loading} onClick={syncSquads}>
           {isLoading('Sync Squads') ? '⏳ …' : '↻ SYNC SQUADS'}
+        </button>
+
+        <button style={btn('#a855f7')} disabled={!!loading} onClick={syncSchedule}>
+          {isLoading('Sync Schedule') ? '⏳ …' : '↻ SYNC SCHEDULE'}
         </button>
       </div>
 

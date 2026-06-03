@@ -339,6 +339,50 @@ export interface ApiFixtureEvent {
   comments: string | null;
 }
 
+// ── Standings types ───────────────────────────────────────────────────────────
+
+export interface ApiStandingEntry {
+  rank:        number;
+  team:        { id: number; name: string };
+  points:      number;
+  goalsDiff:   number;
+  group:       string;   // "Group A", "Group B", ...
+  all: {
+    played: number; win: number; draw: number; lose: number;
+    goals: { for: number; against: number };
+  };
+}
+
+/**
+ * Fetches standings for a league/season and returns all entries
+ * (flattened across all groups), excluding "Ranking of third-placed" rows.
+ * Cache: 6h (standings update once per day at most during group stage).
+ */
+export async function fetchGroupStandings(
+  leagueId: number,
+  season:   number,
+): Promise<ApiStandingEntry[]> {
+  const cacheKey = `api:standings:${leagueId}:${season}`;
+  return fetchWithCache(cacheKey, 21600, async () => {
+    const res = await apiFetch('/standings', {
+      league: String(leagueId),
+      season: String(season),
+    });
+    if (!res.ok) throw new Error(`Standings API error ${res.status}`);
+    const data = await res.json() as {
+      response?: Array<{ league: { standings: ApiStandingEntry[][] } }>;
+      errors?: unknown;
+    };
+    if (data.errors && typeof data.errors === 'object' && Object.keys(data.errors as object).length > 0) {
+      throw new Error(`Standings API error: ${JSON.stringify(data.errors)}`);
+    }
+    if (!data.response?.[0]?.league?.standings) return [];
+    return data.response[0].league.standings
+      .flat()
+      .filter(e => e.group?.startsWith('Group '));
+  }, Array.isArray);
+}
+
 /**
  * Fetches real goal events for a finished fixture.
  * Used by processRealMatchResult to store real scorers.

@@ -19,9 +19,10 @@
 
 import * as Sentry from '@sentry/nextjs';
 import { createAdminClient }      from '@/lib/supabase/admin';
-import { fetchAllFixtures, fetchTeamStrengths } from '@/lib/football-api';
+import { fetchAllFixtures, fetchTeamStrengths, fetchGroupStandings } from '@/lib/football-api';
 import { normalizeFixture }       from '@/lib/normalizer';
 import type { Competition }       from '@/lib/normalizer';
+import { apiNameToTeamId }        from '@/lib/team-mapping';
 
 export const dynamic     = 'force-dynamic';
 export const maxDuration = 60;
@@ -153,6 +154,28 @@ export async function GET(req: Request) {
         if (matchErr) throw new Error(`upsert_fixture RPC: ${matchErr.message}`);
 
         upserted++;
+      }
+
+      // ── 4b. Sync group_code from standings (API-Football ne remplit pas
+      //        league.group dans les fixtures — on le lit séparément)
+      try {
+        const standings = await fetchGroupStandings(comp.league_id, comp.season);
+        if (standings.length > 0) {
+          for (const entry of standings) {
+            const groupCode = entry.group.replace(/^Group\s+/i, '').trim();
+            const teamId    = apiNameToTeamId(entry.team.name, comp.league_id);
+            if (!teamId) continue;
+            await adm(admin).from('competition_teams')
+              .update({ group_code: groupCode })
+              .eq('competition_id', comp.id)
+              .eq('team_id', teamId);
+          }
+          console.log(`[sync-fixtures] ${comp.name}: group_code synced from standings (${standings.length} entries)`);
+        }
+      } catch (standErr) {
+        // Non-blocking
+        console.warn(`[sync-fixtures] standings sync failed for ${comp.name}:`, standErr);
+        Sentry.captureException(standErr, { tags: { cron: 'sync-fixtures', step: 'standings' } });
       }
 
       // ── 5. Seed strength + initial_price for teams that don't have one yet ──

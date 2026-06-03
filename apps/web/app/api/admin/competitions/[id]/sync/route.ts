@@ -28,13 +28,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   // ── Determine which sync to trigger ──────────────────────────────────────
-  const body = await req.json().catch(() => ({})) as { type?: 'fixtures' | 'results' | 'squads' };
+  const body = await req.json().catch(() => ({})) as { type?: 'fixtures' | 'results' | 'squads' | 'schedule' };
   const type = body.type ?? 'fixtures';
 
   const paths: Record<string, string> = {
     fixtures: '/api/cron/sync-fixtures',
     results:  '/api/cron/sync-results',
     squads:   '/api/cron/sync-squads',
+    schedule: '/api/cron/sync-schedule',
   };
 
   const path = paths[type];
