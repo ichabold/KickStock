@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 export default function NewCompetitionPage() {
   const router = useRouter();
   const [form, setForm] = useState({
-    name: '', season: '', league_id: '', start_date: '', end_date: '',
+    name: '', season: '', league_id: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,11 +24,9 @@ export default function NewCompetitionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:       form.name,
-          season:     parseInt(form.season, 10),
-          league_id:  parseInt(form.league_id, 10),
-          start_date: form.start_date || undefined,
-          end_date:   form.end_date || undefined,
+          name:      form.name,
+          season:    parseInt(form.season, 10),
+          league_id: parseInt(form.league_id, 10),
         }),
       });
       const json = await res.json();
@@ -86,27 +84,6 @@ export default function NewCompetitionPage() {
                 value={form.league_id}
                 onChange={e => set('league_id', e.target.value)}
                 required
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={labelStyle}>DATE DÉBUT</label>
-              <input
-                style={inputStyle}
-                type="date"
-                value={form.start_date}
-                onChange={e => set('start_date', e.target.value)}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>DATE FIN</label>
-              <input
-                style={inputStyle}
-                type="date"
-                value={form.end_date}
-                onChange={e => set('end_date', e.target.value)}
               />
             </div>
           </div>

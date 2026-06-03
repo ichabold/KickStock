@@ -11,7 +11,6 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json() as {
     name: string; season: number; league_id: number;
-    start_date: string; end_date: string;
   };
 
   if (!body.name || !body.season || !body.league_id) {
