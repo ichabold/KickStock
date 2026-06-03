@@ -11,10 +11,9 @@ import TabBar, { type TabId }                    from './TabBar';
 type Team = {
   team_id:       string;
   group_code:    string | null;
-  strength:      number;
   initial_price: number;
   current_price: number;
-  teams: { name: string; flag_emoji: string | null };
+  teams: { name: string; flag_emoji: string | null; strength: number };
 };
 
 type Day = {
@@ -70,7 +69,7 @@ export default async function CompetitionPage({
         .select('current_day_index, current_phase, advancing, champion_id, eliminated')
         .eq('competition_id', id).single(),
       adm.from('competition_teams')
-        .select('team_id, group_code, strength, initial_price, current_price, teams(name, flag_emoji)')
+        .select('team_id, group_code, initial_price, current_price, teams(name, flag_emoji, strength)')
         .eq('competition_id', id)
         .order('group_code').order('team_id'),
       adm.from('matches')
@@ -211,7 +210,7 @@ export default async function CompetitionPage({
                       <div key={t.team_id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                         <span style={{ fontSize: 16 }}>{t.teams?.flag_emoji ?? ''}</span>
                         <span style={{ fontSize: 12, color: '#ccc' }}>{t.teams?.name ?? t.team_id}</span>
-                        <span style={{ fontSize: 10, color: '#444', marginLeft: 'auto' }}>F{t.strength}</span>
+                        <span style={{ fontSize: 10, color: '#444', marginLeft: 'auto' }}>F{t.teams?.strength ?? 0}</span>
                       </div>
                     ))}
                   </div>
@@ -295,7 +294,7 @@ export default async function CompetitionPage({
                       <td style={{ ...td, color: t.group_code ? '#FFDB00' : '#444' }}>
                         {t.group_code ?? '—'}
                       </td>
-                      <td style={{ ...td, textAlign: 'center' }}>{t.strength}</td>
+                      <td style={{ ...td, textAlign: 'center' }}>{t.teams?.strength ?? 0}</td>
                       <td style={{ ...td, textAlign: 'center' }}>{t.initial_price} KC</td>
                       <td style={{ ...td, textAlign: 'center' }}>{t.current_price} KC</td>
                       <td style={{
@@ -308,7 +307,7 @@ export default async function CompetitionPage({
                         <TeamEditor
                           competitionId={id}
                           teamId={t.team_id}
-                          strength={t.strength}
+                          strength={t.teams?.strength ?? 0}
                           groupCode={t.group_code}
                           initialPrice={t.initial_price}
                         />
