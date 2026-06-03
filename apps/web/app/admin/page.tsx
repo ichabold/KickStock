@@ -2,22 +2,24 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import Link from 'next/link';
 
 type Competition = {
-  id: number;
-  name: string;
-  season: number;
-  start_date: string;
-  end_date: string;
-  is_active: boolean;
-  league_id: number;
+  id:           number;
+  name:         string;
+  season:       number;
+  start_date:   string | null;
+  is_active:    boolean;
+  league_id:    number;
+  last_sync_at: string | null;
 };
 
 type GameState = {
-  competition_id: number;
+  competition_id:    number;
   current_day_index: number;
-  current_phase: string;
-  champion_id: string | null;
-  advancing: boolean;
+  current_phase:     string;
+  champion_id:       string | null;
+  advancing:         boolean;
 };
+
+type CountRow = { competition_id: number };
 
 export const dynamic = 'force-dynamic';
 
@@ -25,69 +27,94 @@ export default async function AdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adm = createAdminClient() as any;
 
-  const { data: competitions } = await adm
-    .from('competitions')
-    .select('id, name, season, start_date, end_date, is_active, league_id')
-    .order('season', { ascending: false });
-
-  const { data: gameStates } = await adm
-    .from('competition_game_state')
-    .select('competition_id, current_day_index, current_phase, champion_id, advancing');
+  const [
+    { data: competitions },
+    { data: gameStates },
+    { data: teamCounts },
+    { data: matchCounts },
+    { data: dayCounts },
+  ] = await Promise.all([
+    adm.from('competitions')
+      .select('id, name, season, start_date, is_active, league_id, last_sync_at')
+      .order('id', { ascending: false }),
+    adm.from('competition_game_state')
+      .select('competition_id, current_day_index, current_phase, champion_id, advancing'),
+    adm.from('competition_teams').select('competition_id'),
+    adm.from('matches').select('competition_id'),
+    adm.from('competition_days').select('competition_id'),
+  ]);
 
   const stateMap = Object.fromEntries(
     ((gameStates ?? []) as GameState[]).map(gs => [gs.competition_id, gs]),
   );
+  const teamCount  = (teamCounts  as CountRow[] ?? []).reduce<Record<number,number>>((a, r) => { a[r.competition_id] = (a[r.competition_id] ?? 0) + 1; return a; }, {});
+  const matchCount = (matchCounts as CountRow[] ?? []).reduce<Record<number,number>>((a, r) => { a[r.competition_id] = (a[r.competition_id] ?? 0) + 1; return a; }, {});
+  const dayCount   = (dayCounts   as CountRow[] ?? []).reduce<Record<number,number>>((a, r) => { a[r.competition_id] = (a[r.competition_id] ?? 0) + 1; return a; }, {});
+
+  const cell:  React.CSSProperties = { padding: '10px 10px', fontSize: 12, color: '#ccc', verticalAlign: 'middle' };
+  const hcell: React.CSSProperties = { padding: '8px 10px', fontSize: 10, color: '#555', textAlign: 'left', letterSpacing: 1, borderBottom: '1px solid #222' };
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 }}>
-        <h1 style={{ color: '#FFDB00', margin: 0, fontSize: 20 }}>Compétitions</h1>
+        <h1 style={{ color: '#FFDB00', margin: 0, fontSize: 20, fontFamily: 'monospace' }}>COMPÉTITIONS</h1>
         <Link href="/admin/competitions/new">
           <button style={{
             padding: '7px 14px', background: '#FFDB00', color: '#000',
-            border: 'none', cursor: 'pointer', fontSize: 12, fontFamily: 'monospace', fontWeight: 700,
+            border: 'none', cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', fontWeight: 700,
           }}>
             + NOUVELLE
           </button>
         </Link>
       </div>
 
-      {(!competitions || competitions.length === 0) ? (
-        <div style={{ color: '#555', fontSize: 13 }}>Aucune compétition. Crée-en une.</div>
+      {(!competitions || (competitions as Competition[]).length === 0) ? (
+        <div style={{ color: '#555', fontSize: 13 }}>Aucune compétition.</div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid #333', color: '#888' }}>
-              <th style={{ textAlign: 'left', padding: '8px 12px' }}>Nom</th>
-              <th style={{ textAlign: 'center' }}>Saison</th>
-              <th style={{ textAlign: 'center' }}>League ID</th>
-              <th style={{ textAlign: 'center' }}>Statut</th>
-              <th style={{ textAlign: 'center' }}>Phase</th>
-              <th style={{ textAlign: 'center' }}>Jour</th>
-              <th style={{ textAlign: 'center' }}>Champion</th>
-              <th style={{ textAlign: 'center' }}>Actions</th>
+            <tr>
+              {['ID', 'NOM', 'SAISON', 'LEAGUE', 'STATUT', 'PHASE', 'JOUR', 'ÉQUIPES', 'MATCHES', 'JOURS', 'LAST SYNC', 'CHAMPION', ''].map(h => (
+                <th key={h} style={hcell}>{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {(competitions as Competition[]).map(c => {
-              const gs = stateMap[c.id] as GameState | undefined;
+              const gs  = stateMap[c.id] as GameState | undefined;
+              const sync = c.last_sync_at
+                ? new Date(c.last_sync_at).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                : '—';
               return (
-                <tr key={c.id} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{c.name}</td>
-                  <td style={{ textAlign: 'center', color: '#888' }}>{c.season}</td>
-                  <td style={{ textAlign: 'center', color: '#888' }}>{c.league_id}</td>
-                  <td style={{ textAlign: 'center', color: c.is_active ? '#00FF87' : '#555' }}>
-                    {c.is_active ? '● ACTIVE' : '○ INACTIVE'}
+                <tr key={c.id} style={{ borderBottom: '1px solid #111' }}>
+                  <td style={{ ...cell, color: '#444', fontSize: 11 }}>{c.id}</td>
+                  <td style={{ ...cell, fontWeight: 600, color: '#fff' }}>{c.name}</td>
+                  <td style={{ ...cell, textAlign: 'center' }}>{c.season}</td>
+                  <td style={{ ...cell, textAlign: 'center', color: '#888' }}>{c.league_id}</td>
+                  <td style={{ ...cell, textAlign: 'center' }}>
+                    <span style={{ color: c.is_active ? '#00FF87' : '#444', fontWeight: 700, fontSize: 11 }}>
+                      {c.is_active ? '● ACTIVE' : '○ OFF'}
+                    </span>
                   </td>
-                  <td style={{ textAlign: 'center', color: '#ccc' }}>{gs?.current_phase ?? '—'}</td>
-                  <td style={{ textAlign: 'center', color: '#ccc' }}>{gs?.current_day_index ?? '—'}</td>
-                  <td style={{ textAlign: 'center', color: gs?.champion_id ? '#FFDB00' : '#555' }}>
+                  <td style={{ ...cell, textAlign: 'center', color: '#a855f7' }}>{gs?.current_phase ?? '—'}</td>
+                  <td style={{ ...cell, textAlign: 'center' }}>{gs?.current_day_index ?? '—'}</td>
+                  <td style={{ ...cell, textAlign: 'center', color: (teamCount[c.id] ?? 0) > 0 ? '#00FF87' : '#444' }}>
+                    {teamCount[c.id] ?? 0}
+                  </td>
+                  <td style={{ ...cell, textAlign: 'center', color: (matchCount[c.id] ?? 0) > 0 ? '#00FF87' : '#444' }}>
+                    {matchCount[c.id] ?? 0}
+                  </td>
+                  <td style={{ ...cell, textAlign: 'center', color: (dayCount[c.id] ?? 0) > 0 ? '#00FF87' : '#444' }}>
+                    {dayCount[c.id] ?? 0}
+                  </td>
+                  <td style={{ ...cell, fontSize: 10, color: '#555' }}>{sync}</td>
+                  <td style={{ ...cell, textAlign: 'center', color: gs?.champion_id ? '#FFDB00' : '#333' }}>
                     {gs?.champion_id ?? '—'}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td style={{ ...cell, textAlign: 'center' }}>
                     <Link
                       href={`/admin/competitions/${c.id}`}
-                      style={{ color: '#FFDB00', textDecoration: 'none', fontSize: 12 }}
+                      style={{ color: '#FFDB00', textDecoration: 'none', fontSize: 11, fontFamily: 'monospace' }}
                     >
                       GÉRER →
                     </Link>

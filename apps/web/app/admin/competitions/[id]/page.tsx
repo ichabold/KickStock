@@ -1,6 +1,7 @@
 import { createAdminClient }                    from '@/lib/supabase/admin';
 import { notFound }                              from 'next/navigation';
 import CompetitionActions                        from './CompetitionActions';
+import CompetitionEditor                         from './CompetitionEditor';
 import TeamEditor                                from './TeamEditor';
 import { DayDeleteButton, DayAddForm }           from './DayManager';
 import MatchEditor                               from './MatchEditor';
@@ -159,6 +160,14 @@ export default async function CompetitionPage({
               competitionId={id}
               isActive={comp.is_active}
               currentDayIndex={gs?.current_day_index ?? 0}
+            />
+            <CompetitionEditor
+              competitionId={id}
+              name={comp.name}
+              season={comp.season}
+              leagueId={comp.league_id}
+              startDate={comp.start_date ?? null}
+              isActive={comp.is_active}
             />
           </div>
 
