@@ -166,7 +166,7 @@ Ce fichier contient dans l'ordre :
 | `matches` | Matchs (`fixture_id`, `nation_a`, `nation_b`, `scheduled_at`, `api_status`, `processed_at`, `trade_lock_until`, `result_data` JSONB) |
 | `competition_game_state` | État global par compétition (pools KO, `eliminated[]`, `champion_id`, `advancing` — verrou CAS) |
 | `competition_prices` | Historique des prix indexé par `day_index` |
-| `portfolios` | Portefeuille joueur (`cash`, `avg_cost` JSONB, `tx_log` JSONB, `best_score`) |
+| `portfolios` | Portefeuille joueur (`cash`, `avg_cost` JSONB, `tx_log` JSONB, `best_score`, `guest_username`) |
 | `holdings` | Positions joueur par équipe et compétition (`quantity`) |
 | `transactions` | Audit log immuable des trades |
 
@@ -181,6 +181,23 @@ CREATE INDEX idx_holdings_portfolio_id      ON holdings(portfolio_id);
 CREATE INDEX idx_transactions_portfolio_id  ON transactions(portfolio_id);
 CREATE INDEX idx_comp_prices_competition_id ON competition_prices(competition_id);
 ```
+
+### Colonne `guest_username` dans `portfolios`
+
+| Colonne | Type | Contrainte | Description |
+|---------|------|-----------|-------------|
+| `guest_username` | `TEXT` | `UNIQUE`, nullable | Pseudo public choisi par un joueur guest. `NULL` si aucun pseudo n'a été renseigné. |
+
+**Unicité globale des pseudos — règle métier fondamentale :**
+
+Un pseudo doit être unique sur l'ensemble de la plateforme, qu'il soit détenu par un guest ou par un compte enregistré. Cette unicité est garantie à deux niveaux :
+
+1. **Contrainte DB** : `UNIQUE` sur `portfolios.guest_username` d'une part, `UNIQUE` sur `profiles.username` d'autre part.
+2. **Vérification applicative** : avant tout enregistrement d'un pseudo (guest ou compte), l'API vérifie simultanément les deux tables via `GET /api/auth/check-pseudo` (voir [5.8](#58-endpoints-auxiliaires)). Cette vérification est faite dans une transaction pour éviter les race conditions.
+
+> **Pas de contrainte cross-table en DB :** PostgreSQL ne supporte pas nativement une contrainte UNIQUE qui s'étend sur deux tables distinctes. La cohérence est assurée côté applicatif dans `check-pseudo` + verrou optimiste à l'écriture. En cas de collision race condition (deux requêtes simultanées), la deuxième écriture retourne `USERNAME_TAKEN`.
+
+---
 
 ### RPCs `SECURITY DEFINER`
 
@@ -315,19 +332,61 @@ Toute modification de `game_config` via l'admin panel doit être validée côté
 
 ---
 
-## 5. Authentification anonyme
+## 5. Authentification & Gestion des identités
 
-### Principe
+### Vue d'ensemble — trois modes d'identité coexistants
 
-L'authentification repose sur **Supabase Auth** en mode anonyme. Le frontend n'a pas à gérer de token manuellement : le serveur crée la session, pose un cookie `HttpOnly`, et le navigateur l'envoie automatiquement à chaque requête (`credentials: 'include'`).
+| Mode | Identifiant | Cookie session | Compte permanent |
+|------|-------------|----------------|-----------------|
+| **Guest** | `X-Device-ID` (UUID v4, localStorage) | Non | Non |
+| **Email / Mot de passe** | `auth.users` Supabase | Oui (`HttpOnly`) | Oui |
+| **Google OAuth** | `auth.users` Supabase | Oui (`HttpOnly`) | Oui |
 
-### Endpoint `POST /api/auth/session`
+Les trois modes coexistent sans friction. Un joueur commence toujours en mode guest et peut à tout moment se créer un compte permanent pour conserver son portfolio sur n'importe quel device.
+
+---
+
+### 5.1 Table `profiles` — extension de `auth.users`
+
+La table `profiles` est créée dans `schema.sql`. Elle est liée à `auth.users` par une clé étrangère sur `id`.
+
+**Colonnes :**
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | `UUID` (PK, FK → `auth.users.id`) | Même identifiant que l'utilisateur Supabase Auth |
+| `username` | `TEXT UNIQUE` | Pseudo public choisi par le joueur |
+| `country` | `TEXT` | Pays (optionnel, renseigné par le joueur) |
+| `is_admin` | `BOOLEAN DEFAULT FALSE` | Rôle administrateur |
+| `banned` | `BOOLEAN DEFAULT FALSE` | Joueur banni — bloqué sur tous les endpoints sensibles |
+| `is_auto` | `BOOLEAN DEFAULT TRUE` | `TRUE` si le pseudo a été généré automatiquement (non choisi) |
+| `created_at` | `TIMESTAMPTZ DEFAULT NOW()` | Date de création du profil |
+
+**Trigger de création automatique :**
+
+À chaque insertion dans `auth.users` (inscription email ou OAuth), un trigger PostgreSQL crée automatiquement la ligne correspondante dans `profiles` avec un pseudo généré (`player_XXXXX`). Le joueur peut ensuite personnaliser son pseudo via `POST /api/auth/set-username`.
+
+```
+Trigger : on INSERT on auth.users
+→ INSERT INTO profiles (id, username, is_auto)
+  VALUES (NEW.id, 'player_' || substr(NEW.id::text, 1, 5), TRUE)
+```
+
+Ce trigger est défini dans `schema.sql` et ne nécessite aucun code applicatif.
+
+---
+
+### 5.2 Endpoint `POST /api/auth/session` — création session guest
+
+**Auth :** Aucune.
 
 **Fonctionnement :**
 1. Appeler `supabase.auth.signInAnonymously()`
 2. Récupérer `access_token` et `refresh_token`
 3. Poser un cookie `HttpOnly` nommé `session` contenant le refresh token
-4. Répondre `{ "authenticated": true }`
+4. Répondre `{ "authenticated": true, "mode": "guest" }`
+
+**Comportement si aucun cookie et aucun `X-Device-ID` :** le portfolio est créé par le RPC `get_or_create_competition_portfolio` en utilisant uniquement le `device_id` passé dans le header. Aucune session Supabase n'est obligatoire pour jouer.
 
 **En cas d'échec :**
 ```json
@@ -335,24 +394,284 @@ L'authentification repose sur **Supabase Auth** en mode anonyme. Le frontend n'a
 ```
 Statut HTTP `503`.
 
-### Middleware d'authentification (Next.js)
+---
 
-Voir [Point 13](#13-middleware-nextjs) pour l'implémentation complète.
+### 5.2b Endpoint `POST /api/auth/guest` — création / mise à jour du pseudo guest
 
-**Routes protégées (session obligatoire) :**
+**Auth :** Aucune (`X-Device-ID` requis dans le header).
+
+**Rôle :** Permet à un joueur guest de se choisir un pseudo public, afin d'apparaître au leaderboard sous un nom lisible plutôt qu'un UUID. Peut aussi être appelé en mise à jour si le guest souhaite changer son pseudo (tant qu'il n'a pas de compte permanent).
+
+**Body :**
+```json
+{
+  "username": "MonPseudo"
+}
+```
+`username` est **optionnel** — si absent ou vide, la requête crée simplement un portfolio sans pseudo (comportement identique à l'ancien `POST /api/auth/session`).
+
+**Fonctionnement :**
+1. Extraire `device_id` depuis le header `X-Device-ID` — `400` si absent
+2. Valider `username` : 3–20 caractères, alphanumérique + tirets/underscores, pas de caractères spéciaux
+3. Si `username` fourni → vérifier la disponibilité **dans les deux tables** :
+   - `SELECT 1 FROM portfolios WHERE guest_username = $username`
+   - `SELECT 1 FROM profiles WHERE username = $username`
+   - Si l'un ou l'autre retourne une ligne → `422 USERNAME_TAKEN`
+4. Chercher ou créer le portfolio lié à ce `device_id` via `get_or_create_competition_portfolio`
+5. Si `username` fourni → `UPDATE portfolios SET guest_username = $username WHERE device_id = $device_id`
+6. Répondre :
+
+```json
+{
+  "ok": true,
+  "device_id": "uuid-v4",
+  "guest_username": "MonPseudo"
+}
+```
+
+Si aucun `username` fourni :
+```json
+{
+  "ok": true,
+  "device_id": "uuid-v4",
+  "guest_username": null
+}
+```
+
+**Codes d'erreur :**
+
+| Code | HTTP | Signification |
+|------|------|---------------|
+| `MISSING_DEVICE_ID` | 400 | Header `X-Device-ID` absent |
+| `USERNAME_TAKEN` | 422 | Pseudo déjà pris (guest ou compte) |
+| `INVALID_USERNAME` | 422 | Format invalide (longueur, caractères) |
+
+---
+
+### 5.3 Endpoint `POST /api/auth/register` — inscription email / mot de passe
+
+**Auth :** Aucune.
+
+**Body :**
+```json
+{
+  "email": "joueur@example.com",
+  "password": "motdepasse",
+  "username": "MonPseudo",
+  "device_id": "uuid-v4-du-device"
+}
+```
+
+**Fonctionnement :**
+1. Valider `email`, `password` (min 8 caractères), `username` (unique, 3–20 caractères, alphanumérique)
+2. Vérifier la disponibilité du `username` via `GET /api/auth/check-pseudo`
+3. Appeler `supabase.auth.signUp({ email, password })`
+4. Le trigger crée automatiquement la ligne dans `profiles` avec un pseudo auto
+5. Mettre à jour `profiles.username = username` et `profiles.is_auto = FALSE`
+6. Si `device_id` fourni → proposer la migration guest (voir [5.6](#56-fusion-guest--compte-migration-du-portfolio))
+7. Poser le cookie `HttpOnly` de session
+8. Répondre `{ "ok": true, "userId": "...", "username": "..." }`
+
+**Codes d'erreur (`422`) :**
+
+| Code | Signification |
+|------|---------------|
+| `EMAIL_TAKEN` | Email déjà utilisé |
+| `USERNAME_TAKEN` | Pseudo déjà pris |
+| `INVALID_EMAIL` | Format email invalide |
+| `WEAK_PASSWORD` | Mot de passe trop court ou trop simple |
+| `INVALID_USERNAME` | Pseudo trop court, trop long ou caractères interdits |
+
+---
+
+### 5.4 Endpoint `POST /api/auth/login` — connexion email / mot de passe
+
+**Auth :** Aucune.
+
+**Body :**
+```json
+{
+  "email": "joueur@example.com",
+  "password": "motdepasse",
+  "device_id": "uuid-v4-du-device"
+}
+```
+
+**Fonctionnement :**
+1. Appeler `supabase.auth.signInWithPassword({ email, password })`
+2. Si erreur Supabase → retourner `401` avec message générique (ne pas préciser si c'est l'email ou le mot de passe qui est incorrect)
+3. Vérifier que `profiles.banned !== true` — si banni → répondre `403 BANNED`
+4. Si `device_id` fourni → proposer la migration guest (voir [5.6](#56-fusion-guest--compte-migration-du-portfolio))
+5. Poser le cookie `HttpOnly` de session
+6. Répondre `{ "ok": true, "userId": "...", "username": "..." }`
+
+**Codes d'erreur :**
+
+| Code | HTTP | Signification |
+|------|------|---------------|
+| `INVALID_CREDENTIALS` | 401 | Email ou mot de passe incorrect |
+| `BANNED` | 403 | Compte banni |
+| `INTERNAL_ERROR` | 500 | Erreur serveur |
+
+---
+
+### 5.5 OAuth Google — `GET /api/auth/google` + `GET /api/auth/callback/google`
+
+#### `GET /api/auth/google` — initiation du flux OAuth
+
+**Auth :** Aucune.
+
+**Query params :** `?device_id=uuid-v4` (optionnel — pour la migration guest après connexion)
+
+**Fonctionnement :**
+1. Appeler `supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: '/api/auth/callback/google' } })`
+2. Stocker le `device_id` dans un cookie temporaire `pending_device_id` (HttpOnly, TTL 5 minutes) pour le récupérer au callback
+3. Retourner une redirection `302` vers l'URL OAuth Google fournie par Supabase
+
+#### `GET /api/auth/callback/google` — traitement du retour OAuth
+
+**Auth :** Aucune (appelé par Google après consentement utilisateur).
+
+**Query params :** `code` et `state` fournis par Google via Supabase.
+
+**Fonctionnement :**
+1. Appeler `supabase.auth.exchangeCodeForSession(code)`
+2. Récupérer le profil Google (email, nom, photo) depuis les métadonnées Supabase Auth
+3. Si c'est la première connexion Google (profil `is_auto = TRUE`) → mettre à jour `profiles.username` depuis le nom Google (si disponible et unique)
+4. Vérifier que `profiles.banned !== true` — si banni → rediriger vers `/banned`
+5. Lire le cookie `pending_device_id` → si présent → déclencher la migration guest (voir [5.6](#56-fusion-guest--compte-migration-du-portfolio)), supprimer le cookie temporaire
+6. Poser le cookie `HttpOnly` de session
+7. Rediriger vers `/` (page d'accueil du jeu)
+
+**En cas d'erreur OAuth :** rediriger vers `/?auth_error=true`.
+
+---
+
+### 5.6 Fusion guest → compte (migration du portfolio)
+
+Quand un joueur guest se connecte ou s'inscrit pour la première fois avec un `device_id` actif, son portfolio guest peut être migré vers son compte permanent.
+
+**Déclencheur :** présence d'un `device_id` dans le body (login/register) ou dans le cookie `pending_device_id` (OAuth callback).
+
+**Logique de migration :**
+
+```
+1. Chercher les portfolios liés au device_id :
+   SELECT id, guest_username FROM portfolios
+   WHERE device_id = $device_id AND user_id IS NULL
+
+2. Si portfolios trouvés :
+   a. Récupérer le guest_username éventuel (premier portfolio non NULL)
+   b. Mettre à jour : SET user_id = $userId, device_id = NULL, guest_username = NULL
+
+3. Si le user possédait déjà des portfolios (reconnexion) :
+   → Ne pas écraser — conserver le portfolio existant
+   → Signaler au frontend qu'une fusion était disponible mais skippée
+
+4. Répondre avec un champ "portfoliosMigrated: number" dans la réponse d'auth
+```
+
+**Migration du pseudo guest vers `profiles.username` :**
+
+Lors de la migration des portfolios, si le guest avait un `guest_username` renseigné, ce pseudo doit être proposé ou automatiquement migré vers `profiles.username` selon les règles suivantes :
+
+| Situation | Action |
+|-----------|--------|
+| `profiles.is_auto = TRUE` (pseudo auto, non choisi) ET `guest_username` disponible dans `profiles` | Écraser automatiquement : `UPDATE profiles SET username = $guest_username, is_auto = FALSE` |
+| `profiles.is_auto = TRUE` ET `guest_username` déjà pris dans `profiles` (collision) | Conserver le pseudo auto, retourner `guestUsernameConflict: true` — le frontend propose au joueur de choisir un nouveau pseudo |
+| `profiles.is_auto = FALSE` (l'utilisateur avait choisi un pseudo à l'inscription) | Ne pas écraser — retourner `guestUsername` dans la réponse pour info |
+
+**Règle de conflit sur les portfolios :** si l'utilisateur a un portfolio existant (user_id déjà renseigné) ET un portfolio guest actif sur le même `competition_id`, la migration est skippée pour cette compétition et le frontend est informé. Pas de fusion automatique de portefeuilles — cela évite tout risque de corruption financière.
+
+**Réponse enrichie après migration :**
+```json
+{
+  "ok": true,
+  "userId": "...",
+  "username": "MonPseudo",
+  "portfoliosMigrated": 2,
+  "portfoliosSkipped": 0,
+  "guestUsername": "MonPseudo",
+  "guestUsernameConflict": false
+}
+```
+
+---
+
+### 5.7 Endpoint `POST /api/auth/logout` — déconnexion
+
+**Auth :** Oui (cookie session obligatoire).
+
+**Fonctionnement :**
+1. Appeler `supabase.auth.signOut()`
+2. Supprimer le cookie `session` (le poser avec `maxAge: 0`)
+3. Répondre `{ "ok": true }`
+
+Le `device_id` côté client n'est **pas effacé** par le logout — il reste en localStorage. Si le joueur rejoue en mode guest après déconnexion, son portfolio guest (s'il existe encore) sera accessible via son `device_id`.
+
+---
+
+### 5.8 Endpoints auxiliaires
+
+#### `GET /api/auth/check-email`
+
+Vérifie si un email est déjà enregistré (utilisé pendant la saisie du formulaire d'inscription).
+
+**Query :** `?email=joueur@example.com`
+**Réponse :** `{ "available": true }` ou `{ "available": false }`
+
+#### `GET /api/auth/check-pseudo`
+
+Vérifie si un pseudo est disponible **sur l'ensemble de la plateforme** — guests et comptes enregistrés confondus.
+
+**Query :** `?username=MonPseudo`
+
+**Logique :** interroge simultanément `portfolios.guest_username` ET `profiles.username` :
+```
+taken = EXISTS(SELECT 1 FROM portfolios WHERE guest_username = $username)
+     OR EXISTS(SELECT 1 FROM profiles  WHERE username        = $username)
+```
+
+**Réponse :** `{ "available": true }` ou `{ "available": false }`
+
+#### `POST /api/auth/set-username`
+
+Permet à un joueur connecté de choisir ou modifier son pseudo (uniquement si `profiles.is_auto = TRUE` ou changement volontaire).
+
+**Auth :** Oui (cookie session).
+**Body :** `{ "username": "NouveauPseudo" }`
+**Réponse :** `{ "ok": true, "username": "NouveauPseudo" }`
+
+---
+
+### 5.9 Protection des routes — règles de routage (voir Point 13 pour l'implémentation)
+
+**Routes protégées — session cookie OU `X-Device-ID` acceptés :**
 - `POST /api/trade`
 - `GET /api/game/state`
 - `POST /api/game/advance`
 
-**Routes publiques (aucune session requise) :**
+**Routes protégées — session cookie uniquement (compte permanent requis) :**
+- `POST /api/auth/logout`
+- `POST /api/auth/set-username`
+
+**Routes publiques (aucune auth requise) :**
 - `GET /api/health`
 - `GET /api/competition/bootstrap`
 - `GET /api/competition/list`
 - `GET /api/matches`
 - `GET /api/market`
 - `GET /api/game/live-matches`
+- `POST /api/auth/session`
+- `POST /api/auth/guest`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/google`
+- `GET /api/auth/callback/google`
+- `GET /api/auth/check-email`
+- `GET /api/auth/check-pseudo`
 
-**Routes cron (protégées par `CRON_SECRET`, pas par session) :**
+**Routes cron (protégées par `CRON_SECRET` uniquement) :**
 - `GET /api/cron/sync-fixtures`
 - `GET /api/cron/sync-results`
 
@@ -365,15 +684,24 @@ Voir [Point 13](#13-middleware-nextjs) pour l'implémentation complète.
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
 | `GET` | `/api/health` | Non | Sanity check du serveur |
-| `POST` | `/api/auth/session` | Non | Création session anonyme Supabase |
+| `POST` | `/api/auth/session` | Non | Création session guest anonyme Supabase |
+| `POST` | `/api/auth/guest` | X-Device-ID | Choix / mise à jour du pseudo guest |
+| `POST` | `/api/auth/register` | Non | Inscription email / mot de passe |
+| `POST` | `/api/auth/login` | Non | Connexion email / mot de passe |
+| `GET` | `/api/auth/google` | Non | Initiation flux OAuth Google |
+| `GET` | `/api/auth/callback/google` | Non | Callback OAuth Google + pose du cookie session |
+| `POST` | `/api/auth/logout` | Cookie session | Déconnexion + suppression du cookie |
+| `GET` | `/api/auth/check-email` | Non | Vérifie disponibilité d'un email |
+| `GET` | `/api/auth/check-pseudo` | Non | Vérifie disponibilité d'un pseudo |
+| `POST` | `/api/auth/set-username` | Cookie session | Choix / modification du pseudo |
 | `GET` | `/api/competition/bootstrap` | Non | Données offline (équipes, calendrier, fixtures) |
 | `GET` | `/api/competition/list` | Non | Liste des compétitions disponibles |
-| `GET` | `/api/game/state` | Oui | État complet du jeu + portefeuille joueur |
-| `POST` | `/api/game/advance` | Oui | Simule la journée suivante |
+| `GET` | `/api/game/state` | Cookie ou X-Device-ID | État complet du jeu + portefeuille joueur |
+| `POST` | `/api/game/advance` | Cookie ou X-Device-ID | Simule la journée suivante |
 | `GET` | `/api/game/live-matches` | Non | Matchs du jour avec statuts live |
 | `GET` | `/api/matches` | Non | Matchs d'un `day_index` spécifique |
 | `GET` | `/api/market` | Non | Données marché enrichies |
-| `POST` | `/api/trade` | Oui | Exécute un achat ou une vente |
+| `POST` | `/api/trade` | Cookie ou X-Device-ID | Exécute un achat ou une vente |
 | `GET` | `/api/cron/sync-fixtures` | CRON_SECRET | Synchronise le calendrier depuis API-Football |
 | `GET` | `/api/cron/sync-results` | CRON_SECRET | Traite les résultats réels terminés |
 
@@ -785,8 +1113,115 @@ si count > 10  → retourner 429
 
 **Auth :** Aucune.
 
-**Réponse succès :** `{ "authenticated": true }` + cookie `session` HttpOnly.
+**Réponse succès :** `{ "authenticated": true, "mode": "guest" }` + cookie `session` HttpOnly.
 **Réponse échec :** `{ "error": "Supabase unavailable" }` — statut `503`.
+
+---
+
+### `POST /api/auth/guest`
+
+**Auth :** `X-Device-ID` header requis.
+
+**Body :** `{ "username": "MonPseudo" }` (optionnel)
+
+**Réponse succès (avec pseudo) :**
+```json
+{ "ok": true, "device_id": "uuid-v4", "guest_username": "MonPseudo" }
+```
+
+**Réponse succès (sans pseudo) :**
+```json
+{ "ok": true, "device_id": "uuid-v4", "guest_username": null }
+```
+
+**Codes d'erreur :** `MISSING_DEVICE_ID` (400), `USERNAME_TAKEN` (422), `INVALID_USERNAME` (422).
+
+---
+
+### `POST /api/auth/register`
+
+**Auth :** Aucune.
+
+**Body :** `{ "email": "...", "password": "...", "username": "...", "device_id": "uuid" }`
+
+**Réponse succès :**
+```json
+{ "ok": true, "userId": "...", "username": "...", "portfoliosMigrated": 1, "portfoliosSkipped": 0 }
+```
+Cookie `session` HttpOnly posé sur la réponse.
+
+**Codes d'erreur (`422`) :** `EMAIL_TAKEN`, `USERNAME_TAKEN`, `INVALID_EMAIL`, `WEAK_PASSWORD`, `INVALID_USERNAME`.
+
+---
+
+### `POST /api/auth/login`
+
+**Auth :** Aucune.
+
+**Body :** `{ "email": "...", "password": "...", "device_id": "uuid" }`
+
+**Réponse succès :**
+```json
+{ "ok": true, "userId": "...", "username": "...", "portfoliosMigrated": 0, "portfoliosSkipped": 0 }
+```
+Cookie `session` HttpOnly posé sur la réponse.
+
+**Codes d'erreur :** `INVALID_CREDENTIALS` (401), `BANNED` (403).
+
+---
+
+### `GET /api/auth/google`
+
+**Auth :** Aucune.
+
+**Query :** `?device_id=uuid` (optionnel).
+
+**Comportement :** stocke `device_id` dans un cookie temporaire `pending_device_id` (HttpOnly, TTL 5 min), retourne une redirection `302` vers l'URL OAuth Google générée par Supabase.
+
+---
+
+### `GET /api/auth/callback/google`
+
+**Auth :** Aucune (appelé par Google).
+
+**Comportement :** échange le `code` contre une session, crée le profil si première connexion, exécute la migration guest si `pending_device_id` présent, pose le cookie `session`, redirige vers `/`.
+
+**Erreur :** redirection vers `/?auth_error=true`.
+
+---
+
+### `POST /api/auth/logout`
+
+**Auth :** Cookie session obligatoire.
+
+**Comportement :** `supabase.auth.signOut()` + suppression du cookie `session` (`maxAge: 0`). Le `device_id` localStorage côté client n'est pas affecté.
+
+**Réponse :** `{ "ok": true }`
+
+---
+
+### `GET /api/auth/check-email`
+
+**Auth :** Aucune.
+**Query :** `?email=joueur@example.com`
+**Réponse :** `{ "available": true }` ou `{ "available": false }`
+
+---
+
+### `GET /api/auth/check-pseudo`
+
+**Auth :** Aucune.
+**Query :** `?username=MonPseudo`
+**Réponse :** `{ "available": true }` ou `{ "available": false }`
+
+---
+
+### `POST /api/auth/set-username`
+
+**Auth :** Cookie session.
+**Body :** `{ "username": "NouveauPseudo" }`
+**Réponse succès :** `{ "ok": true, "username": "NouveauPseudo" }`
+**Codes d'erreur :** `USERNAME_TAKEN`, `INVALID_USERNAME`.
 
 ---
 
@@ -849,10 +1284,11 @@ si count > 10  → retourner 429
   "priceHistory": { "BRA": [200, 212.5], "FRA": [200, 200] },
   "matchResults": { "0": [...] },
   "cash": 9800,
-  "portfolio":  { "BRA": 2 },
-  "avgCost":    { "BRA": 200 },
-  "txLog": [{ "dir": "buy", "flag": "🇧🇷", "name": "Brazil", "qty": 2, "price": 200, "day": 0 }],
-  "bestScore": 10050
+  "portfolio":    { "BRA": 2 },
+  "avgCost":      { "BRA": 200 },
+  "txLog":        [{ "dir": "buy", "flag": "🇧🇷", "name": "Brazil", "qty": 2, "price": 200, "day": 0 }],
+  "bestScore":    10050,
+  "guestUsername": "MonPseudo"
 }
 ```
 
@@ -979,18 +1415,58 @@ Cache-Control: private, no-cache
 
 Fichier : `middleware.ts` à la racine.
 
-**Routes couvertes :**
-```typescript
-export const config = {
-  matcher: ['/api/trade', '/api/game/state', '/api/game/advance'],
-};
+### Deux niveaux de protection
+
+Le middleware couvre deux catégories de routes avec des règles différentes.
+
+#### Catégorie A — Cookie session OU `X-Device-ID` acceptés
+
+Ce sont les routes de jeu : un joueur guest (device_id uniquement) et un joueur connecté (cookie session) doivent tous deux y accéder sans friction.
+
+```
+Matcher : ['/api/trade', '/api/game/state', '/api/game/advance']
 ```
 
 **Logique :**
-1. Créer un client Supabase SSR (lit les cookies)
-2. `supabase.auth.getSession()`
-3. Pas de session → `401 Unauthorized`
-4. Session valide → `NextResponse.next()`
+1. Lire le header `X-Device-ID`
+2. Tenter `supabase.auth.getSession()` depuis les cookies
+3. Si **au moins un** des deux est présent et valide → `NextResponse.next()`
+4. Si les deux sont absents ou invalides → `401 Unauthorized`
+
+**Résolution de l'identité dans les handlers :**
+- Si cookie session valide → `userId` = `user.id` de la session Supabase
+- Si uniquement `X-Device-ID` → `userId = null`, `deviceId` = valeur du header
+- Le RPC `get_or_create_competition_portfolio` accepte les deux paramètres (`p_user_id` et `p_device_id`) — il résout le bon portfolio de façon transparente
+
+#### Catégorie B — Cookie session uniquement (compte permanent requis)
+
+Ce sont les routes qui nécessitent une identité persistante sur le serveur.
+
+```
+Matcher : ['/api/auth/logout', '/api/auth/set-username']
+```
+
+**Logique :**
+1. `supabase.auth.getSession()` depuis les cookies
+2. Pas de session valide → `401 Unauthorized`
+3. Session valide → vérifier `profiles.banned !== true` → si banni → `403 FORBIDDEN`
+4. `NextResponse.next()`
+
+### Vérification du bannissement
+
+Pour les routes de catégorie B, après validation de la session, le middleware interroge `profiles` :
+
+```sql
+SELECT banned FROM profiles WHERE id = $userId
+```
+
+Si `banned = TRUE` → `403 FORBIDDEN` avec `{ "code": "BANNED", "error": "Compte suspendu" }`.
+
+> **Note :** la vérification du bannissement n'est pas faite sur les routes de catégorie A (jeu) pour éviter une requête DB supplémentaire sur chaque trade ou fetchState. Le bannissement sur ces routes est enforced dans les RPCs Supabase (`execute_competition_trade` vérifie le statut banni avant d'exécuter le trade).
+
+### Routes non couvertes par le middleware (gestion dans les handlers)
+
+Les routes cron vérifient elles-mêmes `CRON_SECRET` en première ligne de leur handler — le middleware ne les couvre pas.
 
 ---
 
