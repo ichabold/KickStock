@@ -20,23 +20,33 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adm = createAdminClient() as any;
 
+  // Upsert: si (league_id, season) existe déjà, on retourne l'ID existant
+  // et on met à jour le nom — ça permet de "reprendre" une compétition
+  // sans planter sur la contrainte UNIQUE.
   const { data: comp, error } = await adm
     .from('competitions')
-    .insert({ ...body, is_active: false })
+    .upsert(
+      { ...body, is_active: false },
+      { onConflict: 'league_id,season', ignoreDuplicates: false },
+    )
     .select('id')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await adm.from('competition_game_state').insert({
-    competition_id:    comp.id,
-    current_day_index: 0,
-    current_phase:     'Groups',
-    advancing:         false,
-    eliminated:        [],
-    r32_pool: [], r16_pool: [], qf_pool: [],
-    sf_pool: [], final_pool: [], third_pool: [],
-  });
+  // Initialise le game state si absent (ON CONFLICT DO NOTHING)
+  await adm.from('competition_game_state').upsert(
+    {
+      competition_id:    comp.id,
+      current_day_index: 0,
+      current_phase:     'Groups',
+      advancing:         false,
+      eliminated:        [],
+      r32_pool: [], r16_pool: [], qf_pool: [],
+      sf_pool: [], final_pool: [], third_pool: [],
+    },
+    { onConflict: 'competition_id', ignoreDuplicates: true },
+  );
 
   return NextResponse.json({ ok: true, id: comp.id });
 }
