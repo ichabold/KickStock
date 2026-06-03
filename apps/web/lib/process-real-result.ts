@@ -8,10 +8,12 @@
  *   - Sets processed_at + trade_lock_until
  */
 
-import { applyResult }       from '@kickstock/game-engine';
-import { createAdminClient } from '@/lib/supabase/admin';
-import * as Sentry            from '@sentry/nextjs';
-import type { ApiFixture }    from './football-api';
+import { applyResult }                     from '@kickstock/game-engine';
+import { createAdminClient }               from '@/lib/supabase/admin';
+import * as Sentry                          from '@sentry/nextjs';
+import { fetchFixtureEvents }              from './football-api';
+import type { ApiFixture }                 from './football-api';
+import type { Goal }                       from '@kickstock/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adm = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
@@ -25,6 +27,12 @@ interface MatchRow {
   phase:          string;
   day_index:      number;
   processed_at:   string | null;
+}
+
+interface TeamRow {
+  id:          string;
+  strength:    number;
+  api_team_id: number | null;
 }
 
 interface DayRow {
@@ -79,15 +87,19 @@ export async function processRealMatchResult(
   // ── 2. Idempotence guard ──────────────────────────────────────────────────
   if (match.processed_at !== null) return false;
 
-  // ── 3. Load team strengths (from teams table) ─────────────────────────────
+  // ── 3. Load team strengths + api_team_id (needed for real event fetching) ──
   const { data: teamsRaw } = await adm(admin)
     .from('teams')
-    .select('id, strength')
+    .select('id, strength, api_team_id')
     .in('id', [match.nation_a, match.nation_b]);
 
-  const teamList = (teamsRaw ?? []) as Array<{ id: string; strength: number }>;
-  const strA = teamList.find(t => t.id === match.nation_a)?.strength ?? 75;
-  const strB = teamList.find(t => t.id === match.nation_b)?.strength ?? 75;
+  const teamList = (teamsRaw ?? []) as TeamRow[];
+  const teamA    = teamList.find(t => t.id === match.nation_a);
+  const teamB    = teamList.find(t => t.id === match.nation_b);
+  const strA     = teamA?.strength ?? 75;
+  const strB     = teamB?.strength ?? 75;
+  const apiIdA   = teamA?.api_team_id ?? null;
+  const apiIdB   = teamB?.api_team_id ?? null;
 
   // ── 4. Determine result ───────────────────────────────────────────────────
   const res      = determineResult(fixture);
@@ -132,7 +144,18 @@ export async function processRealMatchResult(
     }
   }
 
-  // ── 9. Dividends ──────────────────────────────────────────────────────────
+  // ── 9. Fetch real goal events from API ───────────────────────────────────
+  const events  = await fetchFixtureEvents(fixtureId);
+  const goals: Goal[] = events
+    .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty')
+    .map(e => ({
+      min:  e.time.elapsed + (e.time.extra ?? 0),
+      team: (apiIdA !== null && e.team.id === apiIdA) ? 'A' as const : 'B' as const,
+      name: e.player.name ?? 'Unknown',
+    }))
+    .sort((a, b) => a.min - b.min);
+
+  // ── 10. Dividends ─────────────────────────────────────────────────────────
   const { data: dayRaw } = await adm(admin)
     .from('competition_days')
     .select('div_key, is_ko')
@@ -141,25 +164,66 @@ export async function processRealMatchResult(
     .maybeSingle();
 
   const day = dayRaw as DayRow | null;
+  const { DIV_RATES } = await import('@kickstock/constants');
 
-  if (day?.div_key && winnerId) {
-    const { DIV_RATES } = await import('@kickstock/constants');
+  if (day?.div_key) {
     const rate = DIV_RATES[day.div_key] ?? 0;
-    if (rate > 0) {
+
+    // Gagnant (tous rounds KO)
+    if (winnerId && rate > 0) {
       await adm(admin).rpc('distribute_competition_dividends', {
         p_competition_id: match.competition_id,
         p_team_id:        winnerId,
         p_round:          day.div_key,
         p_rate:           rate,
-        p_price:          newPA, // winner's new price
+        p_price:          newPA,
+        p_day_index:      match.day_index,
+      });
+    }
+
+    // [G2 FIX] Perdant de la finale → reçoit aussi le taux du round Final (40%)
+    if (match.phase === 'Final' && loserId && rate > 0) {
+      await adm(admin).rpc('distribute_competition_dividends', {
+        p_competition_id: match.competition_id,
+        p_team_id:        loserId,
+        p_round:          day.div_key,
+        p_rate:           rate,
+        p_price:          newPB,
         p_day_index:      match.day_index,
       });
     }
   }
 
-  // ── 10. Mark match as processed ───────────────────────────────────────────
-  const now        = new Date();
+  // [G1 FIX] Champion → dividende bonus 60% en plus du dividende Final
+  if (match.phase === 'Final' && winnerId) {
+    const champRate = DIV_RATES['champion'] ?? 0.60;
+    if (champRate > 0) {
+      await adm(admin).rpc('distribute_competition_dividends', {
+        p_competition_id: match.competition_id,
+        p_team_id:        winnerId,
+        p_round:          'champion',
+        p_rate:           champRate,
+        p_price:          newPA,
+        p_day_index:      match.day_index,
+      });
+    }
+  }
+
+  // ── 11. Mark match as processed ───────────────────────────────────────────
+  const now         = new Date();
   const tradeUnlock = new Date(+now + 15 * 60_000).toISOString();
+
+  // [G6 FIX] res90 doit refléter le vrai résultat à 90 min.
+  // Pour AET et PEN, le match était nul à 90 min.
+  const status  = fixture.fixture.status.short;
+  const isAET   = status === 'AET' || status === 'PEN';
+  const res90   = isAET ? 'draw' as const : res;
+  const etRes   = isAET
+    ? ((fixture.goals.home ?? 0) > (fixture.goals.away ?? 0) ? 'A' : 'B') as 'A' | 'B'
+    : null;
+  const penWinner = status === 'PEN'
+    ? ((fixture.score.penalty.home ?? 0) > (fixture.score.penalty.away ?? 0) ? 'A' : 'B') as 'A' | 'B'
+    : null;
 
   const { error: updateErr } = await adm(admin)
     .from('matches')
@@ -171,14 +235,14 @@ export async function processRealMatchResult(
       played_at:        fixture.fixture.date,
       processed_at:     now.toISOString(),
       trade_lock_until: tradeUnlock,
-      api_status:       fixture.fixture.status.short,
+      api_status:       status,
       result_data: {
         a:         match.nation_a,
         b:         match.nation_b,
         scoreA:    fixture.goals.home ?? 0,
         scoreB:    fixture.goals.away ?? 0,
         res,
-        res90:     res,
+        res90,
         isUpset,
         pA,
         pB,
@@ -187,16 +251,13 @@ export async function processRealMatchResult(
         elimId:    loserId && match.phase !== 'Groups' ? loserId : null,
         winnerId,
         loserId,
-        etRes: fixture.fixture.status.short === 'AET' || fixture.fixture.status.short === 'PEN'
-          ? ((fixture.goals.home ?? 0) > (fixture.goals.away ?? 0) ? 'A' : 'B')
-          : null,
-        penWinner: fixture.fixture.status.short === 'PEN'
-          ? ((fixture.score.penalty.home ?? 0) > (fixture.score.penalty.away ?? 0) ? 'A' : 'B')
-          : null,
+        etRes,
+        penWinner,
         penA:    fixture.score.penalty.home ?? 0,
         penB:    fixture.score.penalty.away ?? 0,
         divCash: 0,
         phase:   match.phase,
+        goals,
       },
     })
     .eq('fixture_id', fixtureId);

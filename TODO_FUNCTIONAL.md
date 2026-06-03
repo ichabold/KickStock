@@ -1,67 +1,23 @@
 # KickStock — Todo : Jeu fonctionnel Online & Offline
 
-> État au 2 juin 2026.
+> État au 3 juin 2026.
 > Ce document liste tout ce qui reste à faire pour avoir un jeu complet et jouable,
 > en mode Online (vrais résultats API-Football) et Offline (simulation locale).
 > Classé par priorité : 🔴 Bloquant · 🟠 Important · 🟡 Souhaitable
 
 ---
 
-## 🔴 BLOQUANT — À corriger en priorité
+## ✅ RÉSOLU
 
-### 1. Switch de langue FR/EN ne fonctionne pas
+### ~~1. Switch de langue FR/EN ne fonctionne pas~~ ✅
 
-**Symptôme :** Cliquer sur "🇬🇧 English" dans le menu avatar ne change rien en production.
+**Corrigé le 3 juin 2026.** Deux niveaux de problèmes résolus :
 
-**Ce qui a été essayé sans succès :**
-- `router.refresh()` — Next.js Router Cache sert le layout mis en cache
-- `document.cookie` + `window.location.reload()` — idem
-- Server Action `cookies().set()` + `redirect()` — intercepté par Router Cache
-- API route `/api/set-locale` + HTTP 302 + `Set-Cookie` + `window.location.href` — dernier essai, à débugger
+1. **Plomberie next-intl v4** — le middleware Supabase custom n'injectait pas le header `X-NEXT-INTL-LOCALE` attendu par `next-intl` v4. Corrigé dans `middleware.ts` + `i18n/request.ts` + `app/layout.tsx`.
+2. **Strings françaises hardcodées** — 26+ textes dans `BrowserShell.tsx` étaient hors système i18n. Tous remplacés par `useTranslations`. 24 nouvelles clés ajoutées dans `en.json` / `fr.json`.
+3. **Accessibilité** — `LanguageSwitcher` ajouté pour les guests et visiteurs (était réservé aux connectés).
 
-**Pour débugger demain :**
-1. Ouvrir Chrome DevTools → onglet **Network**
-2. Cliquer sur "🇬🇧 English"
-3. Vérifier qu'une requête part vers `/api/set-locale?locale=en&redirect=%2F`
-4. Vérifier que la réponse contient `Set-Cookie: NEXT_LOCALE=en`
-5. Vérifier que le redirect vers `/` est suivi
-6. Vérifier que la requête GET `/` envoie bien `Cookie: NEXT_LOCALE=en`
-
-Si l'étape 3 ne se passe pas → le handler `onClick` ne tire pas → bug JavaScript
-Si étape 4 → le cookie n'est pas dans la réponse → bug dans `/api/set-locale`
-Si étape 6 → le cookie n'est pas envoyé → problème `SameSite`/`Secure`/domaine
-
-**Fichiers concernés :**
-- `apps/web/app/api/set-locale/route.ts` — API route qui pose le cookie
-- `apps/web/components/shared/AuthWidget.tsx` — fonction `handleLocale`
-
----
-
-### 2. Strings hardcodées en français dans `BrowserShell.tsx`
-
-Même si le switch de langue fonctionnait, ces labels resteraient en français sur desktop.
-Toutes à remplacer par des appels `t('key')` avec clés ajoutées dans `fr.json`/`en.json`.
-
-**Liste exhaustive :**
-
-| Fichier | Ligne approx. | Texte hardcodé | Clé i18n suggérée |
-|---------|--------------|----------------|-------------------|
-| `BrowserShell.tsx` | 158 | `JOURNÉE PRÉCÉDENTE · {label}` | `shell.prevDay` |
-| `BrowserShell.tsx` | 185 | `JOURNÉE COURANTE · {label}` | `shell.currentDay` |
-| `BrowserShell.tsx` | 197 | `Phase KO — matchs déterminés dynamiquement` | `schedule.dynamicKO` (existe déjà !) |
-| `BrowserShell.tsx` | 201 | `🏆 TOURNOI TERMINÉ` | `shell.tournamentEnded` (existe déjà !) |
-| `BrowserShell.tsx` | 204 | `ACTIONS · MATCHS DU JOUR` | `shell.todayMatches` |
-| `BrowserShell.tsx` | 270 | `TOUS LES MATCHS — PHASE DE GROUPES` | `shell.allGroupMatches` |
-| `BrowserShell.tsx` | 327 | `PHASE KO` | `shell.koPhase` |
-| `BrowserShell.tsx` | 481 | `HISTORIQUE DES TRANSACTIONS` | `portfolio.txHistory` (existe déjà !) |
-| `BrowserShell.tsx` | 595 | `Pens {a}–{b}` | `matchDetail.penalties` (existe déjà !) |
-| `BrowserShell.tsx` | 610 | `CLASSEMENTS DE GROUPE` | `standings.groupStandings` (existe déjà !) |
-| `BrowserShell.tsx` | 617 | `Équipe` (header table) | `shell.teamHeader` |
-| `BrowserShell.tsx` | 916 | `Mise à jour auto toutes les 30s` | `shell.autoRefresh` |
-| `NationDetailOverlay.tsx` | 177 | `HISTORIQUE DES PRIX` | `nationDetail.priceHistory` |
-| `StandingsTab.tsx` | 103 | `Pens {a}–{b}` | `matchDetail.penalties` (existe déjà !) |
-
-**Note :** plusieurs clés existent déjà dans les JSON — il suffit d'utiliser `t('key')` au lieu du texte hardcodé. Seulement 5 nouvelles clés à créer.
+**Analyse complète :** `docs/analyse-language-switch.md`
 
 ---
 
@@ -207,8 +163,8 @@ grep -rn "NATIONS\|SCORER_POOL" . --include="*.ts" --include="*.tsx" | grep -v n
 
 | # | Priorité | Item | Mode | Effort |
 |---|----------|------|------|--------|
-| 1 | 🔴 | Switch langue FR/EN — débugger avec DevTools | Both | 1-2h |
-| 2 | 🔴 | Strings FR hardcodées restantes dans BrowserShell | Both | 2h |
+| ~~1~~ | ~~🔴~~ | ~~Switch langue FR/EN~~ | ~~Both~~ | ✅ |
+| ~~2~~ | ~~🔴~~ | ~~Strings FR hardcodées dans BrowserShell~~ | ~~Both~~ | ✅ |
 | 3 | 🟠 | Vérifier cron `sync-results` actif en prod | Online | 15 min |
 | 4 | 🟠 | Vérifier trade lock dans RPC SQL | Online | 30 min |
 | 5 | 🟠 | `LiveTab` — vérifier fixture_id + statuts | Online | 30 min |

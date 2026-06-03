@@ -66,6 +66,7 @@ function makeBootstrap(): BootstrapData {
     group_fixtures: [
       { day_index: 0, nation_a: 'AAA', nation_b: 'BBB', venue: null },
     ],
+    squads: {},
     generated_at: new Date().toISOString(),
   };
 }

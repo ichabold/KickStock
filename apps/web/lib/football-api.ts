@@ -251,3 +251,92 @@ export async function fetchFifaRankings(): Promise<Array<{
   };
   return data.response ?? [];
 }
+
+/**
+ * Converts a FIFA world ranking position (1 = best) to a 50-100 strength score.
+ *   rank 1   → 100
+ *   rank 20  → 91
+ *   rank 50  → 76
+ *   rank 100 → 51
+ *   rank 101+ → 50 (capped)
+ */
+export function rankingToStrength(ranking: number): number {
+  return Math.max(50, Math.round(100 - (ranking - 1) * 0.5));
+}
+
+/**
+ * Fetches FIFA world rankings and returns a Map<api_team_id → strength>.
+ * Cached for 24h (rankings don't change mid-tournament).
+ */
+export async function fetchTeamStrengths(): Promise<Map<number, number>> {
+  const cacheKey = 'api:fifa-rankings:latest';
+  const rankings = await fetchWithCache(
+    cacheKey,
+    86_400,
+    () => fetchFifaRankings(),
+    (v) => Array.isArray(v) && v.length > 0,
+  );
+  const map = new Map<number, number>();
+  for (const entry of rankings) {
+    map.set(entry.team.id, rankingToStrength(entry.ranking));
+  }
+  return map;
+}
+
+// ── Squad types ───────────────────────────────────────────────────────────────
+
+export interface ApiSquadPlayer {
+  id:       number;
+  name:     string;
+  age:      number | null;
+  number:   number | null;
+  /** "Goalkeeper" | "Defender" | "Midfielder" | "Attacker" */
+  position: string;
+  photo:    string | null;
+}
+
+/**
+ * Fetches the full squad for a team via /players/squads (PRO plan required).
+ * Cache: 24h per team.
+ */
+export async function fetchSquad(apiTeamId: number): Promise<ApiSquadPlayer[]> {
+  const cacheKey = `api:squad:${apiTeamId}`;
+  return fetchWithCache(cacheKey, 86_400, async () => {
+    const res = await apiFetch('/players/squads', { team: String(apiTeamId) });
+    if (!res.ok) throw new Error(`Squad fetch failed for team ${apiTeamId}: ${res.status}`);
+    const data = await res.json() as {
+      response?: Array<{ team: { id: number }; players: ApiSquadPlayer[] }>;
+    };
+    return data.response?.[0]?.players ?? [];
+  }, Array.isArray);
+}
+
+// ── Fixture events types ──────────────────────────────────────────────────────
+
+export interface ApiFixtureEvent {
+  time:   { elapsed: number; extra: number | null };
+  team:   { id: number; name: string };
+  player: { id: number | null; name: string | null };
+  assist: { id: number | null; name: string | null };
+  /** "Goal" | "Card" | "subst" | "Var" */
+  type:   string;
+  /** "Normal Goal" | "Own Goal" | "Penalty" | "Missed Penalty" */
+  detail: string;
+  comments: string | null;
+}
+
+/**
+ * Fetches real goal events for a finished fixture.
+ * Used by processRealMatchResult to store real scorers.
+ * No cache — called once per match when processing the result.
+ */
+export async function fetchFixtureEvents(fixtureId: number): Promise<ApiFixtureEvent[]> {
+  try {
+    const res = await apiFetch('/fixtures/events', { fixture: String(fixtureId) });
+    if (!res.ok) return [];
+    const data = await res.json() as { response?: ApiFixtureEvent[] };
+    return data.response ?? [];
+  } catch {
+    return []; // non-blocking: if it fails, we just don't have real scorers
+  }
+}

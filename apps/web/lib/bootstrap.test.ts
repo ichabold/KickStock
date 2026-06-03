@@ -8,6 +8,7 @@ function makeBootstrap(days: Array<{ day_index: number; phase: string; is_ko: bo
     teams: [],
     days: days.map(d => ({ ...d, full_label: `Day ${d.day_index}`, date_label: 'Jan 1', div_key: null })),
     group_fixtures: [],
+    squads: {},
     generated_at: new Date().toISOString(),
   };
 }

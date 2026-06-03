@@ -85,6 +85,13 @@ export async function POST(req: NextRequest) {
 
     try {
       // ── 3. Team data ──────────────────────────────────────────────────────
+      const { data: compRow } = await A(admin)
+        .from('competitions')
+        .select('season')
+        .eq('id', competitionId)
+        .single();
+      const season = (compRow as { season: number } | null)?.season ?? 2026;
+
       const { data: teamRows } = await A(admin)
         .from('competition_teams')
         .select('team_id, current_price, initial_price, teams(strength, name, flag_emoji)')
@@ -97,6 +104,21 @@ export async function POST(req: NextRequest) {
       for (const t of teams) {
         prices[t.team_id]    = t.current_price ?? t.initial_price;
         strengths[t.team_id] = t.teams?.strength ?? 75;
+      }
+
+      // Load squads for real player names in goal timelines
+      const { data: squadRaw } = await A(admin)
+        .from('team_players')
+        .select('team_id, players(name)')
+        .in('team_id', teams.map(t => t.team_id))
+        .eq('season', season)
+        .neq('position', 'Goalkeeper');
+
+      const squads: Record<string, string[]> = {};
+      for (const row of (squadRaw ?? []) as Array<{ team_id: string; players: { name: string } | null }>) {
+        if (!row.players?.name) continue;
+        if (!squads[row.team_id]) squads[row.team_id] = [];
+        squads[row.team_id].push(row.players.name);
       }
 
       // ── 4. Today's day metadata ───────────────────────────────────────────
@@ -182,8 +204,8 @@ export async function POST(req: NextRequest) {
         const [scoreA, scoreB] = genScore(sim.res, sim.res90, sim.etRes, sim.penWinner);
         const goals = genGoals(
           scoreA, scoreB,
-          { id: m.a, name: teamA?.teams?.name ?? m.a },
-          { id: m.b, name: teamB?.teams?.name ?? m.b },
+          { id: m.a, name: teamA?.teams?.name ?? m.a, squad: squads[m.a] },
+          { id: m.b, name: teamB?.teams?.name ?? m.b, squad: squads[m.b] },
           sim.res90, sim.etRes,
         );
         const winnerId = sim.res === 'draw' ? null : (sim.res === 'A' ? m.a : m.b);

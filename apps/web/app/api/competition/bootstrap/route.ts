@@ -111,7 +111,24 @@ export async function GET(req: Request) {
     div_key:    string | null;
   }>;
 
-  // ── 4. Group-stage fixtures ───────────────────────────────────────────────
+  // ── 4. Squad data for genGoals (outfield players only) ───────────────────
+  const teamIds = teams.map(t => t.id);
+  const { data: squadRaw } = await adm(admin)
+    .from('team_players')
+    .select('team_id, players(name)')
+    .in('team_id', teamIds)
+    .eq('season', comp.season)
+    .neq('position', 'Goalkeeper');
+
+  type SquadRow = { team_id: string; players: { name: string } | null };
+  const squads: Record<string, string[]> = {};
+  for (const row of (squadRaw ?? []) as SquadRow[]) {
+    if (!row.players?.name) continue;
+    if (!squads[row.team_id]) squads[row.team_id] = [];
+    squads[row.team_id].push(row.players.name);
+  }
+
+  // ── 5. Group-stage fixtures ───────────────────────────────────────────────
   const { data: fixturesRaw } = await adm(admin)
     .from('matches')
     .select('day_index, nation_a, nation_b, venue, scheduled_at, api_status')
@@ -147,6 +164,7 @@ export async function GET(req: Request) {
         nation_b:  f.nation_b,
         venue:     f.venue,
       })),
+      squads,
       generated_at: new Date().toISOString(),
     },
     {

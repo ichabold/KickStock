@@ -18,10 +18,10 @@
  */
 
 import * as Sentry from '@sentry/nextjs';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { fetchAllFixtures }  from '@/lib/football-api';
-import { normalizeFixture }  from '@/lib/normalizer';
-import type { Competition }  from '@/lib/normalizer';
+import { createAdminClient }      from '@/lib/supabase/admin';
+import { fetchAllFixtures, fetchTeamStrengths } from '@/lib/football-api';
+import { normalizeFixture }       from '@/lib/normalizer';
+import type { Competition }       from '@/lib/normalizer';
 
 export const dynamic     = 'force-dynamic';
 export const maxDuration = 60;
@@ -86,7 +86,7 @@ export async function GET(req: Request) {
 
         const { teamA, teamB, compTeamA, compTeamB, day, match } = normalized;
 
-        // ── 1. Upsert teams individually (NOT strength — admin-configured)
+        // ── 1. Upsert teams (name, logo, flag — strength seeded separately below)
         for (const t of [teamA, teamB]) {
           const { error: tErr } = await adm(admin).from('teams').upsert(
             { id: t.id, api_team_id: t.api_team_id, name: t.name, logo_url: t.logo_url, flag_emoji: t.flag_emoji },
@@ -95,7 +95,7 @@ export async function GET(req: Request) {
           if (tErr) throw new Error(`teams upsert [${t.id}]: ${tErr.message}`);
         }
 
-        // ── 2. Upsert competition_teams individually (group_code only — NOT initial_price)
+        // ── 2. Upsert competition_teams (group_code only — initial_price seeded below)
         for (const ct of [compTeamA, compTeamB]) {
           const { error: ctErr } = await adm(admin).from('competition_teams').upsert(
             { competition_id: ct.competition_id, team_id: ct.team_id, group_code: ct.group_code },
@@ -139,7 +139,50 @@ export async function GET(req: Request) {
         upserted++;
       }
 
-      // ── 5. Update last_sync_at
+      // ── 5. Seed strength + initial_price for teams that don't have one yet ──
+      //       Runs once per competition per sync (cached 24h in Redis).
+      try {
+        const { data: unseeded } = await adm(admin)
+          .from('competition_teams')
+          .select('team_id, teams(api_team_id, strength)')
+          .eq('competition_id', comp.id)
+          .or('teams.strength.is.null,competition_teams.initial_price.is.null');
+
+        if (unseeded && (unseeded as unknown[]).length > 0) {
+          const strengthMap = await fetchTeamStrengths();
+
+          for (const row of unseeded as Array<{ team_id: string; teams: { api_team_id: number | null; strength: number | null } | null }>) {
+            const apiId    = row.teams?.api_team_id ?? null;
+            const strength = (apiId && strengthMap.get(apiId)) ?? row.teams?.strength ?? 75;
+            const price    = Math.round(strength * 1.5);
+
+            // Update teams.strength only if missing
+            if (!row.teams?.strength && apiId) {
+              await adm(admin).from('teams').update({
+                strength,
+                strength_updated_at: new Date().toISOString(),
+              }).eq('id', row.team_id);
+            }
+
+            // Always ensure initial_price + current_price are set
+            await adm(admin).from('competition_teams').update({
+              initial_price: price,
+              current_price: price,
+            })
+              .eq('competition_id', comp.id)
+              .eq('team_id', row.team_id)
+              .is('initial_price', null);
+          }
+
+          console.log(`[sync-fixtures] ${comp.name}: strength seeded for ${(unseeded as unknown[]).length} teams`);
+        }
+      } catch (seedErr) {
+        // Non-blocking: log but don't fail the whole sync
+        console.warn(`[sync-fixtures] Strength seeding failed for ${comp.name}:`, seedErr);
+        Sentry.captureException(seedErr, { tags: { cron: 'sync-fixtures', step: 'seed-strength' } });
+      }
+
+      // ── 6. Update last_sync_at
       await adm(admin).from('competitions')
         .update({ last_sync_at: new Date().toISOString() })
         .eq('id', comp.id);

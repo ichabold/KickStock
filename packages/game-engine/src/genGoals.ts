@@ -1,8 +1,18 @@
 import type { Goal } from '@kickstock/types';
 
 interface TeamRef {
-  id:   string;
-  name: string;
+  id:    string;
+  name:  string;
+  /** Optional squad of outfield player names. When provided, a random
+   *  player is picked for each goal instead of the team name. */
+  squad?: string[];
+}
+
+function pickScorer(team: TeamRef): string {
+  if (team.squad && team.squad.length > 0) {
+    return team.squad[Math.floor(Math.random() * team.squad.length)];
+  }
+  return team.name;
 }
 
 export function genGoals(
@@ -13,8 +23,8 @@ export function genGoals(
   res90: string,
   etRes: string | null,
 ): Goal[] {
-  const nameA = () => nA.name;
-  const nameB = () => nB.name;
+  const nameA = () => pickScorer(nA);
+  const nameB = () => pickScorer(nB);
 
   const isETMatch = res90 === 'draw' && etRes != null;
   const score90A = isETMatch ? (etRes === 'A' ? scoreA - 1 : scoreA) : scoreA;

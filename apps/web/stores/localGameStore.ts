@@ -345,8 +345,8 @@ export const useLocalGameStore = create<LocalGameStore>()(
           const newPB          = Math.max(1, rawPB);
           const [scoreA, scoreB] = genScore(sim.res, sim.res90, sim.etRes, sim.penWinner);
           const goals = genGoals(scoreA, scoreB,
-            { id: tA.id, name: tA.name },
-            { id: tB.id, name: tB.name },
+            { id: tA.id, name: tA.name, squad: _bootstrap?.squads?.[tA.id] },
+            { id: tB.id, name: tB.name, squad: _bootstrap?.squads?.[tB.id] },
             sim.res90, sim.etRes,
           );
           const winnerId = sim.res === 'draw' ? null : (sim.res === 'A' ? m.a : m.b);

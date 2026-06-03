@@ -62,6 +62,10 @@ export interface BootstrapData {
   teams:          BootstrapTeam[];
   days:           BootstrapDay[];
   group_fixtures: BootstrapFixture[];
+  /** teamId → array of outfield player names (Defenders, Midfielders, Attackers).
+   *  Used by genGoals() to show real player names instead of team names.
+   *  Empty object if squad data hasn't been synced yet. */
+  squads:         Record<string, string[]>;
   generated_at:   string;
 }
 
