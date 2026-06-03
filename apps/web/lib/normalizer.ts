@@ -59,6 +59,9 @@ export interface NormalizedFixture {
   compTeamB: CompetitionTeamRow;
   day:       CompetitionDayRow;
   match:     MatchRow;
+  /** true when team names are API placeholders ("Winner Group A") —
+   *  caller should skip teams/competition_teams upserts */
+  isPlaceholder: boolean;
 }
 
 export interface Competition {
@@ -189,24 +192,52 @@ function parseGroupCode(group: string | null): string | null {
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 /**
+ * Derives a stable placeholder ID from an API-Football placeholder team name.
+ * "Winner Group A"   → "KO_WINNERA"
+ * "Runner-up Group B" → "KO_RUNNERB"
+ * "3rd Place Group C" → "KO_3RDC"
+ *
+ * Keeps only alphanumeric chars, uppercased, max 12 chars after "KO_".
+ */
+function derivePlaceholderId(name: string): string {
+  const clean = name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 12);
+  return `KO_${clean}`;
+}
+
+/**
  * Transforms a single API-Football fixture into DB upsert payloads.
  *
- * Returns null (with a console.error) if the team names can't be mapped.
- * The caller (sync-fixtures cron) should skip nulls and increment a `skipped` counter.
+ * Returns null only if the fixture is a Group Stage match with unmapped teams
+ * (genuine mapping gap — caller should log + skip).
+ *
+ * For KO-round fixtures with placeholder team names ("Winner Group A"),
+ * returns a result with isPlaceholder=true — caller should skip
+ * teams/competition_teams upserts but still persist competition_days + match.
  */
 export function normalizeFixture(
   fixture:     ApiFixture,
   competition: Competition,
 ): NormalizedFixture | null {
-  const idA = apiNameToTeamId(fixture.teams.home.name, competition.league_id);
-  const idB = apiNameToTeamId(fixture.teams.away.name, competition.league_id);
+  const phase = leagueRoundToPhase(fixture.league.round);
+  const isKO  = phase !== 'Groups';
 
+  let idA = apiNameToTeamId(fixture.teams.home.name, competition.league_id);
+  let idB = apiNameToTeamId(fixture.teams.away.name, competition.league_id);
+
+  // For KO rounds, unmapped names are placeholders (e.g. "Winner Group A").
+  // Derive stable IDs so we still create the competition_day + match record.
+  let isPlaceholder = false;
   if (!idA || !idB) {
-    // Error already logged by apiNameToTeamId
-    return null;
+    if (!isKO) {
+      // Group stage with unmapped teams → genuine mapping gap, skip entirely
+      return null;
+    }
+    // KO placeholder — use derived IDs
+    idA = idA ?? derivePlaceholderId(fixture.teams.home.name);
+    idB = idB ?? derivePlaceholderId(fixture.teams.away.name);
+    isPlaceholder = true;
   }
 
-  const phase    = leagueRoundToPhase(fixture.league.round);
   const dayIndex = competition.start_date
     ? calcDayIndex(fixture.fixture.date, competition.start_date)
     : 0;
@@ -245,7 +276,7 @@ export function normalizeFixture(
       date_label:     formatDateLabel(fixture.fixture.date),
       full_label:     buildDayLabel(dayIndex, fixture.fixture.date, phase),
       phase,
-      is_ko:          phase !== 'Groups',
+      is_ko:          isKO,
       div_key:        PHASE_TO_DIV[phase] ?? null,
     },
     match: {
@@ -260,5 +291,6 @@ export function normalizeFixture(
       scheduled_at:   fixture.fixture.date,
       api_status:     fixture.fixture.status.short,
     },
+    isPlaceholder,
   };
 }

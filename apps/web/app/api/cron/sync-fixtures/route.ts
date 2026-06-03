@@ -93,32 +93,36 @@ export async function GET(req: Request) {
           continue;
         }
 
-        const { teamA, teamB, compTeamA, compTeamB, day, match } = normalized;
+        const { teamA, teamB, compTeamA, compTeamB, day, match, isPlaceholder } = normalized;
 
-        // ── 1. Upsert teams (name, logo, flag — strength seeded separately below)
-        for (const t of [teamA, teamB]) {
-          const { error: tErr } = await adm(admin).from('teams').upsert(
-            { id: t.id, api_team_id: t.api_team_id, name: t.name, logo_url: t.logo_url, flag_emoji: t.flag_emoji },
-            { onConflict: 'id', ignoreDuplicates: false }
-          );
-          if (tErr) throw new Error(`teams upsert [${t.id}]: ${tErr.message}`);
-        }
+        // ── 1 & 2. Upsert teams + competition_teams
+        // Skipped for KO placeholder fixtures ("Winner Group A") — those teams
+        // don't exist yet; we only persist the competition_day + match record.
+        if (!isPlaceholder) {
+          // ── 1. Upsert teams
+          for (const t of [teamA, teamB]) {
+            const { error: tErr } = await adm(admin).from('teams').upsert(
+              { id: t.id, api_team_id: t.api_team_id, name: t.name, logo_url: t.logo_url, flag_emoji: t.flag_emoji },
+              { onConflict: 'id', ignoreDuplicates: false }
+            );
+            if (tErr) throw new Error(`teams upsert [${t.id}]: ${tErr.message}`);
+          }
 
-        // ── 2. Upsert competition_teams
-        // N'écrase group_code que si l'API en fournit un non-null —
-        // évite de remettre null quand l'API ne renseigne pas encore les groupes.
-        for (const ct of [compTeamA, compTeamB]) {
-          const row: Record<string, unknown> = {
-            competition_id: ct.competition_id,
-            team_id:        ct.team_id,
-          };
-          if (ct.group_code !== null) row.group_code = ct.group_code;
+          // ── 2. Upsert competition_teams
+          // N'écrase group_code que si l'API en fournit un non-null.
+          for (const ct of [compTeamA, compTeamB]) {
+            const row: Record<string, unknown> = {
+              competition_id: ct.competition_id,
+              team_id:        ct.team_id,
+            };
+            if (ct.group_code !== null) row.group_code = ct.group_code;
 
-          const { error: ctErr } = await adm(admin).from('competition_teams').upsert(
-            row,
-            { onConflict: 'competition_id,team_id', ignoreDuplicates: false }
-          );
-          if (ctErr) throw new Error(`competition_teams upsert [${ct.team_id}]: ${ctErr.message}`);
+            const { error: ctErr } = await adm(admin).from('competition_teams').upsert(
+              row,
+              { onConflict: 'competition_id,team_id', ignoreDuplicates: false }
+            );
+            if (ctErr) throw new Error(`competition_teams upsert [${ct.team_id}]: ${ctErr.message}`);
+          }
         }
 
         // ── 3. Upsert competition_days (metadata)
