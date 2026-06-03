@@ -49,6 +49,7 @@ export const LEAGUE_1_MAPPING: Record<string, string> = {
   'Austria':                'AUT',
   'Denmark':                'DEN',
   'Turkey':                 'TUR',
+  'Türkiye':               'TUR',    // API-Football uses this spelling since 2022
   'Scotland':               'SCO',
   'Serbia':                 'SRB',
   'Ukraine':                'UKR',
@@ -88,8 +89,10 @@ export const LEAGUE_1_MAPPING: Record<string, string> = {
   'Tunisia':                'TUN',
   'Algeria':                'ALG',
   'DR Congo':               'COD',
+  'Congo DR':               'COD',   // API-Football uses this
   'Zambia':                 'ZAM',
   'Cape Verde':             'CPV',
+  'Cape Verde Islands':     'CPV',   // API-Football uses this
   'Czechia':                'CZE',
   'Czech Republic':         'CZE',   // alternate
   'Poland':                 'POL',
@@ -101,6 +104,7 @@ export const LEAGUE_1_MAPPING: Record<string, string> = {
   'Slovakia':               'SVK',
   'Bosnia':                 'BIH',
   'Bosnia and Herzegovina': 'BIH',   // alternate
+  'Bosnia & Herzegovina':   'BIH',   // API-Football uses this
   'Kosovo':                 'KOS',
   'Iceland':                'ISL',
   'China':                  'CHN',

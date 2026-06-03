@@ -149,10 +149,24 @@ async function fetchWithCache<T>(
 }
 
 function parseFixtures(body: unknown): ApiFixture[] {
-  const data = body as { response?: ApiFixture[]; errors?: unknown };
+  const data = body as { response?: ApiFixture[]; errors?: unknown; message?: string };
+
+  // api-sports.io key error: { "errors": { "token": "..." } }
+  if (data.errors && typeof data.errors === 'object' && Object.keys(data.errors as object).length > 0) {
+    const errMsg = JSON.stringify(data.errors);
+    console.error('[football-api] API error response (errors field):', errMsg);
+    throw new Error(`API-Football error: ${errMsg}`);
+  }
+
+  // RapidAPI rejection: { "message": "You are not subscribed to this API." }
+  if (data.message && !data.response) {
+    console.error('[football-api] API gateway error:', data.message);
+    throw new Error(`API-Football gateway: ${data.message}`);
+  }
+
   if (!data.response) {
-    console.error('[football-api] unexpected response shape', data.errors ?? body);
-    return [];
+    console.error('[football-api] unexpected response shape', body);
+    throw new Error(`API-Football: réponse inattendue — ${JSON.stringify(body).slice(0, 200)}`);
   }
   return data.response;
 }

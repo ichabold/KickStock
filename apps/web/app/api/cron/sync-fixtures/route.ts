@@ -63,6 +63,7 @@ export async function GET(req: Request) {
 
   const results: Array<{
     competition: string;
+    fetched?: number;
     upserted?: number;
     skipped?: number;
     error?: string;
@@ -194,9 +195,9 @@ export async function GET(req: Request) {
         .update({ last_sync_at: new Date().toISOString() })
         .eq('id', comp.id);
 
-      results.push({ competition: comp.name, upserted, skipped });
+      results.push({ competition: comp.name, fetched: fixtures.length, upserted, skipped });
 
-      console.log(`[sync-fixtures] ${comp.name}: ${upserted} upserted, ${skipped} skipped`);
+      console.log(`[sync-fixtures] ${comp.name}: ${fixtures.length} fetched, ${upserted} upserted, ${skipped} skipped`);
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
