@@ -19,7 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         display: 'flex', alignItems: 'center', gap: 24,
       }}>
         <strong style={{ color: '#FFDB00', fontSize: 14 }}>⚽ KICKSTOCK ADMIN</strong>
-        <Link href="/admin" style={{ color: '#ccc', fontSize: 13, textDecoration: 'none' }}>Compétitions</Link>
+        <Link href="/admin" style={{ color: '#ccc', fontSize: 13, textDecoration: 'none' }}>Competitions Settings</Link>
         <Link href="/admin/competitions/new" style={{ color: '#ccc', fontSize: 13, textDecoration: 'none' }}>+ Nouvelle</Link>
         <Link href="/" style={{ color: '#555', fontSize: 13, textDecoration: 'none', marginLeft: 'auto' }}>← App</Link>
       </nav>

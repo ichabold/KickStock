@@ -57,7 +57,7 @@ export default async function AdminPage() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 }}>
-        <h1 style={{ color: '#FFDB00', margin: 0, fontSize: 20, fontFamily: 'monospace' }}>COMPÉTITIONS</h1>
+        <h1 style={{ color: '#FFDB00', margin: 0, fontSize: 20, fontFamily: 'monospace' }}>COMPETITIONS SETTINGS</h1>
         <Link href="/admin/competitions/new">
           <button style={{
             padding: '7px 14px', background: '#FFDB00', color: '#000',
