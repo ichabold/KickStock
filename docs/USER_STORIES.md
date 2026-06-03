@@ -752,9 +752,14 @@ Toute la structure d'une compétition (nom, dates, équipes, groupes, stades, ho
 **US-16.1 · Créer une nouvelle compétition**
 > En tant qu'admin, je veux créer un nouveau tournoi en renseignant ses métadonnées pour l'ouvrir aux joueurs.
 
-- Formulaire : nom du tournoi, saison/année, date de début, date de fin, `league_id` API-Football.
+- Formulaire : **nom du tournoi**, **saison/année**, **`league_id` API-Football** (3 champs uniquement).
+- Les dates de début/fin ne sont **pas saisies** : `start_date` est dérivée automatiquement depuis les fixtures lors du premier sync ; `end_date` est cosmétique et non nécessaire à la création.
 - La compétition est créée en état inactif (invisible aux joueurs) jusqu'à activation manuelle.
 - Chaque compétition est identifiée par un `id` unique et dispose d'un état de jeu partagé isolé.
+- La création **enchaîne automatiquement** 3 étapes avec retour visuel par étape :
+  1. Création de la ligne en DB + initialisation de `competition_game_state`
+  2. Import des équipes depuis API-Football (teams + force FIFA + prix initial)
+  3. Sync du calendrier complet (fixtures → matches + competition_days)
 
 ---
 
@@ -827,11 +832,41 @@ Champs par journée :
 
 ---
 
-**US-16.8 · Voir l'état courant d'une compétition**
-> En tant qu'admin, je veux voir en un coup d'œil où en est chaque compétition active.
+**US-16.8 · Voir et gérer l'état d'une compétition via une interface tabulée**
+> En tant qu'admin, je veux naviguer entre des onglets dédiés pour consulter et modifier chaque dimension d'une compétition.
 
-- Dashboard par compétition : `current_day_index`, phase courante, nombre de matchs traités / total, champion éventuel.
-- Alertes si le cron `sync-results` échoue ou si des matchs sont dans un état inattendu.
+La page `/admin/competitions/[id]` est organisée en **4 onglets** :
+
+| Onglet | Contenu |
+|--------|---------|
+| **INFO** | Métadonnées (id, league_id, saison, dates, compteurs équipes/matches/journées), état de jeu (jour courant, phase, champion, éliminés), tous les boutons d'action API |
+| **FORMAT** | Visualisation des poules (groupes A-L avec équipes + force), tableau des journées (competition_days : phase, KO/Groupes, div_key) avec ajout/suppression |
+| **ÉQUIPES** | Tableau complet des équipes avec groupe, force, prix initial, prix actuel, Δ%, édition inline (force / groupe / prix) |
+| **MATCHES** | Tous les matches groupés par journée, avec score, date Paris, statut API, processed_at, édition inline de chaque match |
+
+---
+
+**US-16.9 · Déclencher les calls API-Football manuellement**
+> En tant qu'admin, je veux un bouton par type de call API pour contrôler précisément ce qui est synchronisé.
+
+Boutons disponibles dans l'onglet INFO :
+- **ACTIVER / DÉSACTIVER** — toggle `is_active`
+- **SIMULATE DAY** — simule la journée courante (test uniquement)
+- **⬇ IMPORT TEAMS** — récupère les équipes depuis API-Football (`/teams?league=…&season=…`) + force FIFA + prix initial
+- **↻ SYNC FIXTURES** — synchronise le calendrier complet (matches + journées)
+- **↻ SYNC RESULTS** — récupère les résultats des matchs terminés
+- **↻ SYNC SQUADS** — récupère les compositions d'équipes
+
+Chaque bouton affiche le détail du résultat après exécution (ex : "32 importées · 0 ignorées").
+
+---
+
+**US-16.10 · Modifier un match manuellement**
+> En tant qu'admin, je veux corriger la date, le score ou le statut d'un match directement depuis l'interface.
+
+- Depuis l'onglet MATCHES, chaque ligne dispose d'un bouton ✏️.
+- Champs éditables : `scheduled_at` (datetime picker), `score_a`, `score_b`, `api_status` (dropdown NS/FT/AET/PEN…).
+- La modification est persistée via `PATCH /api/admin/competitions/[id]/matches/[fixture_id]`.
 
 ---
 
@@ -889,7 +924,7 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 | Leaderboard | US-13.1 → 13.2 | ✅ Implémenté |
 | Tutorial & Coach Marks | US-14.1 → 14.2 | ✅ Implémenté |
 | UI Shell Mobile & Desktop | US-15.1 → 15.5 | ✅ Implémenté |
-| Admin — Gestion compétitions | US-16.1 → 16.8 | ⚠️ Partiel (API seule, pas d'UI admin) |
+| Admin — Gestion compétitions | US-16.1 → 16.10 | ✅ Implémenté (UI tabulée complète) |
 | Infrastructure & Monitoring | US-17.1 → 17.3 | ✅ Implémenté |
 
 **Total : 63 user stories identifiées**
@@ -898,6 +933,6 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 
 | Priorité | Gap identifié |
 |----------|---------------|
-| 🔴 Haute | **US-2.1–2.4** — L'anglais n'est pas encore actif en prod ; la détection navigateur et le switch de langue sont à implémenter |
-| 🔴 Haute | **US-16.1–16.8** — L'interface admin de gestion des compétitions n'existe pas encore ; la configuration se fait aujourd'hui directement en SQL |
-| 🟡 Moyenne | **US-16.8** — Dashboard de monitoring admin par compétition |
+| 🟡 Moyenne | **US-2.1–2.4** — Switch de langue FR→EN fonctionnel en prod (corrigé session 2026-06-02) ; vérifier détection automatique `Accept-Language` |
+| 🟡 Moyenne | **US-16.8** — Pas de log horodaté des actions admin (dernière sync, erreurs cron) |
+| 🟢 Basse | **US-16.10** — Pas de confirmation avant modification d'un match déjà traité (`processed_at != null`) |

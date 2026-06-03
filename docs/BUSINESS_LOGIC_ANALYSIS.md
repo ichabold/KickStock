@@ -1305,6 +1305,94 @@ Convertit ISO-2 en emoji drapeau via Unicode Regional Indicator Symbols
 
 ---
 
+### US-16.1 · Création de compétition — auto-chain
+
+**Logique métier couverte :** La création enchaîne automatiquement 3 appels séquentiels côté client avec retour visuel par étape. Si l'import des équipes échoue, le sync des fixtures part quand même (non-bloquant).
+
+#### Procédures & Processus
+
+**Séquence dans `/admin/competitions/new/page.tsx` (client) :**
+```
+1. POST /api/admin/competitions → { id }
+   Champs requis : name, season, league_id (start_date/end_date retirés)
+   Initialise competition + competition_game_state
+
+2. POST /api/admin/competitions/{id}/import-teams
+   Fetch API-Football /teams?league={league_id}&season={season}
+   + fetch /teams/rankings/fifa (force FIFA)
+   Upsert teams + competition_teams (initial_price = strength × 1.5)
+   Non-bloquant : erreur n'arrête pas l'étape suivante
+
+3. POST /api/admin/competitions/{id}/sync { type: 'fixtures' }
+   Proxy admin → GET /api/cron/sync-fixtures (CRON_SECRET côté serveur)
+   Peuple matches + competition_days
+```
+
+**Note start_date :** le champ `start_date` a été retiré du formulaire. `sync-fixtures` dérive `start_date` depuis le premier fixture retourné par l'API (voir `derivedStartDate` dans le cron). Le fallback DB est utilisé uniquement s'il n'y a aucun fixture disponible.
+
+---
+
+### US-16.6 · Import des équipes
+
+**Logique métier couverte :** `import-teams` upsert les teams avec force FIFA et prix dérivé.
+
+#### Formules & Calculs
+
+**Prix initial (`initial_price`) :**
+```
+initial_price = round(strength × 1.5)
+// Ex : strength=100 → 150 KC · strength=75 → 112 KC · strength=50 → 75 KC
+```
+- Source : `app/api/admin/competitions/[id]/import-teams/route.ts:87`
+
+**Fallback force :**
+```
+strength = strengthMap.get(apiTeamId) ?? 75
+```
+Si le ranking FIFA ne retourne pas l'équipe (ex: équipe non FIFA), force par défaut = 75.
+
+**Idempotence :** `upsert` sur `(competition_id, team_id)` — safe à relancer.
+
+---
+
+### US-16.9 · Boutons API admin
+
+**Logique métier couverte :** Tous les calls API-Football sont déclenchables manuellement depuis l'UI admin via des boutons dans `CompetitionActions.tsx`. Le CRON_SECRET ne transite jamais côté client.
+
+#### Routes & Sécurité
+
+| Bouton | Route côté client | Route côté serveur | Auth |
+|--------|------------------|--------------------|------|
+| IMPORT TEAMS | `POST /api/admin/.../import-teams` | API-Football direct | user.role=admin |
+| SYNC FIXTURES | `POST /api/admin/.../sync {type:'fixtures'}` | `GET /api/cron/sync-fixtures` | user.role=admin → CRON_SECRET serveur |
+| SYNC RESULTS | `POST /api/admin/.../sync {type:'results'}` | `GET /api/cron/sync-results` | idem |
+| SYNC SQUADS | `POST /api/admin/.../sync {type:'squads'}` | `GET /api/cron/sync-squads` | idem |
+
+**Correction sécurité (2026-06-03) :** L'ancienne implémentation de `syncFixtures()` appelait `/api/cron/sync-fixtures` directement avec `Authorization: Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}`, exposant le secret dans le bundle client. Corrigé : tous les syncs passent désormais par `/api/admin/.../sync` qui garde le `CRON_SECRET` côté serveur.
+
+---
+
+### US-16.10 · Édition d'un match
+
+**Logique métier couverte :** Modification manuelle des attributs d'un match pour corriger les données API.
+
+#### Route
+
+```
+PATCH /api/admin/competitions/[id]/matches/[fixture_id]
+Body: { scheduled_at?, score_a?, score_b?, api_status? }
+```
+- Auth : `user.app_metadata?.role === 'admin'`
+- Scope : le match doit appartenir à la compétition (`competition_id` vérifié)
+- `scheduled_at` : converti en ISO 8601 UTC côté client (`new Date(localDatetime).toISOString()`)
+- `api_status` valeurs acceptées : `NS`, `1H`, `HT`, `2H`, `ET`, `PEN`, `FT`, `AET`, `PST`, `CANC`
+
+**Cas d'usage principal :** corriger une date erronée ou décalée retournée par l'API-Football, ou forcer manuellement un score pour les tests.
+
+**Limite actuelle :** aucune confirmation demandée si le match a déjà un `processed_at` (déjà traité en DB).
+
+---
+
 ### US-16.7 · Simuler une journée depuis l'admin
 
 **Logique métier couverte :** `simulate-day` reproduit intégralement le pipeline du mode live (résultat simulé → prix → liquidation → dividendes → avancement).
@@ -1808,6 +1896,70 @@ RPCs supprimés : `execute_trade`, `get_or_create_portfolio`, `distribute_divide
 ---
 
 *Document mis à jour le 2 juin 2026 — Version 6 (fin de journée)*
+
+---
+
+## État du projet — Version 7 (3 juin 2026)
+
+### Corrections et améliorations appliquées — session 2026-06-03
+
+**Interface admin — refonte complète**
+
+| Item | Description | Fichiers modifiés |
+|------|-------------|-------------------|
+| 🔒 Bug sécurité | `CompetitionActions.syncFixtures()` exposait `NEXT_PUBLIC_CRON_SECRET` dans le bundle client → corrigé pour passer par le proxy admin `/api/admin/.../sync` | `CompetitionActions.tsx` |
+| ➕ Nouveau bouton | **⬇ IMPORT TEAMS** → `POST /api/admin/.../import-teams` | `CompetitionActions.tsx` |
+| ➕ Nouveau bouton | **↻ SYNC RESULTS** → proxy admin `{type:'results'}` | `CompetitionActions.tsx` |
+| ➕ Nouveau bouton | **↻ SYNC SQUADS** → proxy admin `{type:'squads'}` | `CompetitionActions.tsx` |
+| 💬 Feedback enrichi | Résultat de chaque call API affiché inline (imported/skipped/unmapped…) | `CompetitionActions.tsx` |
+| 🗑️ Champs supprimés | `start_date` et `end_date` retirés du formulaire de création (dérivés automatiquement par sync-fixtures) | `competitions/new/page.tsx`, `api/admin/competitions/route.ts` |
+| ⚡ Auto-chain création | La création enchaîne : create → import-teams → sync-fixtures, avec progress UI par étape | `competitions/new/page.tsx` |
+| 🗂️ Refonte page détail | 4 onglets : INFO / FORMAT / ÉQUIPES / MATCHES | `competitions/[id]/page.tsx` |
+| ➕ Nouveau composant | `TabBar.tsx` — navigation par onglets (URL params `?tab=`) | `TabBar.tsx` |
+| ➕ Nouveau composant | `MatchEditor.tsx` — édition inline datetime/score/statut par match | `MatchEditor.tsx` |
+| ➕ Nouvelle route | `PATCH /api/admin/competitions/[id]/matches/[fixture_id]` — correction manuelle d'un match | `matches/[fixture_id]/route.ts` |
+| 📖 Nouvelle doc | `docs/admin-status.md` — état des lieux admin complet | `docs/admin-status.md` |
+
+### Nouveaux fichiers créés
+
+```
+apps/web/app/admin/competitions/[id]/
+  TabBar.tsx                              ← navigation onglets (client)
+  MatchEditor.tsx                         ← édition inline match (client)
+
+apps/web/app/api/admin/competitions/[id]/matches/[fixture_id]/
+  route.ts                                ← PATCH match
+
+docs/
+  admin-status.md                         ← audit admin mode complet
+```
+
+### US-16 — Couverture mise à jour
+
+| US | Description | Statut |
+|----|-------------|--------|
+| US-16.1 | Création compétition (3 champs, auto-chain) | ✅ |
+| US-16.2 | Configurer équipes | ✅ |
+| US-16.3 | Configurer calendrier (sync-fixtures) | ✅ |
+| US-16.4 | Configurer journées (DayManager) | ✅ |
+| US-16.5 | Activer/désactiver compétition | ✅ |
+| US-16.6 | Import teams API-Football | ✅ |
+| US-16.7 | Simuler une journée | ✅ |
+| US-16.8 | UI tabulée (Info/Format/Équipes/Matches) | ✅ **nouveau** |
+| US-16.9 | Boutons API manuels (import/sync/results/squads) | ✅ **nouveau** |
+| US-16.10 | Édition manuelle d'un match | ✅ **nouveau** |
+
+### Next Steps recommandés — Vague 6
+
+| Priorité | Item |
+|----------|------|
+| 🟡 | Afficher `last_sync_at` sur la compétition + log horodaté des actions admin |
+| 🟡 | Ajouter confirmation avant modification d'un match déjà `processed_at` |
+| 🟡 | Bouton Live Fixtures (voir les matchs en cours en temps réel depuis l'admin) |
+| 🟢 | Supprimer `NEXT_PUBLIC_CRON_SECRET` du `.env` (plus utilisé après la correction sécurité) |
+| 🟢 | Vérification détection automatique `Accept-Language` en production |
+
+---
 
 ### Priorité 5 — Tests supplémentaires
 

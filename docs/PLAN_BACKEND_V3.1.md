@@ -844,7 +844,7 @@ si count > 10  → retourner 429
   "phase": "Groups",
   "champion": null,
   "eliminated": [],
-  "r32Pool": [], "r16Pool": [], "qfPool": [], "sfPool": [], "finalPool": [], "thirdPool": [],
+  "r32_pool": [], "r16_pool": [], "qf_pool": [], "sf_pool": [], "final_pool": [], "third_pool": [],
   "prices":       { "BRA": 212.5, "FRA": 200 },
   "priceHistory": { "BRA": [200, 212.5], "FRA": [200, 200] },
   "matchResults": { "0": [...] },
@@ -877,7 +877,7 @@ Cache-Control: private, no-cache
   "results": [...], "flash": { "BRA": "fu", "MAR": "fd" },
   "newDayIndex": 6, "newPhase": "Groups",
   "prices": { "BRA": 212.5 }, "eliminated": [],
-  "r32Pool": [], "champion": null, "newCash": 9850
+  "r32_pool": [], "champion": null, "newCash": 9850
 }
 ```
 
