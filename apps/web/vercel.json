@@ -1,0 +1,19 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-fixtures",
+      "schedule": "0 6 * * *",
+      "comment": "Sync fixtures + groups from standings — daily at 06:00 UTC"
+    },
+    {
+      "path": "/api/cron/sync-results",
+      "schedule": "*/30 * * * *",
+      "comment": "Process real match results — every 30 min (auto-skips if no match window)"
+    },
+    {
+      "path": "/api/cron/sync-squads",
+      "schedule": "0 5 * * 1",
+      "comment": "Sync squad data — weekly Monday 05:00 UTC"
+    }
+  ]
+}
