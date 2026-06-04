@@ -200,8 +200,8 @@ export async function POST(req: NextRequest) {
       processed++;
     }
 
-    // ── 6. Advance game state (checks if day complete, fills pools) ───────────
-    await checkAndAdvancePhase(competitionId);
+    // ── 6. Advance game state — simulateMode creates KO matches if missing ────
+    await checkAndAdvancePhase(competitionId, /* simulateMode */ true);
 
     // ── 7. Fetch updated state to return to caller ────────────────────────────
     const { data: newGs } = await A(admin)

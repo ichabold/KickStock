@@ -33,7 +33,12 @@ export async function buildKOQualifiers(
   const admin = createAdminClient();
 
   // ── 1. How many KO spots are available in the next phase ─────────────────
-  // Each scheduled match in DB accounts for 2 team slots.
+  // Try to derive from scheduled matches in DB first; fall back to phase defaults
+  // so simulation works even before KO fixtures are published by the API.
+  const PHASE_SPOTS: Record<string, number> = {
+    R32: 32, R16: 16, QF: 8, SF: 4, Final: 2, '3rd': 2,
+  };
+
   const { count: matchCount } = await adm(admin)
     .from('matches')
     .select('id', { count: 'exact', head: true })
@@ -41,7 +46,9 @@ export async function buildKOQualifiers(
     .eq('phase', nextPhase)
     .not('fixture_id', 'is', null);
 
-  const totalSpots = (matchCount ?? 0) * 2;
+  const totalSpots = (matchCount ?? 0) > 0
+    ? (matchCount ?? 0) * 2
+    : (PHASE_SPOTS[nextPhase] ?? 16);
 
   // ── 2. Load teams with group assignments ──────────────────────────────────
   interface CTRow { team_id: string; group_code: string | null; teams: { strength: number } | null }

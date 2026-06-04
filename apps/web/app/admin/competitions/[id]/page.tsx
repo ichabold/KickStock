@@ -5,6 +5,7 @@ import CompetitionEditor                         from './CompetitionEditor';
 import TeamEditor                                from './TeamEditor';
 import { DayDeleteButton, DayAddForm }           from './DayManager';
 import MatchEditor                               from './MatchEditor';
+import ManualResultForm                          from './ManualResultForm';
 import TabBar, { type TabId }                    from './TabBar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -168,6 +169,19 @@ export default async function CompetitionPage({
               leagueId={comp.league_id}
               startDate={comp.start_date ?? null}
               isActive={comp.is_active}
+            />
+          </div>
+
+          {/* Saisie manuelle de résultat */}
+          <div style={card}>
+            <h2 style={h2}>⚠ SAISIE MANUELLE — FALLBACK API</h2>
+            <p style={{ fontSize: 11, color: '#888', marginBottom: 12, fontFamily: 'monospace' }}>
+              Utiliser uniquement si l&apos;API-Football ne retourne pas le résultat.
+              Supporte temps réglementaire, prolongations et tirs au but.
+            </p>
+            <ManualResultForm
+              competitionId={id}
+              currentDayIndex={gs?.current_day_index ?? 0}
             />
           </div>
 
