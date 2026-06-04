@@ -78,9 +78,8 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     Sentry.captureException(err, { tags: { route: 'POST /api/trade' } });
-    const msg = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[POST /api/trade]', msg);
-    return NextResponse.json({ code: 'INTERNAL_ERROR', error: msg }, { status: 500 });
+    console.error('[POST /api/trade]', err);
+    return NextResponse.json({ code: 'INTERNAL_ERROR', error: 'Erreur interne' }, { status: 500 });
   }
 }
 
