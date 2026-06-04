@@ -34,20 +34,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ code: 'MISSING_DEVICE_ID', error: 'X-Device-ID requis' }, { status: 400 });
     }
 
+    // Resolve authenticated user identity (best-effort)
     let userId: string | null = null;
-    let useSessionedClient = false;
-    let sessionedClient: Awaited<ReturnType<typeof createServerClient>> | null = null;
-
     try {
-      sessionedClient = await createServerClient();
+      const sessionedClient = await createServerClient();
       const { data: { user } } = await sessionedClient.auth.getUser();
-      if (user?.id) { userId = user.id; useSessionedClient = true; }
-    } catch { /* anonymous player */ }
+      if (user?.id) userId = user.id;
+    } catch { /* anonymous player — proceed without userId */ }
 
+    // Always use admin client for the SECURITY DEFINER RPC so it works for
+    // both anon (no GRANT EXECUTE on authenticated/anon roles) and logged-in users.
+    // User identity is passed explicitly via p_user_id.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client: any = useSessionedClient ? sessionedClient! : createAdminClient();
+    const adminClient: any = createAdminClient();
 
-    const { data, error } = await client.rpc('execute_competition_trade', {
+    const { data, error } = await adminClient.rpc('execute_competition_trade', {
       p_competition_id: competitionId,
       p_device_id:      deviceId,
       p_team_id:        nationId,
@@ -56,7 +57,10 @@ export async function POST(req: NextRequest) {
       p_user_id:        userId,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[POST /api/trade] RPC error:', error);
+      throw error;
+    }
 
     const result = data as { ok?: boolean; error?: string; code?: string; new_cash?: number; new_held?: number; price?: number; fee?: number };
     if (result?.error) {
