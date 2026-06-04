@@ -705,8 +705,9 @@ function BracketView({ onNationClick, onMatchClick }: {
   const state        = useGameStore(s => s);
   const bootstrap = useGameStore(s => s._bootstrap);
 
-  const phases: { label: string; key: 'R32' | 'QF' | 'SF' | '3rd' | 'Final' }[] = [
+  const phases: { label: string; key: 'R32' | 'R16' | 'QF' | 'SF' | '3rd' | 'Final' }[] = [
     { label: tst('r32'),           key: 'R32'   },
+    { label: tst('r16'),           key: 'R16'   },
     { label: tst('quarterFinals'), key: 'QF'    },
     { label: tst('semiFinals'),    key: 'SF'    },
     { label: tst('thirdPlace'),    key: '3rd'   },
