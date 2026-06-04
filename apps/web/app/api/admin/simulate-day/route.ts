@@ -20,6 +20,7 @@
  */
 import { NextRequest, NextResponse }  from 'next/server';
 import { createAdminClient }           from '@/lib/supabase/admin';
+import { createClient }                from '@/lib/supabase/server';
 import * as Sentry                     from '@sentry/nextjs';
 import { simulate, applyResult, genScore, genGoals } from '@kickstock/game-engine';
 import { DIV_RATES }                   from '@kickstock/constants';
@@ -32,9 +33,20 @@ export const maxDuration = 60;
 const A = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
 
 export async function POST(req: NextRequest) {
-  // ── Auth ────────────────────────────────────────────────────────────────────
-  if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // ── Auth — accept either CRON_SECRET (cron job) or logged-in admin ──────────
+  const authHeader = req.headers.get('Authorization');
+  const isCron     = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+  if (!isCron) {
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || user.app_metadata?.role !== 'admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   try {
