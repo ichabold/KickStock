@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { Nation } from '@kickstock/types';
 import { useGameStore } from '@/stores/gameStore';
 
@@ -39,9 +40,10 @@ export function TradeActions({
   wrapClassName,
   buyClassName,
   sellClassName,
-  buyLabel  = 'BUY',
-  sellLabel = 'SELL',
+  buyLabel,
+  sellLabel,
 }: Props) {
+  const t      = useTranslations('trade');
   const held   = useGameStore(s => s.portfolio[nation.id] ?? 0);
   const isElim = useGameStore(s => s.eliminated.includes(nation.id));
 
@@ -54,7 +56,7 @@ export function TradeActions({
         onClick={onBuy}
         aria-label={`Acheter ${nation.name}`}
       >
-        {buyLabel}
+        {buyLabel ?? t('buy')}
       </button>
       <button
         className={sellClassName}
@@ -62,7 +64,7 @@ export function TradeActions({
         disabled={held === 0}
         aria-label={`Vendre ${nation.name}`}
       >
-        {sellLabel}
+        {sellLabel ?? t('sell')}
       </button>
     </div>
   );

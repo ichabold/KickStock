@@ -5,6 +5,7 @@
  * Use density="compact" in the desktop 4-column grid.
  */
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Nation } from '@kickstock/types';
 import { useGameStore } from '@/stores/gameStore';
 import { PriceDisplay } from '@/components/mechanics/PriceDisplay';
@@ -58,6 +59,7 @@ function Sparkline({ history, up }: { history: number[]; up: boolean }) {
 export default function NationCard({
   nation, onBuy, onSell, onCardClick, density = 'comfortable', flash, coachTarget,
 }: Props) {
+  const ts         = useTranslations('shell');
   const prices     = useGameStore(s => s.prices);
   const history    = useGameStore(s => s.priceHistory[nation.id] ?? []);
   const portfolio  = useGameStore(s => s.portfolio);
@@ -93,7 +95,7 @@ export default function NationCard({
         {held > 0 && !isElim && (
           <span className={`${styles.tag} ${styles.tagHeld}`}>×{held}</span>
         )}
-        {isElim && <span className={`${styles.tag} ${styles.tagOut}`}>OUT</span>}
+        {isElim && <span className={`${styles.tag} ${styles.tagOut}`}>{ts('elimOut')}</span>}
       </div>
 
       <PriceDisplay
@@ -108,7 +110,7 @@ export default function NationCard({
       <Sparkline history={history} up={up} />
 
       {isElim ? (
-        <div className={styles.disabled}>Eliminated · 1 KC</div>
+        <div className={styles.disabled}>{ts('eliminatedBadge')}</div>
       ) : (
         <TradeActions
           nation={nation}

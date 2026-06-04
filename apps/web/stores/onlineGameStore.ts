@@ -213,7 +213,12 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
       if (held < quantity) return 'Actions insuffisantes';
     }
 
-    const result = await apiTrade(getDeviceId(), get()._competitionId, mode, nationId, quantity);
+    let result: Awaited<ReturnType<typeof apiTrade>>;
+    try {
+      result = await apiTrade(getDeviceId(), get()._competitionId, mode, nationId, quantity);
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Erreur réseau';
+    }
     if (result.error) return result.error;
 
     if (mode === 'buy') {

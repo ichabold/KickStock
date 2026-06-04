@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { fmt } from '@kickstock/game-engine';
 import type { StoredMatchResult, TeamMeta } from '@kickstock/types';
 import styles from './MatchAnimation.module.css';
@@ -13,10 +14,7 @@ interface Props {
   onDone:    () => void;
 }
 
-const PHASE_LABEL: Record<string, string> = {
-  Groups: 'GROUP STAGE', R32: 'ROUND OF 32', R16: 'ROUND OF 16',
-  QF: 'QUARTER-FINAL', SF: 'SEMI-FINAL', Final: '🏆 FINAL', '3rd': '3RD PLACE',
-};
+// PHASE_LABEL is built dynamically per-render using translations — see phaseLabel() below
 
 // Timing constants, tunable from one place
 const ANIM = {
@@ -83,6 +81,7 @@ function SingleMatch({
   teams:     TeamMeta[];
   onNext:    () => void;
 }) {
+  const ta = useTranslations('matchAnimation');
   const gN = (id: string) => (teams ?? []).find(t => t.id === id);
   const nA = gN(result.a)!;
   const nB = gN(result.b)!;
@@ -277,9 +276,13 @@ function SingleMatch({
   }
 
   const divCash = result.divCash ?? 0;
-  const phaseHdr = PHASE_LABEL[result.phase] ?? result.phase;
-  const subHdr = phase === 'et' || phase === 'stingerET' ? '⚡ EXTRA TIME'
-    : phase === 'pens' || phase === 'stingerPens' ? '🎯 PENALTIES' : null;
+  const phaseLabels: Record<string, string> = {
+    Groups: ta('groupStage'), R32: ta('r32'), R16: ta('r16'),
+    QF: ta('quarterFinal'), SF: ta('semiFinal'), Final: ta('final'), '3rd': ta('thirdPlace'),
+  };
+  const phaseHdr = phaseLabels[result.phase] ?? result.phase;
+  const subHdr = phase === 'et' || phase === 'stingerET' ? `⚡ ${ta('extraTime')}`
+    : phase === 'pens' || phase === 'stingerPens' ? `🎯 ${ta('penalties')}` : null;
 
   const penScoreA = penEvents.filter(k => k.team === 'A' && k.scored).length;
   const penScoreB = penEvents.filter(k => k.team === 'B' && k.scored).length;
@@ -303,16 +306,16 @@ function SingleMatch({
       {/* Phase stingers */}
       {phase === 'stingerET' && (
         <PhaseStinger
-          label="EXTRA TIME"
-          sub="30 minutes added"
+          label={ta('extraTime')}
+          sub={ta('extraTimeSub')}
           tone="gold"
           onDone={() => { setPhase('et'); startET(); }}
         />
       )}
       {phase === 'stingerPens' && (
         <PhaseStinger
-          label="PENALTIES"
-          sub="Sudden death shootout"
+          label={ta('penalties')}
+          sub={ta('penaltiesSub')}
           tone="loss"
           onDone={() => { setPhase('pens'); startPens(); }}
         />
@@ -320,7 +323,7 @@ function SingleMatch({
 
       {/* Skip button */}
       {(phase === 'playing' || phase === 'et') && (
-        <button className={styles.skipBtn} onClick={skip}>SKIP ▶▶</button>
+        <button className={styles.skipBtn} onClick={skip}>{ta('skip')}</button>
       )}
 
       {/* Phase header */}
@@ -337,8 +340,8 @@ function SingleMatch({
           </div>
           <div className={styles.teamNameSmall}>{nA.name.toUpperCase()}</div>
           {phase === 'pens' && nxtTeam === 'A' && (portfolio[result.a] ?? 0) > 0
-            ? <div className={styles.yourTeam}>VOTRE ÉQUIPE</div>
-            : expA && <div className={styles.expBadge}>EXPOSED</div>
+            ? <div className={styles.yourTeam}>{ta('yourTeam')}</div>
+            : expA && <div className={styles.expBadge}>{ta('exposed')}</div>
           }
         </div>
         <div className={styles.scoreBox} aria-label={`${sA} à ${sB}`}>
@@ -352,8 +355,8 @@ function SingleMatch({
           </div>
           <div className={styles.teamNameSmall}>{nB.name.toUpperCase()}</div>
           {phase === 'pens' && nxtTeam === 'B' && (portfolio[result.b] ?? 0) > 0
-            ? <div className={styles.yourTeam}>VOTRE ÉQUIPE</div>
-            : expB && <div className={styles.expBadge}>EXPOSED</div>
+            ? <div className={styles.yourTeam}>{ta('yourTeam')}</div>
+            : expB && <div className={styles.expBadge}>{ta('exposed')}</div>
           }
         </div>
       </div>
@@ -364,13 +367,13 @@ function SingleMatch({
           <div className={styles.progBg}>
             <div className={styles.progFill} style={{ width: `${prog}%` }} />
           </div>
-          <div className={styles.progTimer}>{min}&apos;{phase === 'et' ? ' (ET)' : ''}</div>
+          <div className={styles.progTimer}>{min}&apos;{phase === 'et' ? ` (${ta('etAbbr')})` : ''}</div>
         </div>
       )}
 
       {/* Whistle */}
       <div className={styles.whistle} style={{ opacity: whistle ? 1 : 0 }}>
-        {phase === 'pens' ? '🎯 PENALTY SHOOTOUT' : phase === 'et' ? '⚡ FULL TIME (ET)' : '⚽ FULL TIME'}
+        {phase === 'pens' ? `🎯 ${ta('penaltyShootout')}` : phase === 'et' ? `⚡ ${ta('fullTimeET')}` : `⚽ ${ta('fullTime')}`}
       </div>
 
       {/* Penalty view */}
@@ -439,7 +442,7 @@ function SingleMatch({
               </div>
               {result.penWinner && <div className={styles.rSub}>Pens: {result.penA}–{result.penB}</div>}
               {pnlLabel && <div className={styles.rPnl} style={{ color: 'var(--loss)' }}>{pnlLabel}</div>}
-              <div className={styles.rSub}>{gN(krachId)?.name.toUpperCase()} ELIMINATED → 1 KC</div>
+              <div className={styles.rSub}>{gN(krachId)?.name.toUpperCase()} {ta('eliminatedKc')}</div>
             </>
           ) : (expA || expB) ? (
             <>
@@ -484,7 +487,7 @@ function SingleMatch({
             </>
           )}
           <button className={styles.nextBtn} onClick={onNext}>
-            {matchNum < total ? 'MATCH SUIVANT ▶' : 'VOIR LES RÉSULTATS ▶'}
+            {matchNum < total ? ta('nextMatch') : ta('viewResults')}
           </button>
         </div>
       )}

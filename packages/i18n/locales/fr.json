@@ -151,6 +151,7 @@
     "bestScoresTab": "MEILLEURS SCORES",
     "liveCompetitionTab": "COMPÉTITION LIVE",
     "eliminatedBadge": "💀 ÉLIMINÉ · 1 KC",
+    "elimOut": "ÉLIM.",
     "refresh": "↻ ACTUALISER",
     "rankingAutoRefresh": "Mise à jour auto toutes les 30s"
   },
@@ -306,6 +307,29 @@
     "noScorers": "0 – 0 · Aucun buteur enregistré",
     "impact": "{nation} IMPACT",
     "closeLabel": "Fermer"
+  },
+  "matchAnimation": {
+    "groupStage": "PHASE DE GROUPES",
+    "r32": "HUITIÈMES",
+    "r16": "SEIZIÈMES",
+    "quarterFinal": "QUART DE FINALE",
+    "semiFinal": "DEMI-FINALE",
+    "final": "🏆 FINALE",
+    "thirdPlace": "PETITE FINALE",
+    "extraTime": "PROLONGATIONS",
+    "extraTimeSub": "30 minutes ajoutées",
+    "etAbbr": "PROL.",
+    "penalties": "TIRS AU BUT",
+    "penaltiesSub": "Tirs au but décisifs",
+    "penaltyShootout": "TIRS AU BUT",
+    "fullTimeET": "TEMPS RÉGL. (PROL.)",
+    "fullTime": "TEMPS RÉGLEMENTAIRE",
+    "skip": "PASSER ▶▶",
+    "exposed": "EXPOSÉ",
+    "yourTeam": "VOTRE ÉQUIPE",
+    "eliminatedKc": "ÉLIMINÉ → 1 KC",
+    "nextMatch": "MATCH SUIVANT ▶",
+    "viewResults": "VOIR LES RÉSULTATS ▶"
   },
   "nationDetail": {
     "initialPrice": "Départ",

@@ -151,6 +151,7 @@
     "bestScoresTab": "BEST SCORES",
     "liveCompetitionTab": "LIVE COMPETITION",
     "eliminatedBadge": "💀 ELIMINATED · 1 KC",
+    "elimOut": "OUT",
     "refresh": "↻ REFRESH",
     "rankingAutoRefresh": "Auto-refresh every 30s"
   },
@@ -306,6 +307,29 @@
     "noScorers": "0 – 0 · No scorers recorded",
     "impact": "{nation} IMPACT",
     "closeLabel": "Close"
+  },
+  "matchAnimation": {
+    "groupStage": "GROUP STAGE",
+    "r32": "ROUND OF 32",
+    "r16": "ROUND OF 16",
+    "quarterFinal": "QUARTER-FINAL",
+    "semiFinal": "SEMI-FINAL",
+    "final": "🏆 FINAL",
+    "thirdPlace": "3RD PLACE",
+    "extraTime": "EXTRA TIME",
+    "extraTimeSub": "30 minutes added",
+    "etAbbr": "ET",
+    "penalties": "PENALTIES",
+    "penaltiesSub": "Sudden death shootout",
+    "penaltyShootout": "PENALTY SHOOTOUT",
+    "fullTimeET": "FULL TIME (ET)",
+    "fullTime": "FULL TIME",
+    "skip": "SKIP ▶▶",
+    "exposed": "EXPOSED",
+    "yourTeam": "YOUR TEAM",
+    "eliminatedKc": "ELIMINATED → 1 KC",
+    "nextMatch": "NEXT MATCH ▶",
+    "viewResults": "VIEW RESULTS ▶"
   },
   "nationDetail": {
     "initialPrice": "Start",

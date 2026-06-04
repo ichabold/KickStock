@@ -103,8 +103,6 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
             wrapClassName="st-acts"
             buyClassName="bbuy"
             sellClassName="bsell"
-            buyLabel="▲ BUY"
-            sellLabel="▼ SELL"
           />
       }
     </div>
