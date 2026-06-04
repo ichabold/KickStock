@@ -1971,3 +1971,350 @@ Les 3 tests Vitest existants couvrent uniquement le chemin happy path basique. A
 ---
 
 *Document mis à jour le 2 juin 2026 — Version 2 (post NEXT_STEPS.md)*
+
+---
+
+## État du projet — Version 8 (4 juin 2026)
+
+### Session 2026-06-03/04 — Infrastructure API-Football + Admin enrichi + Pricing
+
+---
+
+### Nouvelles logiques métier
+
+#### `strengthToPrice(strength)` — Formule de prix quadratique
+
+**Remplace** l'ancienne formule linéaire `strength × 1.5`.
+
+```typescript
+// lib/normalizer.ts
+export function strengthToPrice(strength: number): number {
+  const clamped = Math.max(50, Math.min(100, strength));
+  const t = (clamped - 50) / 50;   // normalise 0→1
+  return Math.round(5 + 195 * t * t);
+}
+```
+
+**Valeurs clés :**
+
+| Strength | Prix KC | Exemple équipe |
+|----------|---------|----------------|
+| 50 (plancher) | 5 KC | Équipes hors-ranking |
+| 60 | 13 KC | — |
+| 70 | 36 KC | Qatar |
+| 75 (défaut) | 54 KC | Équipes sans ranking FIFA |
+| 80 | 75 KC | Mexico |
+| 90 | 130 KC | Argentina |
+| 95 | 163 KC | Brazil |
+| 100 (max) | 200 KC | — |
+
+**Justification :** courbe convexe — les équipes faibles démarrent très bas, l'écart s'accentue vers les top équipes, créant une vraie tension de marché.
+
+**Utilisée par :**
+- `import-teams/route.ts` → `import { strengthToPrice } from '@/lib/normalizer'`
+- `sync-fixtures/route.ts` step 5 (seed initial_price)
+- `teams/[team_id]/route.ts` PATCH (recalcul auto depuis strength)
+
+---
+
+#### `normalizeFixture` — Support des fixtures placeholder KO
+
+**Nouvelle logique :** les fixtures KO publiées avant la fin des groupes ont des équipes placeholder ("Winner Group A", "Runner-up Group B"). L'ancienne version retournait `null` → fixture skippée → aucun `competition_day` créé.
+
+**Nouveau comportement :**
+```typescript
+// lib/normalizer.ts
+function derivePlaceholderId(name: string): string {
+  const clean = name.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 12);
+  return `KO_${clean}`;
+}
+
+// Dans normalizeFixture() :
+if (!idA || !idB) {
+  if (!isKO) return null;  // Group Stage non mappé → skip
+  // KO placeholder → dériver IDs stables
+  idA = idA ?? derivePlaceholderId(fixture.teams.home.name);
+  idB = idB ?? derivePlaceholderId(fixture.teams.away.name);
+  isPlaceholder = true;  // signal au cron : skip teams/competition_teams
+}
+```
+
+**`isPlaceholder = true`** → le cron `sync-fixtures` skip les steps 1 et 2 (upsert teams + competition_teams) mais exécute toujours steps 3 et 4 (competition_days + match). Résultat : les journées KO apparaissent dans le calendrier dès publication des fixtures placeholder.
+
+**Mise à jour `upsert_fixture` (migration 016) :**
+```sql
+ON CONFLICT (fixture_id) DO UPDATE SET
+  nation_a     = EXCLUDED.nation_a,   -- ← nouveau : placeholder → vraie équipe
+  nation_b     = EXCLUDED.nation_b,   -- ← nouveau
+  scheduled_at = EXCLUDED.scheduled_at,
+  ...
+```
+`nation_a`/`nation_b` désormais dans le `DO UPDATE SET` → quand l'API remplace "Winner Group A" par "France", le prochain sync met à jour automatiquement.
+
+**Champ `isPlaceholder` ajouté à `NormalizedFixture` :**
+```typescript
+export interface NormalizedFixture {
+  ...
+  isPlaceholder: boolean;
+}
+```
+
+---
+
+#### `sync-fixtures` — Enrichissements
+
+**Step 4b — Sync group_code depuis `/standings`** (non-bloquant) :
+```typescript
+const standings = await fetchGroupStandings(comp.league_id, comp.season);
+for (const entry of standings) {
+  const groupCode = entry.group.replace(/^Group\s+/i, '').trim();
+  const teamId    = apiNameToTeamId(entry.team.name, comp.league_id);
+  if (!teamId) continue;
+  await adm(admin).from('competition_teams')
+    .update({ group_code: groupCode })
+    .eq('competition_id', comp.id)
+    .eq('team_id', teamId);
+}
+```
+**Raison :** `fixture.league.group` est `null` dans les fixtures WC2026. L'endpoint `/standings?league=1&season=2026` retourne les groupes A-L correctement.
+
+**Protection contre l'écrasement null (step 2) :**
+```typescript
+// N'inclure group_code dans l'upsert que si non-null
+const row: Record<string, unknown> = { competition_id, team_id };
+if (ct.group_code !== null) row.group_code = ct.group_code;
+```
+
+**Paramètre `competition_id` (bypass `is_active`) :**
+```
+GET /api/cron/sync-fixtures?competition_id=2
+```
+Quand appelé depuis le panel admin avec `competition_id`, cible cette compétition spécifique même si `is_active=false`. Sans paramètre : comportement normal (toutes les actives).
+
+**Champ `fetched` dans le résultat :**
+```json
+{ "competition": "FIFA World Cup 2026", "fetched": 72, "upserted": 72, "skipped": 0 }
+```
+Distingue "API a retourné 0 fixtures" de "fixtures reçues mais toutes skippées".
+
+---
+
+#### `fetchGroupStandings(leagueId, season)` — Nouvelle fonction
+
+```typescript
+// lib/football-api.ts
+export interface ApiStandingEntry {
+  rank:     number;
+  team:     { id: number; name: string };
+  points:   number;
+  goalsDiff: number;
+  group:    string;  // "Group A"…"Group L"
+  all:      { played: number; win: number; draw: number; lose: number; goals: { for: number; against: number } };
+}
+
+export async function fetchGroupStandings(leagueId, season): Promise<ApiStandingEntry[]>
+```
+
+- Cache Redis : 6h (`api:standings:${leagueId}:${season}`)
+- Filtre : uniquement les entrées `group.startsWith('Group ')` (exclut "Ranking of third-placed teams")
+- Erreurs API remontées (pas silencieuses)
+
+---
+
+#### `sync-schedule` — Nouveau cron
+
+```
+GET /api/cron/sync-schedule?competition_id=N
+```
+
+Crée les `competition_days` pour toutes les phases KO selon le calendrier officiel WC2026 :
+
+| Phase | Jours | Dates |
+|-------|-------|-------|
+| R32 | 6 jours (day_index 17-22) | 28 juin – 3 juillet |
+| R16 | 4 jours (day_index 24-27) | 5-8 juillet |
+| QF  | 2 jours (day_index 31-32) | 12-13 juillet |
+| SF  | 2 jours (day_index 35-36) | 16-17 juillet |
+| 3rd | 1 jour (day_index 39) | 20 juillet |
+| Final | 1 jour (day_index 40) | 21 juillet |
+
+- Idempotent (upsert sur `competition_id,day_index`)
+- Uniquement `league_id=1` (autres leagues : `skipped`)
+- Déclenché depuis le bouton **↻ SYNC SCHEDULE** dans `CompetitionActions`
+
+---
+
+#### Bootstrap — Cache-bust automatique
+
+**Problème résolu :** les joueurs voyaient des prix périmés (cache localStorage 24h) après une mise à jour admin.
+
+**Solution :** appel lightweight `?version_only=1` avant de lire le cache :
+```typescript
+// lib/bootstrap.ts
+const vRes = await fetch(`/api/competition/bootstrap?competition_id=${id}&version_only=1`);
+const { version } = await vRes.json();  // = competitions.last_sync_at
+const cached = readCache(competitionId, serverVersion);
+// Si version différente du cache → cache invalidé → refetch complet
+```
+
+**API côté serveur :**
+```typescript
+if (versionOnly) {
+  return NextResponse.json({ version: comp.last_sync_at ?? comp.id });
+}
+```
+
+**Impact :** dès qu'un admin lance "Import Teams" ou "Sync Fixtures" (ce qui met à jour `last_sync_at`), les joueurs reçoivent les nouveaux prix à leur prochaine ouverture de l'app — sans action manuelle.
+
+---
+
+### Admin — Nouvelles fonctionnalités
+
+#### `PATCH /api/admin/competitions/[id]`
+
+Édition des métadonnées d'une compétition :
+```
+Body: { name?, season?, league_id?, start_date?, is_active? }
+```
+- Champs scopés explicitement (pas de wildcard)
+- `start_date` : critique pour le recalcul des `day_index` au prochain sync
+
+#### `CompetitionEditor.tsx`
+
+Formulaire inline (client) dans l'onglet INFO :
+- Champs : Nom, Saison, League ID, Date de début
+- Avertissement si `start_date` modifiée (impacte tous les `day_index`)
+
+#### Correction query admin liste `/admin`
+
+**Bug :** la query sélectionnait `end_date` (colonne inexistante) → PostgREST error → `data=null` → "Aucune compétition".
+
+**Fix :** suppression de `end_date` + ajout de colonnes utiles (compteurs teams/matches/jours, `last_sync_at`).
+
+#### Bouton ↻ SYNC SCHEDULE
+
+Nouveau bouton violet dans `CompetitionActions` → `POST /api/admin/competitions/${id}/sync {type:'schedule'}` → déclenche `/api/cron/sync-schedule?competition_id=${id}`.
+
+#### `TeamEditor` — Auto-calcul du prix
+
+```typescript
+// Modifier strength → recalcule le prix automatiquement (si pas d'override manuel)
+function handleStrChange(val: string) {
+  setStr(val);
+  if (!priceManual) {
+    const s = parseInt(val, 10);
+    if (!isNaN(s)) setPrice(String(strengthToPrice(s)));
+  }
+}
+```
+
+- Champ prix avec **bordure jaune** si override manuel, grise si calculé
+- Envoi du body : `initial_price` inclus uniquement si `priceManual === true`
+
+#### `PATCH /api/admin/competitions/[id]/teams/[team_id]` — Split tables
+
+**Avant :** tout envoyé vers `competition_teams` → erreur sur `strength` (colonne sur `teams`).
+
+**Après :**
+```typescript
+// strength → UPDATE teams SET strength = ?
+// group_code, initial_price, current_price → UPDATE competition_teams SET ...
+// Si strength modifiée sans initial_price explicite :
+const recalcPrice = strengthToPrice(body.strength);
+compTeamUpdates.initial_price = recalcPrice;
+compTeamUpdates.current_price = recalcPrice;
+```
+
+#### `import-teams` — Fallback strength DB
+
+**Problème :** endpoint `/teams/rankings/fifa` non disponible avec le plan API actuel → `strengthMap` vide → tous les prix à 54 KC.
+
+**Fix :** si l'API FIFA échoue, utiliser la force déjà en DB :
+```typescript
+const strength = strengthMap.get(t.id)
+              ?? dbStrengthByApiId.get(t.id)
+              ?? dbStrengthById.get(teamId)
+              ?? 75;
+// N'update teams.strength que si freshValue depuis API FIFA
+if (strengthMap.get(t.id) !== undefined) {
+  teamPatch.strength = strength;
+}
+```
+
+---
+
+### Team mapping — Ajouts WC2026
+
+| Nom API-Football | ID KickStock | Raison |
+|-----------------|--------------|--------|
+| `'Türkiye'` | `'TUR'` | Orthographe officielle depuis 2022 |
+| `'Bosnia & Herzegovina'` | `'BIH'` | API utilise `&` pas `and` |
+| `'Cape Verde Islands'` | `'CPV'` | API utilise "Islands" |
+| `'Congo DR'` | `'COD'` | API inverse "DR" et "Congo" |
+
+**Résultat WC2026 :** 72/72 fixtures syncées, 0 skippées.
+
+---
+
+### `parseFixtures` — Remontée d'erreurs API
+
+**Avant :** retournait `[]` silencieusement sur toute erreur API.
+
+**Après :**
+```typescript
+// Erreur api-sports.io : { "errors": { "token": "Error/Missing application key." } }
+if (data.errors && Object.keys(data.errors).length > 0) {
+  throw new Error(`API-Football error: ${JSON.stringify(data.errors)}`);
+}
+// Erreur RapidAPI : { "message": "You are not subscribed to this API." }
+if (data.message && !data.response) {
+  throw new Error(`API-Football gateway: ${data.message}`);
+}
+// Réponse inattendue
+if (!data.response) {
+  throw new Error(`API-Football: réponse inattendue — ${JSON.stringify(body).slice(0, 200)}`);
+}
+```
+
+**Impact :** le cron `sync-fixtures` remonte maintenant l'erreur réelle dans `results[].error` au lieu de retourner `{ upserted: 0, skipped: 0 }` sans explication.
+
+---
+
+### Infrastructure — `vercel.json`
+
+**Crons automatiques (plan Hobby — 1 exécution/jour max) :**
+```json
+{
+  "crons": [
+    { "path": "/api/cron/sync-fixtures", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/sync-squads",   "schedule": "0 5 * * 1" }
+  ]
+}
+```
+
+**Note :** `sync-results` retiré des crons automatiques (plan Hobby = 1 run/jour, insuffisant pour les résultats en temps réel). À déclencher manuellement depuis l'admin pendant les matchs, ou passer au plan Pro pour `*/30 * * * *`.
+
+---
+
+### Création de compétition — Upsert au lieu d'Insert
+
+**Avant :** `INSERT` → crash si `(league_id, season)` déjà existant.
+
+**Après :** `upsert(onConflict: 'league_id,season', ignoreDuplicates: false)` → retourne l'ID existant et met à jour le nom. Permet de "reprendre" une compétition sans créer de doublon.
+
+**`competition_game_state` :** idem → `upsert(ignoreDuplicates: true)` → ne réinitialise pas un état existant.
+
+---
+
+### Récapitulatif des incohérences et résidus — Version 8
+
+| # | Description | Statut |
+|---|-------------|--------|
+| Endpoint FIFA rankings | `/teams/rankings/fifa` non disponible sur le plan actuel | ⚠️ Contournement : fallback sur DB strength. Fonctionnel. |
+| sync-results non automatique | Plan Hobby Vercel = 1 cron/jour max | ⚠️ Manuel pendant les matchs. Pro plan requis pour auto. |
+| `strength` global vs par compétition | `teams.strength` partagé entre WC2022 et WC2026 | 🟡 WC2022 = test data. Pour WC2026, strength = classements actuels (correct). À migrer si besoin historique. |
+| `competition_days` KO = hardcodées WC2026 | `sync-schedule` utilise les dates officielles FIFA 2026 | 🟡 Correct pour WC2026. Adapter pour d'autres compétitions si besoin. |
+
+---
+
+*Document mis à jour le 4 juin 2026 — Version 8*

@@ -16,6 +16,7 @@ export async function GET() {
   const { data, error } = await adm(admin)
     .from('competitions')
     .select('id, name, season, is_active')
+    .eq('is_active', true)
     .order('id', { ascending: false });
 
   if (error) {

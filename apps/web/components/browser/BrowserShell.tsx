@@ -14,6 +14,7 @@ import GuestModal from '@/components/auth/GuestModal';
 import WelcomeModal from '@/components/auth/WelcomeModal';
 import { getPseudo } from '@/lib/pseudo';
 import { PriceDisplay, TradeActions, SimulateButton, usePortfolioTotals } from '@/components/mechanics';
+import { useGameMode } from '@/hooks/useGameMode';
 import CoachMarkOverlay from '@/components/shared/CoachMarkOverlay';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
@@ -971,6 +972,7 @@ export default function BrowserShell() {
   const [matchDetail,  setMatchDetail]  = useState<{ result: StoredMatchResult; dayLabel: string } | null>(null);
   const [showTut,      setShowTut]      = useState(false);
   const { user: browserUser }           = useAuth();
+  const { mode: gameMode }              = useGameMode();
 
   useEffect(() => {
     useGameStore.getState().startSync();
@@ -1084,12 +1086,14 @@ export default function BrowserShell() {
                 🏆 {teams.find(t => t.id === champion)?.flag} {teams.find(t => t.id === champion)?.name?.toUpperCase()}
               </div>
             )}
-            {/* SimulateButton — mechanic atom, same advanceDay() logic as SimulateTab */}
-            <SimulateButton
-              className="sim-inline-btn"
-              onResults={results => { setAnimResults(results); setShowAnim(true); }}
-              onNoResults={() => setView('market')}
-            />
+            {/* SimulateButton — only in offline mode */}
+            {gameMode === 'offline' && (
+              <SimulateButton
+                className="sim-inline-btn"
+                onResults={results => { setAnimResults(results); setShowAnim(true); }}
+                onNoResults={() => setView('market')}
+              />
+            )}
           </div>
         </header>
 

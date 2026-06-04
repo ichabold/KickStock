@@ -183,6 +183,7 @@ KickStock supporte dès le lancement plusieurs tournois actifs simultanément (e
 - `/api/competition/bootstrap` retourne : équipes (avec prix initial, force, groupe, logo), journées (label, phase, is_ko, div_key), fixtures de groupe (équipes A/B, stade, date/heure).
 - Toute la structure du tournoi est issue de la base de données alimentée par l'admin (voir section 16).
 - Le chargement affiche un état intermédiaire (skeleton). En cas d'échec, un message d'erreur est affiché.
+- **Cache-bust automatique (2026-06-04) :** le client vérifie `last_sync_at` de la compétition avant de lire le cache localStorage. Si l'admin a mis à jour les données (Import Teams, Sync Fixtures), le cache est invalidé automatiquement sans rechargement forcé.
 
 ---
 
@@ -753,7 +754,7 @@ Toute la structure d'une compétition (nom, dates, équipes, groupes, stades, ho
 > En tant qu'admin, je veux créer un nouveau tournoi en renseignant ses métadonnées pour l'ouvrir aux joueurs.
 
 - Formulaire : **nom du tournoi**, **saison/année**, **`league_id` API-Football** (3 champs uniquement).
-- Les dates de début/fin ne sont **pas saisies** : `start_date` est dérivée automatiquement depuis les fixtures lors du premier sync ; `end_date` est cosmétique et non nécessaire à la création.
+- Si `(league_id, season)` existe déjà → upsert : retourne l'ID existant et met à jour le nom (pas de doublon).
 - La compétition est créée en état inactif (invisible aux joueurs) jusqu'à activation manuelle.
 - Chaque compétition est identifiée par un `id` unique et dispose d'un état de jeu partagé isolé.
 - La création **enchaîne automatiquement** 3 étapes avec retour visuel par étape :
@@ -768,14 +769,17 @@ Toute la structure d'une compétition (nom, dates, équipes, groupes, stades, ho
 
 Champs par équipe :
 - Identifiant ISO (ex. `BRA`, `FRA`)
-- Nom complet (localisé FR + EN)
+- Nom complet
 - Emoji drapeau et/ou URL de logo
-- Groupe d'appartenance (ex. `A`…`L`)
+- Groupe d'appartenance (ex. `A`…`L`) — synchronisé automatiquement depuis `/standings` lors du Sync Fixtures
 - Force FIFA (0–100), utilisée par le moteur de simulation
-- Prix initial en KC
+- Prix initial en KC — **formule quadratique** : `5 + 195 × ((strength-50)/50)²` (strength 50→5 KC, strength 100→200 KC)
 - Confédération (UEFA, CONMEBOL, CAF…)
 
-- Import possible depuis l'API API-Football ou saisie manuelle ligne par ligne.
+- Import possible depuis l'API API-Football (`⬇ IMPORT TEAMS`) ou édition manuelle ligne par ligne (✏️ dans l'onglet Équipes).
+- Modifier la Force recalcule automatiquement le prix initial.
+- Modifier le prix directement overrides la formule (bordure jaune dans le formulaire).
+- Si l'endpoint FIFA Rankings n'est pas disponible (plan API), la force existante en DB est utilisée comme fallback.
 
 ---
 
@@ -818,9 +822,11 @@ Champs par journée :
 **US-16.6 · Importer les fixtures depuis l'API Football**
 > En tant qu'admin, je veux déclencher manuellement la synchronisation des fixtures pour initialiser ou compléter le calendrier.
 
-- Un bouton "Sync fixtures" dans l'interface admin déclenche le cron `sync-fixtures`.
-- Les fixtures importées sont associées à leur `fixture_id` pour permettre la récupération automatique des résultats live.
+- Un bouton "↻ SYNC FIXTURES" dans l'interface admin déclenche le cron `sync-fixtures` pour cette compétition spécifique (même si inactive).
+- **Fixtures placeholder KO** : quand l'API publie des matchs KO avec équipes non encore déterminées ("Winner Group A"), le sync crée quand même les `competition_days` et enregistre le match. Quand les vraies équipes sont connues, le prochain sync les met à jour automatiquement.
+- **Groupes depuis `/standings`** : après le sync des fixtures, les `group_code` sont mis à jour automatiquement depuis l'endpoint standings (car `league.group` est souvent null dans les fixtures).
 - Les fixtures déjà présentes ne sont pas dupliquées (idempotent).
+- Le résultat affiche : `fetched` (reçus de l'API), `upserted`, `skipped`.
 
 ---
 
@@ -851,13 +857,16 @@ La page `/admin/competitions/[id]` est organisée en **4 onglets** :
 
 Boutons disponibles dans l'onglet INFO :
 - **ACTIVER / DÉSACTIVER** — toggle `is_active`
-- **SIMULATE DAY** — simule la journée courante (test uniquement)
-- **⬇ IMPORT TEAMS** — récupère les équipes depuis API-Football (`/teams?league=…&season=…`) + force FIFA + prix initial
-- **↻ SYNC FIXTURES** — synchronise le calendrier complet (matches + journées)
+- **⚡ SIMULATE DAY** — simule la journée courante (test uniquement)
+- **⬇ IMPORT TEAMS** — récupère les équipes depuis API-Football + force FIFA + recalcule les prix (formule quadratique)
+- **↻ SYNC FIXTURES** — synchronise les fixtures + groupes depuis `/standings` + fixtures placeholder KO
+- **↻ SYNC SCHEDULE** — crée les journées KO (R32→Final) selon le calendrier officiel WC2026
 - **↻ SYNC RESULTS** — récupère les résultats des matchs terminés
 - **↻ SYNC SQUADS** — récupère les compositions d'équipes
 
-Chaque bouton affiche le détail du résultat après exécution (ex : "32 importées · 0 ignorées").
+Chaque bouton affiche le détail du résultat après exécution (ex : "fetched: 72 · upserted: 72 · skipped: 0").
+
+**Contrainte plan Vercel Hobby :** `sync-results` n'est pas dans les crons automatiques (schedule `*/30` non autorisé sur Hobby). À déclencher manuellement pendant les matchs ou passer au plan Pro.
 
 ---
 
@@ -910,8 +919,8 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 | Domaine | Stories | Statut estimé |
 |---------|---------|---------------|
 | Onboarding & Auth | US-1.1 → 1.6 | ✅ Implémenté |
-| Internationalisation (FR/EN) | US-2.1 → 2.4 | ⚠️ Partiel (FR only en prod) |
-| Compétitions & Mode de jeu | US-3.1 → 3.4 | ✅ Implémenté |
+| Internationalisation (FR/EN) | US-2.1 → 2.4 | ✅ Implémenté (corrigé 2026-06-02) |
+| Compétitions & Mode de jeu | US-3.1 → 3.4 | ✅ Implémenté (cache-bust 2026-06-04) |
 | Marché — Vue | US-4.1 → 4.5 | ✅ Implémenté |
 | Marché — Trading | US-5.1 → 5.7 | ✅ Implémenté |
 | Portfolio | US-6.1 → 6.6 | ✅ Implémenté |
@@ -924,15 +933,31 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 | Leaderboard | US-13.1 → 13.2 | ✅ Implémenté |
 | Tutorial & Coach Marks | US-14.1 → 14.2 | ✅ Implémenté |
 | UI Shell Mobile & Desktop | US-15.1 → 15.5 | ✅ Implémenté |
-| Admin — Gestion compétitions | US-16.1 → 16.10 | ✅ Implémenté (UI tabulée complète) |
+| Admin — Gestion compétitions | US-16.1 → 16.11 | ✅ Implémenté (enrichi 2026-06-04) |
 | Infrastructure & Monitoring | US-17.1 → 17.3 | ✅ Implémenté |
 
-**Total : 63 user stories identifiées**
+**Total : 65 user stories identifiées**
+
+### Nouvelles US ajoutées (session 2026-06-03/04)
+
+**US-16.11 · Éditer les métadonnées d'une compétition existante**
+> En tant qu'admin, je veux modifier le nom, la saison, le league_id et la date de début d'une compétition sans la recréer.
+
+- Bouton **✏️ ÉDITER MÉTADONNÉES** dans l'onglet INFO de la page compétition.
+- Champs éditables : Nom, Saison, League ID, Date de début (`start_date`).
+- Modification de `start_date` entraîne un recalcul des `day_index` au prochain Sync Fixtures.
+- Via `PATCH /api/admin/competitions/[id]`.
 
 ### Zones à compléter
 
 | Priorité | Gap identifié |
 |----------|---------------|
-| 🟡 Moyenne | **US-2.1–2.4** — Switch de langue FR→EN fonctionnel en prod (corrigé session 2026-06-02) ; vérifier détection automatique `Accept-Language` |
-| 🟡 Moyenne | **US-16.8** — Pas de log horodaté des actions admin (dernière sync, erreurs cron) |
-| 🟢 Basse | **US-16.10** — Pas de confirmation avant modification d'un match déjà traité (`processed_at != null`) |
+| 🟡 Moyenne | **US-17.1** — `sync-results` non automatique sur plan Hobby Vercel (max 1 cron/jour). Déclencher manuellement pendant les matchs, ou passer Pro. |
+| 🟡 Moyenne | **US-16.8** — Pas de log horodaté des actions admin (dernière sync par bouton, erreurs). |
+| 🟡 Moyenne | **US-16.2** — `strength` global (table `teams`) partagé entre toutes les compétitions. Pour WC2022 test data, la force reflète le ranking actuel (2026) et non 2022. |
+| 🟢 Basse | **US-16.10** — Pas de confirmation avant modification d'un match déjà traité (`processed_at != null`). |
+| 🟢 Basse | **Endpoint FIFA Rankings** — `/teams/rankings/fifa` non disponible sur le plan API actuel. Contournement : fallback sur DB strength. |
+
+---
+
+*Document mis à jour le 4 juin 2026 — session admin infrastructure*
