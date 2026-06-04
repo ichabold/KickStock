@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+// Mirrors lib/normalizer.ts strengthToPrice (quadratic)
+function strengthToPrice(s: number): number {
+  const c = Math.max(50, Math.min(100, s));
+  const t = (c - 50) / 50;
+  return Math.round(5 + 195 * t * t);
+}
+
 interface Props {
   competitionId: number;
   teamId:        string;
@@ -15,10 +22,24 @@ export default function TeamEditor({
   competitionId, teamId, strength, groupCode, initialPrice
 }: Props) {
   const router = useRouter();
-  const [open,    setOpen]    = useState(false);
-  const [str,     setStr]     = useState(String(strength));
-  const [grp,     setGrp]     = useState(groupCode ?? '');
-  const [price,   setPrice]   = useState(String(initialPrice));
+  const [open,         setOpen]         = useState(false);
+  const [str,          setStr]          = useState(String(strength));
+  const [grp,          setGrp]          = useState(groupCode ?? '');
+  const [price,        setPrice]        = useState(String(initialPrice));
+  const [priceManual,  setPriceManual]  = useState(false); // true = user overrode price
+
+  function handleStrChange(val: string) {
+    setStr(val);
+    if (!priceManual) {
+      const s = parseInt(val, 10);
+      if (!isNaN(s)) setPrice(String(strengthToPrice(s)));
+    }
+  }
+
+  function handlePriceChange(val: string) {
+    setPrice(val);
+    setPriceManual(true); // user is overriding
+  }
   const [loading, setLoading] = useState(false);
   const [msg,     setMsg]     = useState<string | null>(null);
 
@@ -34,7 +55,8 @@ export default function TeamEditor({
           body:    JSON.stringify({
             strength:      parseInt(str, 10),
             group_code:    grp || null,
-            initial_price: parseFloat(price),
+            // n'envoie initial_price que si l'admin l'a modifié manuellement
+            ...(priceManual ? { initial_price: parseFloat(price) } : {}),
           }),
         }
       );
@@ -74,7 +96,7 @@ export default function TeamEditor({
       <input
         style={inputStyle}
         value={str}
-        onChange={e => setStr(e.target.value)}
+        onChange={e => handleStrChange(e.target.value)}
         placeholder="Force (0-100)"
         title="Force FIFA (0-100)"
       />
@@ -87,11 +109,11 @@ export default function TeamEditor({
         maxLength={1}
       />
       <input
-        style={{ ...inputStyle, width: 60 }}
+        style={{ ...inputStyle, width: 60, borderColor: priceManual ? '#FFDB00' : '#333' }}
         value={price}
-        onChange={e => setPrice(e.target.value)}
+        onChange={e => handlePriceChange(e.target.value)}
         placeholder="Prix KC"
-        title="Prix initial en KC"
+        title={priceManual ? 'Prix manuel (override)' : 'Prix calculé depuis la force'}
       />
       <button
         onClick={save}

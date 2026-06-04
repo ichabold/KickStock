@@ -20,8 +20,8 @@
 import * as Sentry from '@sentry/nextjs';
 import { createAdminClient }      from '@/lib/supabase/admin';
 import { fetchAllFixtures, fetchTeamStrengths, fetchGroupStandings } from '@/lib/football-api';
-import { normalizeFixture }       from '@/lib/normalizer';
-import type { Competition }       from '@/lib/normalizer';
+import { normalizeFixture, strengthToPrice } from '@/lib/normalizer';
+import type { Competition }                  from '@/lib/normalizer';
 import { apiNameToTeamId }        from '@/lib/team-mapping';
 
 export const dynamic     = 'force-dynamic';
@@ -197,7 +197,7 @@ export async function GET(req: Request) {
           for (const row of unseeded as Array<{ team_id: string; teams: { api_team_id: number | null; strength: number | null } | null }>) {
             const apiId    = row.teams?.api_team_id ?? null;
             const strength = (apiId && strengthMap.get(apiId)) ?? row.teams?.strength ?? 75;
-            const price    = Math.round(strength * 1.5);
+            const price    = strengthToPrice(strength);
 
             // Update teams.strength only if missing
             if (!row.teams?.strength && apiId) {

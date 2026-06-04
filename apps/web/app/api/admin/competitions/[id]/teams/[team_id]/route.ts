@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient }         from '@/lib/supabase/admin';
+import { createClient }              from '@/lib/supabase/server';
+import { strengthToPrice }           from '@/lib/normalizer';
 
 export async function PATCH(
   req: NextRequest,
@@ -31,24 +32,42 @@ export async function PATCH(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adm = createAdminClient() as any;
 
-  const updates: Record<string, unknown> = {};
-  if (body.strength     !== undefined) updates.strength     = body.strength;
-  if (body.group_code   !== undefined) updates.group_code   = body.group_code;
+  // strength → table teams
+  // group_code, initial_price, current_price → table competition_teams
+  const teamUpdates: Record<string, unknown> = {};
+  const compTeamUpdates: Record<string, unknown> = {};
+
+  if (body.strength   !== undefined) teamUpdates.strength     = body.strength;
+  if (body.group_code !== undefined) compTeamUpdates.group_code = body.group_code;
+
   if (body.initial_price !== undefined) {
-    updates.initial_price = body.initial_price;
-    updates.current_price = body.initial_price;
+    // Prix explicitement fourni → override direct
+    compTeamUpdates.initial_price = body.initial_price;
+    compTeamUpdates.current_price = body.initial_price;
+  } else if (body.strength !== undefined) {
+    // Strength modifiée sans prix explicite → recalcule le prix automatiquement
+    const recalcPrice = strengthToPrice(body.strength);
+    compTeamUpdates.initial_price = recalcPrice;
+    compTeamUpdates.current_price = recalcPrice;
   }
 
-  if (Object.keys(updates).length === 0) {
+  if (Object.keys(teamUpdates).length === 0 && Object.keys(compTeamUpdates).length === 0) {
     return NextResponse.json({ error: 'Aucun champ à mettre à jour' }, { status: 400 });
   }
 
-  const { error } = await adm
-    .from('competition_teams')
-    .update(updates)
-    .eq('competition_id', competitionId)
-    .eq('team_id', teamId);
+  if (Object.keys(teamUpdates).length > 0) {
+    const { error } = await adm.from('teams').update(teamUpdates).eq('id', teamId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (Object.keys(compTeamUpdates).length > 0) {
+    const { error } = await adm
+      .from('competition_teams')
+      .update(compTeamUpdates)
+      .eq('competition_id', competitionId)
+      .eq('team_id', teamId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
   return NextResponse.json({ ok: true });
 }

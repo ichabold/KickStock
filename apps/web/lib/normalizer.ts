@@ -72,7 +72,24 @@ export interface Competition {
   start_date: string | null;  // "2026-06-11"
 }
 
-// ── Game-rule constant (not factual data) ─────────────────────────────────────
+// ── Game-rule constants (not factual data) ────────────────────────────────────
+
+/**
+ * Converts a FIFA strength (50–100) to an initial price in KC.
+ *
+ * Quadratic scale (convex — slow start, steep at top):
+ *   strength 50  →   5 KC
+ *   strength 75  →  54 KC
+ *   strength 90  → 130 KC
+ *   strength 100 → 200 KC
+ *
+ * Formula: round(5 + 195 × ((strength - 50) / 50)²)
+ */
+export function strengthToPrice(strength: number): number {
+  const clamped = Math.max(50, Math.min(100, strength));
+  const t = (clamped - 50) / 50; // normalised 0→1
+  return Math.round(5 + 195 * t * t);
+}
 
 /**
  * Maps KickStock phase names to dividend keys.

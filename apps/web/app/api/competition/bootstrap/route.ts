@@ -32,6 +32,7 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const url   = new URL(req.url);
   const competitionIdParam = url.searchParams.get('competition_id');
+  const versionOnly        = url.searchParams.get('version_only') === '1';
 
   // ── 1. Competition ────────────────────────────────────────────────────────
   let compQuery = adm(admin)
@@ -44,13 +45,20 @@ export async function GET(req: Request) {
     compQuery = compQuery.eq('is_active', true).order('id', { ascending: false });
   }
 
-  const { data: comp, error: compErr } = await compQuery.limit(1).single();
+  const { data: comp, error: compErr } = await compQuery
+    .select('id, name, start_date, league_id, season, last_sync_at')
+    .limit(1).single();
 
   if (compErr || !comp) {
     return NextResponse.json(
       { error: 'Competition not found. Run sync-fixtures first.' },
       { status: 404 }
     );
+  }
+
+  // Version-only request — cheap cache-bust check (no DB joins needed)
+  if (versionOnly) {
+    return NextResponse.json({ version: comp.last_sync_at ?? comp.id });
   }
 
   // ── 2. Teams with group + pricing ─────────────────────────────────────────

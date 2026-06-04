@@ -13,6 +13,7 @@ import { createClient }                from '@/lib/supabase/server';
 import { apiNameToTeamId }             from '@/lib/team-mapping';
 import { teamIdToFlagEmoji }           from '@/lib/team-mapping/team-iso2';
 import { fetchTeamStrengths }          from '@/lib/football-api';
+import { strengthToPrice }             from '@/lib/normalizer';
 
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io';
 
@@ -59,13 +60,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Fetch failed' }, { status: 500 });
   }
 
-  // Fetch FIFA rankings for strength + initial_price seeding
+  // Fetch FIFA rankings for strength seeding (best-effort — endpoint may not be
+  // available on all API plans). Falls back to existing DB strength.
   let strengthMap = new Map<number, number>();
   try {
     strengthMap = await fetchTeamStrengths();
   } catch {
-    // non-blocking: teams will be imported with default strength 75
-    console.warn('[import-teams] FIFA rankings fetch failed, using default strength');
+    console.warn('[import-teams] FIFA rankings fetch failed — will use existing DB strength');
+  }
+
+  // Pre-load existing strength values from DB as fallback
+  const { data: existingTeams } = await adm
+    .from('teams')
+    .select('id, api_team_id, strength');
+  const dbStrengthByApiId = new Map<number, number>();
+  const dbStrengthById    = new Map<string, number>();
+  for (const row of (existingTeams ?? []) as Array<{ id: string; api_team_id: number | null; strength: number }>) {
+    if (row.api_team_id) dbStrengthByApiId.set(row.api_team_id, row.strength);
+    dbStrengthById.set(row.id, row.strength);
   }
 
   let imported = 0;
@@ -75,7 +87,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   for (const item of apiTeams) {
     const t = item.team;
 
-    // [G8 FIX] Derive ISO2 team ID via the team-mapping (e.g. "Brazil" → "BRA")
     const teamId = apiNameToTeamId(t.name, comp.league_id);
     if (!teamId) {
       skipped++;
@@ -83,22 +94,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       continue;
     }
 
-    const strength     = strengthMap.get(t.id) ?? 75;
-    const initialPrice = Math.round(strength * 1.5); // e.g. str=100 → 150 KC, str=75 → 112 KC
+    // Priority: FIFA API → existing DB value → default 75
+    const strength     = strengthMap.get(t.id)
+                      ?? dbStrengthByApiId.get(t.id)
+                      ?? dbStrengthById.get(teamId)
+                      ?? 75;
+    const initialPrice = strengthToPrice(strength);
     const flagEmoji    = teamIdToFlagEmoji(teamId);
 
-    // Upsert team (do NOT overwrite strength if already set manually)
-    await adm.from('teams').upsert({
+    // Upsert team — only update strength if we got a fresh value from FIFA API
+    const teamPatch: Record<string, unknown> = {
       id:          teamId,
       api_team_id: t.id,
       name:        t.name,
       logo_url:    t.logo ?? null,
       flag_emoji:  flagEmoji ?? null,
-      strength,
-      strength_updated_at: new Date().toISOString(),
-    }, { onConflict: 'id', ignoreDuplicates: false });
+    };
+    if (strengthMap.get(t.id) !== undefined) {
+      teamPatch.strength             = strength;
+      teamPatch.strength_updated_at  = new Date().toISOString();
+    }
+    await adm.from('teams').upsert(teamPatch, { onConflict: 'id', ignoreDuplicates: false });
 
-    // Upsert competition_teams with pricing
+    // Upsert competition_teams with recalculated price
     await adm.from('competition_teams').upsert({
       competition_id: competitionId,
       team_id:        teamId,

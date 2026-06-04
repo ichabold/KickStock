@@ -14,14 +14,16 @@ function cacheKey(competitionId: number) {
   return `kickstock:bootstrap:v2:${competitionId}`;
 }
 
-interface CacheEntry { data: BootstrapData; fetchedAt: number }
+interface CacheEntry { data: BootstrapData; fetchedAt: number; serverVersion?: string }
 
-function readCache(competitionId: number): BootstrapData | null {
+function readCache(competitionId: number, serverVersion?: string): BootstrapData | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(cacheKey(competitionId));
     if (!raw) return null;
     const entry = JSON.parse(raw) as CacheEntry;
+    // Bust cache if server version changed (prices/fixtures updated)
+    if (serverVersion && entry.serverVersion !== serverVersion) return null;
     if (Date.now() - entry.fetchedAt < CACHE_TTL) return entry.data;
     return null;
   } catch { return null; }
@@ -36,15 +38,25 @@ function readStale(competitionId: number): BootstrapData | null {
   } catch { return null; }
 }
 
-function writeCache(competitionId: number, data: BootstrapData): void {
+function writeCache(competitionId: number, data: BootstrapData, serverVersion?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(cacheKey(competitionId), JSON.stringify({ data, fetchedAt: Date.now() }));
+    localStorage.setItem(cacheKey(competitionId), JSON.stringify({ data, fetchedAt: Date.now(), serverVersion }));
   } catch { /* storage full / private mode */ }
 }
 
 export async function getBootstrap(competitionId = 1): Promise<BootstrapData | null> {
-  const cached = readCache(competitionId);
+  // Fetch just the version (last_sync_at) cheaply before deciding to use cache
+  let serverVersion: string | undefined;
+  try {
+    const vRes = await fetch(`/api/competition/bootstrap?competition_id=${competitionId}&version_only=1`, { cache: 'no-store' });
+    if (vRes.ok) {
+      const v = await vRes.json() as { version?: string };
+      serverVersion = v.version;
+    }
+  } catch { /* ignore — fallback to TTL-based cache */ }
+
+  const cached = readCache(competitionId, serverVersion);
   if (cached) return cached;
 
   try {
@@ -56,7 +68,7 @@ export async function getBootstrap(competitionId = 1): Promise<BootstrapData | n
       throw new Error('Bootstrap empty — run sync-fixtures first');
     }
 
-    writeCache(competitionId, data);
+    writeCache(competitionId, data, serverVersion ?? data.generated_at);
     return data;
   } catch (err) {
     console.warn('[bootstrap] fetch failed:', err);
