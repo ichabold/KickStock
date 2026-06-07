@@ -90,7 +90,6 @@ export default function AuthWidget({ compact = false }: Props) {
               onClose={() => setPanelOpen(false)}
               onSignOut={async () => {
                 setPanelOpen(false);
-                useGameStore.getState().resetGame();
                 await signOut();
                 window.location.reload();
               }}
@@ -116,7 +115,6 @@ export default function AuthWidget({ compact = false }: Props) {
               onClose={() => setPanelOpen(false)}
               onSignOut={async () => {
                 setPanelOpen(false);
-                useGameStore.getState().resetGame();
                 await signOut();
                 window.location.reload();
               }}
