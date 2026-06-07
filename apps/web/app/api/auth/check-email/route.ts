@@ -5,10 +5,23 @@
  * Response: { exists: boolean, confirmed: boolean }
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rateLimitRedis';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const rl = await checkRateLimit('checkEmail', ip);
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'too_many_requests' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil((rl.reset * 1000 - Date.now()) / 1000)) },
+      },
+    );
+  }
+
   const email = req.nextUrl.searchParams.get('q')?.trim().toLowerCase();
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'invalid_email' }, { status: 400 });

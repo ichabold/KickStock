@@ -16,6 +16,16 @@ export async function signDeviceId(deviceId: string): Promise<string> {
   return hmac(deviceId);
 }
 
+// Empreinte non réversible d'une valeur (IP ou User-Agent), salée par le
+// secret de signature pour empêcher toute reconstruction par dictionnaire /
+// rainbow table. Utilisée par le verrou anti-usurpation device_id (table
+// `device_bindings`) — règle impérative : ne jamais stocker l'IP en clair.
+export async function hashFingerprint(value: string): Promise<string> {
+  const enc = new TextEncoder();
+  const digest = await crypto.subtle.digest('SHA-256', enc.encode(`${SECRET}:fp:${value}`));
+  return Buffer.from(digest).toString('hex');
+}
+
 export async function verifyDeviceSignature(
   deviceId: string,
   signature: string,

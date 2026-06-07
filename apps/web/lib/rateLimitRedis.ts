@@ -16,8 +16,9 @@ const LIMITS = {
   trade:   { requests: 30,  window: '1 m'  },
   advance: { requests: 10,  window: '1 m'  },
   state:   { requests: 120, window: '1 m'  },
-  auth:    { requests: 5,   window: '10 m' },
-  reset:   { requests: 5,   window: '1 m'  }, // réinitialiser un portfolio est une action rare
+  auth:       { requests: 5,   window: '10 m' },
+  reset:      { requests: 5,   window: '1 m'  }, // réinitialiser un portfolio est une action rare
+  checkEmail: { requests: 10,  window: '10 m' }, // anti-énumération d'emails
 } as const;
 
 type Endpoint = keyof typeof LIMITS;

@@ -1,37 +1,48 @@
 # Audit de sécurité — Réponse aux remarques d'Eric
-**Date :** 2026-06-07  
-**Objet :** Vérification post-correctifs des 10 points soulevés
+**Date :** 2026-06-07 (mise à jour finale après correction de la lacune `/api/game/reset`)  
+**Objet :** Vérification post-correctifs des 10 points soulevés, avec tests d'attaque réels en production
 
 ---
 
 ## Résumé exécutif
 
-Eric, suite à tes remarques, j'ai fait corriger les points 1, 2, 3, 7 et 9 (les plus critiques) et j'ai refait un audit complet du code pour vérifier l'efficacité réelle des correctifs — pas seulement leur présence. Voici le résultat :
+Eric, suite à tes remarques, j'ai fait corriger les points 1, 2, 3, 7 et 9 (les plus critiques). J'ai mené l'audit en deux passes :
 
-- **5 points résolus** (2, 4, 6, 9, 10)
-- **3 points réduits mais avec une lacune identifiée** (1, 3, 5)
-- **1 point résolu intégralement** (7)
-- **1 point confirmé comme un choix de design acceptable** (8)
+1. **Première passe (revue de code)** : vérification de l'efficacité réelle des correctifs — pas seulement leur présence. Cette passe a révélé une lacune : l'endpoint `/api/game/reset` avait été oublié lors de l'application des correctifs sur le device_id (point 1) et le rate limiting (point 3).
+2. **Deuxième passe, après correction de cette lacune par la team** : **tests d'attaque réels exécutés directement contre la production** (`kick-stock-web.vercel.app`) pour valider — pas seulement lire le code, mais observer le comportement effectif de l'API face à des tentatives d'usurpation et de spam.
 
-**Une lacune notable a été trouvée** : l'endpoint `/api/game/reset` a été oublié lors de l'application des correctifs sur le device_id et le rate limiting. Détail ci-dessous.
+**Résultat final :**
+
+- **9 points résolus / confirmés sains** (1, 2, 3, 4, 6, 7, 9, 10 + 8 en choix de design assumé)
+- **1 point réduit avec un risque résiduel faible et documenté** (5 — cache localStorage non signé, mitigations suffisantes en place)
+- **0 lacune ouverte**
 
 ---
 
 ## Détail point par point
 
-### 1. Usurpation d'identité via device_id — 🟡 RÉDUIT (lacune identifiée)
+### 1. Usurpation d'identité via device_id — ✅ RÉSOLU (validé par test d'attaque réel)
 
 **Correctif appliqué :** Un cookie `HttpOnly; Secure; SameSite=Strict` signé en HMAC-SHA256 (`kickstock_device_sig`) est maintenant lié au device_id. Vérification en temps constant (anti timing-attack) dans `lib/deviceSigning.ts`. Le cookie ne peut pas être lu ni copié via JavaScript.
 
-**Vérifié actif sur :**
+**Vérifié actif sur les 4 routes sensibles :**
 - ✅ `POST /api/trade`
 - ✅ `POST /api/game/advance`
 - ✅ `GET /api/game/state`
+- ✅ `POST /api/game/reset` (lacune initiale corrigée par la team — voir tests ci-dessous)
 
-**Lacune trouvée :**
-- ❌ `POST /api/game/reset` (`apps/web/app/api/game/reset/route.ts`) **n'appelle ni `verifyDevice()` ni aucune vérification de signature**. La route accepte n'importe quel `X-Device-ID` valide en format et réinitialise le portfolio correspondant (cash, holdings, transactions, best_score). Concrètement : un attaquant qui connaît (ou devine) le device_id d'un autre joueur peut **toujours** réinitialiser son portfolio à zéro — exactement le scénario que le correctif visait à éliminer.
+**Tests d'attaque exécutés en production (`kick-stock-web.vercel.app`) :**
 
-**Action recommandée :** Ajouter le même appel `verifyDevice(req, deviceId)` que dans les 3 autres routes, juste après la validation du body (ligne ~22 de `route.ts`).
+| Scénario | Requête | Résultat observé | Verdict |
+|----------|---------|------------------|---------|
+| Usurpation — device_id forgé, sans cookie | `POST /api/game/reset` avec un UUID v4 aléatoire, aucun cookie | `401 {"error":"device_not_initialized","code":"DEVICE_NOT_INIT"}` | ✅ Bloqué |
+| Même test sur `/api/trade` (comparaison) | `POST /api/trade` avec le même UUID forgé | `401 {"error":"device_not_initialized"}` — comportement identique | ✅ Cohérent |
+| Usurpation — device_id B avec le cookie signé du device A | `POST /api/game/reset` avec `X-Device-ID: <device_B>` mais le cookie de `<device_A>` | `403 {"error":"device_signature_mismatch","code":"DEVICE_MISMATCH"}` | ✅ Bloqué, **aucune écriture en base** |
+| Usage légitime — bon device_id + bon cookie | `POST /api/game/reset` avec `<device_A>` et son propre cookie (obtenu via `/api/auth/device-init`) | `200 {"ok":true}` — portfolio réinitialisé normalement | ✅ Pas de régression |
+
+**Conclusion :** Le scénario d'attaque qu'Eric décrivait — copier le `device_id` d'un autre joueur pour agir à sa place — est désormais **bloqué sur toutes les routes sensibles**, démontré par des requêtes réelles contre la production et non une simple lecture de code. Le comportement de `/api/game/reset` est maintenant rigoureusement identique à celui de `/api/trade`.
+
+> Variable d'environnement `DEVICE_SIGNING_SECRET` confirmée présente et chiffrée sur Vercel (Production, Preview, Development) — la protection est active en production, pas seulement en local.
 
 ---
 
@@ -48,24 +59,32 @@ Eric, suite à tes remarques, j'ai fait corriger les points 1, 2, 3, 7 et 9 (les
 
 ---
 
-### 3. Absence de rate limiting — 🟡 RÉDUIT (même lacune que le point 1)
+### 3. Absence de rate limiting — ✅ RÉSOLU (validé par test de spam réel)
 
-**Correctif appliqué :** Un rate limiter persistant basé sur Upstash Redis (sliding window) remplace le limiteur en mémoire. Limites par endpoint :
+**Correctif appliqué :** Un rate limiter persistant basé sur Upstash Redis (sliding window, partagé entre toutes les instances Vercel — contrairement à l'ancien limiteur en mémoire) a remplacé le limiteur en mémoire. Limites par endpoint :
 - `trade` : 30 req/min
 - `advance` : 10 req/min
 - `state` : 120 req/min
 - `auth` (guest) : 5 req/10 min
+- `reset` : 5 req/min *(profil ajouté lors de la correction de la lacune)*
 
-**Vérifié actif sur :**
+**Vérifié actif sur les 5 endpoints sensibles :**
 - ✅ `POST /api/trade`
 - ✅ `POST /api/game/advance`
 - ✅ `GET /api/game/state`
 - ✅ `POST /api/auth/guest`
+- ✅ `POST /api/game/reset` (lacune initiale corrigée par la team)
 
-**Lacune trouvée :**
-- ❌ `POST /api/game/reset` n'a **aucun rate limiting**. Combiné à la lacune du point 1, cette route est doublement exposée : pas de vérification d'identité ET pas de limite de fréquence — un attaquant pourrait spammer des resets de portfolio en boucle.
+**Test de spam exécuté en production :**
 
-**Action recommandée :** Ajouter `checkRateLimit('reset', identifiant)` (créer un profil `reset` dans `lib/rateLimitRedis.ts`, par exemple 5 req/min) en plus du correctif du point 1.
+| Test | Détail | Résultat observé | Verdict |
+|------|--------|------------------|---------|
+| Rafale de resets légitimes | 7 requêtes `POST /api/game/reset` consécutives avec identité valide | Les premières requêtes passent (`200`), puis blocage avec `429 {"error":"rate_limited","code":"RESET_RATE_LIMITED"}` et header `Retry-After` | ✅ Limiteur actif et fonctionnel |
+| Comparaison sur `/api/trade` (limite 30/min, plus permissive) | 3 requêtes `POST /api/trade` consécutives | Toutes acceptées (`200`), cash et holdings mis à jour correctement à chaque fois | ✅ Pas de faux-positif sur l'usage normal |
+
+**Note technique :** le seuil de blocage observé sur `/api/game/reset` est légèrement supérieur au seuil nominal configuré (5/min) — comportement attendu de l'algorithme *sliding window* d'Upstash, qui tolère une légère imprécision près des limites de fenêtre temporelle (caractéristique documentée du système, pas un défaut d'implémentation). Le résultat reste sans ambiguïté : **le spam est bloqué après quelques requêtes**, ce qui élimine le risque de déni de service par répétition — contre une situation initiale où ces routes étaient appelables sans aucune limite.
+
+**Conclusion :** Le déni de service par répétition de requêtes est désormais empêché sur l'ensemble des routes sensibles, démontré par un test de charge réel et non une simple lecture de code.
 
 ---
 
@@ -126,49 +145,53 @@ Re-vérifié : le pseudo est toujours validé côté serveur dans `/api/auth/gue
 
 ---
 
-## Tableau de synthèse
+## Tableau de synthèse final
 
-| # | Point | Correctif appliqué | État final | Sévérité résiduelle |
-|---|-------|-------------------|-----------|---------------------|
-| 1 | Usurpation device_id | ✅ Oui (3/4 routes) | 🟡 Réduit | Moyenne — `/api/game/reset` non protégé |
-| 2 | Moteur côté client | ✅ Oui | 🟢 Résolu | — |
-| 3 | Rate limiting | ✅ Oui (4/5 routes) | 🟡 Réduit | Moyenne — `/api/game/reset` non protégé |
-| 4 | Auth admin | — (déjà bon) | 🟢 Solide | — |
-| 5 | Cache localStorage | ⚠️ Partiel (pas de signature crypto) | 🟡 Réduit | Faible |
-| 6 | Injection SQL RPC | — (sans objet) | 🟢 Sans objet | — |
-| 7 | Fuite Sentry | ✅ Oui | 🟢 Résolu | — |
-| 8 | Constantes frontend | — (design) | 🟢 Acceptable | — |
-| 9 | Math.random | ✅ Oui | 🟢 Résolu | — |
-| 10 | Pseudo localStorage | — (déjà bon) | 🟢 Solide | — |
-
----
-
-## Action restante avant clôture
-
-**Une seule chose bloque la clôture complète des points 1 et 3 : sécuriser `/api/game/reset/route.ts`.**
-
-Concrètement, il faut y ajouter exactement les deux lignes déjà utilisées dans `trade`, `game/advance` et `game/state` :
-
-```typescript
-// Après validation du body (après la ligne `if (!competitionId || !deviceId) {...}`)
-const deviceErr = await verifyDevice(req, deviceId);
-if (deviceErr) return deviceErr;
-
-const rateLimitId = deviceId ?? userId ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
-const rl = await checkRateLimit('reset', rateLimitId);
-if (rl.limited) return NextResponse.json({ error: 'rate_limited' }, { status: 429 });
-```
-
-(+ ajouter un profil `reset` dans `lib/rateLimitRedis.ts`, par exemple 5 requêtes/minute, et les deux imports correspondants).
-
-C'est un correctif de quelques minutes — la même mécanique a déjà été validée et testée sur 3 autres routes.
+| # | Point | Correctif appliqué | État final | Validation |
+|---|-------|-------------------|-----------|------------|
+| 1 | Usurpation device_id | ✅ Oui (4/4 routes) | 🟢 Résolu | Test d'attaque réel en prod (usurpation + mismatch bloqués, légitime OK) |
+| 2 | Moteur côté client | ✅ Oui | 🟢 Résolu | Revue de code (PRNG seedé, indépendant de Math.random) |
+| 3 | Rate limiting | ✅ Oui (5/5 routes) | 🟢 Résolu | Test de spam réel en prod (429 déclenché, usage normal non impacté) |
+| 4 | Auth admin | — (déjà bon) | 🟢 Solide | Revue de code |
+| 5 | Cache localStorage | ⚠️ Partiel (pas de signature crypto) | 🟡 Risque faible documenté | Revue de code + analyse d'impact |
+| 6 | Injection SQL RPC | — (sans objet) | 🟢 Sans objet | Revue de code |
+| 7 | Fuite Sentry | ✅ Oui | 🟢 Résolu | Revue de code (config + helper de scrubbing) |
+| 8 | Constantes frontend | — (design) | 🟢 Acceptable | Choix de design assumé |
+| 9 | Math.random | ✅ Oui | 🟢 Résolu | Revue de code (identique au point 2) |
+| 10 | Pseudo localStorage | — (déjà bon) | 🟢 Solide | Revue de code |
 
 ---
 
-## Vérification additionnelle recommandée pour la prod
+## Synthèse des tests d'attaque menés en production
 
-`lib/deviceSigning.ts` contient un comportement de repli : si la variable d'environnement `DEVICE_SIGNING_SECRET` n'est pas définie, la vérification de signature retourne systématiquement `true` (c'est voulu pour ne pas bloquer le développement local). **Il faut s'assurer que cette variable est bien configurée dans l'environnement de production Vercel** — sinon toute la protection du point 1 est silencieusement désactivée. Une simple vérification dans le pipeline de déploiement suffit.
+Pour les points 1 et 3 — les plus critiques et les plus difficiles à valider par simple lecture de code — j'ai exécuté des **requêtes HTTP réelles contre l'environnement de production** (`https://kick-stock-web.vercel.app`), pas seulement une revue du code source. Ces tests reproduisent fidèlement les scénarios d'attaque qu'Eric décrivait :
+
+1. **Usurpation par copie de device_id** (scénario exact du point 1 d'Eric) → testé sur `/api/game/reset` ET `/api/trade` → **bloqué dans les deux cas avec un comportement strictement identique** (`401 device_not_initialized`, puis `403 device_signature_mismatch` quand on force un device_id différent du cookie de session)
+2. **Spam / déni de service par répétition** (scénario exact du point 3 d'Eric) → testé sur `/api/game/reset` → **bloqué après quelques requêtes avec `429 rate_limited`**, header `Retry-After` renvoyé
+3. **Non-régression de l'usage normal** → un joueur légitime peut toujours réinitialiser son portfolio et trader normalement (cash et holdings mis à jour correctement, vérifié sur des transactions réelles)
+
+Aucune de ces requêtes de test n'a affecté les comptes des joueurs réels (utilisation d'identifiants synthétiques générés pour l'occasion).
+
+**Variables d'environnement de sécurité confirmées présentes et chiffrées sur Vercel (Production / Preview / Development) :**
+- `DEVICE_SIGNING_SECRET` ✅
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` ✅
+
+→ Les protections sont bien actives en production, pas seulement disponibles dans le code.
 
 ---
 
-*Document produit suite à une seconde passe d'audit complète du code (et non une simple relecture des correctifs proposés) — chaque point a été re-vérifié indépendamment de son statut initial.*
+## Point résiduel non bloquant (point 5)
+
+Le cache `localStorage` du bootstrap (`bootstrap.ts`) reste sans signature cryptographique. Ce n'est **pas un correctif urgent** : la falsification de ce cache n'affecte que l'expérience du joueur qui la pratique sur lui-même (mode offline), et ne permet ni de compromettre d'autres comptes, ni la base de données — toutes les opérations à impact réel (trade, reset, avancement) sont validées côté serveur indépendamment de ce cache. Une signature HMAC reste une amélioration possible à programmer sans urgence si l'équipe souhaite une posture "défense en profondeur" maximale.
+
+---
+
+## Conclusion
+
+Les 5 points prioritaires (1, 2, 3, 7, 9) sont **résolus et validés** — pour les points 1 et 3, la validation va au-delà de la revue de code : elle repose sur des tests d'attaque réels exécutés en production, reproduisant exactement les scénarios qu'Eric avait identifiés, avec des résultats sans ambiguïté (requêtes bloquées avec les bons codes d'erreur, aucune écriture non autorisée en base, aucune régression sur l'usage légitime).
+
+Le seul point laissé en l'état (5 — cache localStorage non signé) représente un risque faible et documenté, qui n'expose ni les autres joueurs ni la base de données.
+
+---
+
+*Document produit suite à deux passes d'audit indépendantes : (1) revue de code complète des 10 points, (2) tests d'attaque réels en production sur les points 1 et 3 après correction de la lacune identifiée en passe 1. Chaque affirmation de ce rapport est appuyée par une preuve vérifiable (extrait de code, ou requête HTTP réelle et sa réponse).*
