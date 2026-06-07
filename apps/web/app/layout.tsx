@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { DeviceInit } from '@/components/shared/DeviceInit';
 import '../styles/globals.css';
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale}>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
+          <DeviceInit />
           {children}
         </NextIntlClientProvider>
       </body>

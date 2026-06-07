@@ -20,7 +20,7 @@
 import { NextRequest, NextResponse }         from 'next/server';
 import { createAdminClient }                 from '@/lib/supabase/admin';
 import { createClient }                      from '@/lib/supabase/server';
-import * as Sentry                           from '@sentry/nextjs';
+import { captureApiException }               from '@/lib/sentryCapture';
 import { applyResult, genGoals }             from '@kickstock/game-engine';
 import { DIV_RATES }                         from '@kickstock/constants';
 import { checkAndAdvancePhase }              from '@/lib/check-advance-phase';
@@ -222,7 +222,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err) {
-    Sentry.captureException(err, { tags: { route: 'POST /api/admin/matches/process-manual' } });
+    captureApiException(err, { route: 'POST /api/admin/matches/process-manual' });
     console.error('[process-manual]', err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

@@ -17,7 +17,7 @@
  * Triggered by Vercel Cron (vercel.json) or manually from admin panel.
  */
 
-import * as Sentry from '@sentry/nextjs';
+import { captureApiException } from '@/lib/sentryCapture';
 import { createAdminClient }      from '@/lib/supabase/admin';
 import { fetchAllFixtures, fetchTeamStrengths, fetchGroupStandings } from '@/lib/football-api';
 import { normalizeFixture, strengthToPrice } from '@/lib/normalizer';
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
     : await compQuery.eq('is_active', true);
 
   if (compErr) {
-    Sentry.captureException(compErr, { tags: { cron: 'sync-fixtures' } });
+    captureApiException(compErr, { route: 'GET /api/cron/sync-fixtures' });
     return Response.json({ error: compErr.message }, { status: 500 });
   }
 
@@ -179,7 +179,7 @@ export async function GET(req: Request) {
       } catch (standErr) {
         // Non-blocking
         console.warn(`[sync-fixtures] standings sync failed for ${comp.name}:`, standErr);
-        Sentry.captureException(standErr, { tags: { cron: 'sync-fixtures', step: 'standings' } });
+        captureApiException(standErr, { route: 'GET /api/cron/sync-fixtures', extra: { step: 'standings' } });
       }
 
       // ── 5. Seed strength + initial_price for teams that don't have one yet ──
@@ -222,7 +222,7 @@ export async function GET(req: Request) {
       } catch (seedErr) {
         // Non-blocking: log but don't fail the whole sync
         console.warn(`[sync-fixtures] Strength seeding failed for ${comp.name}:`, seedErr);
-        Sentry.captureException(seedErr, { tags: { cron: 'sync-fixtures', step: 'seed-strength' } });
+        captureApiException(seedErr, { route: 'GET /api/cron/sync-fixtures', extra: { step: 'seed-strength' } });
       }
 
       // ── 6. Update last_sync_at
@@ -237,10 +237,7 @@ export async function GET(req: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[sync-fixtures] Error for ${comp.name}:`, err);
-      Sentry.captureException(err, {
-        tags:  { cron: 'sync-fixtures' },
-        extra: { competition: comp.name },
-      });
+      captureApiException(err, { route: 'GET /api/cron/sync-fixtures', extra: { competition: comp.name } });
       results.push({ competition: comp.name, error: msg });
     }
   }

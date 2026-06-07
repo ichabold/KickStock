@@ -8,7 +8,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isRateLimited } from '@/lib/rateLimit';
+import { checkRateLimit } from '@/lib/rateLimitRedis';
 
 const RESERVED  = new Set(['admin', 'kickstock', 'moderator', 'system', 'support', 'official']);
 const UUID_V4   = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -21,7 +21,8 @@ const adminRpc  = (a: ReturnType<typeof createAdminClient>, fn: string, args: ob
 export async function POST(req: NextRequest) {
   // ── Rate limiting ────────────────────────────────────────────────────────────
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-  if (isRateLimited(ip)) {
+  const rl = await checkRateLimit('auth', ip);
+  if (rl.limited) {
     return NextResponse.json({ error: 'too_many_requests' }, { status: 429 });
   }
 

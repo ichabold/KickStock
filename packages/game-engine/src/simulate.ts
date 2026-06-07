@@ -1,16 +1,15 @@
 import type { SimulatedMatch } from '@kickstock/types';
+import type { Rng } from './prng';
 
-/**
- * Simulates a match result based on team strengths.
- * In KO rounds, draws go to extra time / penalties.
- */
-export function simulate(strA: number, strB: number, isKO = false): SimulatedMatch {
+// Le paramètre rng est optionnel : Math.random par défaut (rétrocompatible côté serveur).
+// En mode offline, injecter toujours un PRNG seedé — Math.random n'est plus utilisé.
+export function simulate(strA: number, strB: number, isKO = false, rng: Rng = Math.random): SimulatedMatch {
   const gap = Math.abs(strA - strB);
   const fav: 'A' | 'B' = strA >= strB ? 'A' : 'B';
   const upsetP = Math.max(0.05, 0.26 - gap * 0.006);
   const drawP  = Math.max(0.08, 0.25 - gap * 0.004);
 
-  const r = Math.random();
+  const r = rng();
   const res90: 'A' | 'B' | 'draw' =
     r < upsetP ? (fav === 'A' ? 'B' : 'A') :
     r < upsetP + drawP ? 'draw' :
@@ -24,19 +23,19 @@ export function simulate(strA: number, strB: number, isKO = false): SimulatedMat
     const etFav: 'A' | 'B' = strA >= strB ? 'A' : 'B';
     const etUpset = Math.max(0.08, 0.35 - gap * 0.008);
 
-    if (Math.random() < 0.60) {
-      const etR = Math.random();
+    if (rng() < 0.60) {
+      const etR = rng();
       etRes = etR < etUpset ? (etFav === 'A' ? 'B' : 'A') : etFav;
     } else {
       let sA = 0, sB = 0;
       for (let i = 0; i < 5; i++) {
-        sA += Math.random() < (0.73 + strA * 0.001) ? 1 : 0;
-        sB += Math.random() < (0.73 + strB * 0.001) ? 1 : 0;
+        sA += rng() < (0.73 + strA * 0.001) ? 1 : 0;
+        sB += rng() < (0.73 + strB * 0.001) ? 1 : 0;
       }
       let round = 0;
       while (sA === sB && round < 10) {
-        sA += Math.random() < 0.73 ? 1 : 0;
-        sB += Math.random() < 0.73 ? 1 : 0;
+        sA += rng() < 0.73 ? 1 : 0;
+        sB += rng() < 0.73 ? 1 : 0;
         round++;
       }
       penA = sA; penB = sB;

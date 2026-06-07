@@ -21,7 +21,7 @@
 import { NextRequest, NextResponse }  from 'next/server';
 import { createAdminClient }           from '@/lib/supabase/admin';
 import { createClient }                from '@/lib/supabase/server';
-import * as Sentry                     from '@sentry/nextjs';
+import { captureApiException }          from '@/lib/sentryCapture';
 import { simulate, applyResult, genScore, genGoals } from '@kickstock/game-engine';
 import { DIV_RATES }                   from '@kickstock/constants';
 import { checkAndAdvancePhase }        from '@/lib/check-advance-phase';
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     // ── 1. Current game state ─────────────────────────────────────────────────
     const { data: gsRaw } = await A(admin)
       .from('competition_game_state')
-      .select('current_day_index, current_phase, eliminated')
+      .select('current_day_index, current_phase, eliminated, r32_pool, r16_pool, qf_pool, sf_pool, final_pool, third_pool')
       .eq('competition_id', competitionId)
       .single();
 
@@ -64,16 +64,84 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'competition_game_state not found' }, { status: 404 });
     }
 
-    const gs = gsRaw as { current_day_index: number; current_phase: string; eliminated: string[] };
+    const gs = gsRaw as {
+      current_day_index: number; current_phase: string; eliminated: string[];
+      r32_pool: string[]; r16_pool: string[]; qf_pool: string[];
+      sf_pool: string[]; final_pool: string[]; third_pool: string[];
+    };
 
     // ── 2. Today's unprocessed matches ────────────────────────────────────────
-    const { data: matchesRaw } = await A(admin)
+    const loadMatches = () => A(admin)
       .from('matches')
       .select('id, fixture_id, nation_a, nation_b, phase, day_index')
       .eq('competition_id', competitionId)
       .eq('day_index', gs.current_day_index)
       .is('processed_at', null)
       .not('api_status', 'in', '("PST","SUSP","CANC","ABD")');
+
+    let { data: matchesRaw } = await loadMatches();
+
+    // ── 2b. KO phase with no matches → create them from pool ─────────────────
+    // This handles the case where checkAndAdvancePhase advanced to a KO day
+    // but the matches weren't yet inserted (e.g. first time reaching this phase).
+    if ((!matchesRaw || matchesRaw.length === 0) && gs.current_phase !== 'Groups') {
+      const POOL_MAP: Record<string, string[]> = {
+        R32:   gs.r32_pool,
+        R16:   gs.r16_pool,
+        QF:    gs.qf_pool,
+        SF:    gs.sf_pool,
+        Final: gs.final_pool,
+        '3rd': gs.third_pool,
+      };
+      const pool = POOL_MAP[gs.current_phase] ?? [];
+
+      if (pool.length >= 2) {
+        // Find competition_days for this phase ordered by day_index
+        const { data: koDays } = await A(admin)
+          .from('competition_days')
+          .select('day_index')
+          .eq('competition_id', competitionId)
+          .eq('phase', gs.current_phase)
+          .order('day_index', { ascending: true });
+
+        const dayIndexes = ((koDays ?? []) as { day_index: number }[]).map(r => r.day_index);
+
+        // Determine matches per day for this phase
+        const MPD: Record<string, number> = { R32: 4, R16: 4, QF: 2, SF: 1, Final: 1, '3rd': 1 };
+        const mpd = MPD[gs.current_phase] ?? 2;
+
+        // Only create matches that fall on the CURRENT day
+        const currentDayPos = dayIndexes.indexOf(gs.current_day_index);
+        if (currentDayPos >= 0) {
+          const startIdx = currentDayPos * mpd * 2; // pool index start
+          const endIdx   = startIdx + mpd * 2;
+          const slice    = pool.slice(startIdx, endIdx);
+          const toInsert = [];
+          for (let i = 0; i + 1 < slice.length; i += 2) {
+            toInsert.push({
+              competition_id: competitionId,
+              phase:          gs.current_phase,
+              nation_a:       slice[i],
+              nation_b:       slice[i + 1],
+              day_index:      gs.current_day_index,
+              api_status:     'NS',
+              fixture_id:     null,
+            });
+          }
+          if (toInsert.length > 0) {
+            const { error: insErr } = await A(admin).from('matches').insert(toInsert);
+            if (insErr) {
+              console.error('[simulate-day] Failed to create KO matches:', insErr);
+            } else {
+              console.log(`[simulate-day] Created ${toInsert.length} ${gs.current_phase} matches for day ${gs.current_day_index}`);
+              // Re-load after insertion
+              const reloaded = await loadMatches();
+              matchesRaw = reloaded.data;
+            }
+          }
+        }
+      }
+    }
 
     const matches = (matchesRaw ?? []) as Array<{
       id: string; fixture_id: number | null;
@@ -223,7 +291,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err) {
-    Sentry.captureException(err, { tags: { route: 'POST /api/admin/simulate-day' } });
+    captureApiException(err, { route: 'POST /api/admin/simulate-day' });
     console.error('[POST /api/admin/simulate-day]', err);
     return NextResponse.json({ error: 'Internal server error', detail: String(err) }, { status: 500 });
   }

@@ -7,7 +7,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import * as Sentry from '@sentry/nextjs';
+import { captureApiException } from '@/lib/sentryCapture';
+import { checkRateLimit }      from '@/lib/rateLimitRedis';
+import { verifyDevice }        from '@/lib/verifyDevice';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +36,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ code: 'MISSING_DEVICE_ID', error: 'X-Device-ID requis' }, { status: 400 });
     }
 
+    const deviceErr = await verifyDevice(req, deviceId);
+    if (deviceErr) return deviceErr;
+
     // Resolve authenticated user identity (best-effort)
     let userId: string | null = null;
     try {
@@ -41,6 +46,21 @@ export async function POST(req: NextRequest) {
       const { data: { user } } = await sessionedClient.auth.getUser();
       if (user?.id) userId = user.id;
     } catch { /* anonymous player — proceed without userId */ }
+
+    const rateLimitId = deviceId ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
+    const rl = await checkRateLimit('trade', rateLimitId);
+    if (rl.limited) {
+      return NextResponse.json(
+        { code: 'RATE_LIMITED', error: 'Trop de transactions, réessaie dans un moment.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rl.reset * 1000 - Date.now()) / 1000)),
+            'X-RateLimit-Remaining': '0',
+          },
+        },
+      );
+    }
 
     // Always use admin client for the SECURITY DEFINER RPC so it works for
     // both anon (no GRANT EXECUTE on authenticated/anon roles) and logged-in users.
@@ -77,7 +97,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err) {
-    Sentry.captureException(err, { tags: { route: 'POST /api/trade' } });
+    captureApiException(err, { route: 'POST /api/trade' });
     console.error('[POST /api/trade]', err);
     return NextResponse.json({ code: 'INTERNAL_ERROR', error: 'Erreur interne' }, { status: 500 });
   }

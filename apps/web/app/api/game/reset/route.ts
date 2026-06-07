@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import * as Sentry from '@sentry/nextjs';
+import { captureApiException } from '@/lib/sentryCapture';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
 
   } catch (err) {
-    Sentry.captureException(err, { tags: { route: 'POST /api/game/reset' } });
+    captureApiException(err, { route: 'POST /api/game/reset' });
     return NextResponse.json({ error: 'Erreur interne' }, { status: 500 });
   }
 }

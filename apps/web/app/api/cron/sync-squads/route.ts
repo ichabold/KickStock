@@ -14,7 +14,7 @@
  * Security: requires Authorization: Bearer {CRON_SECRET}
  */
 
-import * as Sentry              from '@sentry/nextjs';
+import { captureApiException }  from '@/lib/sentryCapture';
 import { createAdminClient }    from '@/lib/supabase/admin';
 import { fetchSquad }           from '@/lib/football-api';
 
@@ -114,10 +114,7 @@ export async function GET(req: Request) {
       failed++;
       const msg = `${row.team_id}: ${err instanceof Error ? err.message : String(err)}`;
       errors.push(msg);
-      Sentry.captureException(err, {
-        tags:  { cron: 'sync-squads' },
-        extra: { teamId: row.team_id, apiTeamId },
-      });
+      captureApiException(err, { route: 'GET /api/cron/sync-squads', extra: { teamId: row.team_id } });
     }
   }
 

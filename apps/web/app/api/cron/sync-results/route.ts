@@ -16,7 +16,7 @@
  * Security: requires Authorization: Bearer {CRON_SECRET}
  */
 
-import * as Sentry from '@sentry/nextjs';
+import { captureApiException } from '@/lib/sentryCapture';
 import { createAdminClient }       from '@/lib/supabase/admin';
 import { fetchFinishedFixtures }   from '@/lib/football-api';
 import { isMatchWindowActive }     from '@/lib/match-window';
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
   try {
     finished = await fetchFinishedFixtures(leagueIds, season);
   } catch (err) {
-    Sentry.captureException(err, { tags: { cron: 'sync-results' } });
+    captureApiException(err, { route: 'GET /api/cron/sync-results' });
     return Response.json({ error: 'API fetch failed', detail: String(err) }, { status: 500 });
   }
 
@@ -81,10 +81,7 @@ export async function GET(req: Request) {
     } catch (err) {
       const msg = `fixture ${fixture.fixture.id}: ${err instanceof Error ? err.message : String(err)}`;
       console.error('[sync-results]', msg, err);
-      Sentry.captureException(err, {
-        tags:  { cron: 'sync-results' },
-        extra: { fixtureId: fixture.fixture.id },
-      });
+      captureApiException(err, { route: 'GET /api/cron/sync-results', extra: { fixtureId: fixture.fixture.id } });
       errors.push(msg);
     }
   }
@@ -94,10 +91,7 @@ export async function GET(req: Request) {
     try {
       await checkAndAdvancePhase(comp.id);
     } catch (err) {
-      Sentry.captureException(err, {
-        tags:  { cron: 'sync-results', step: 'advance-phase' },
-        extra: { competitionId: comp.id },
-      });
+      captureApiException(err, { route: 'GET /api/cron/sync-results', extra: { step: 'advance-phase', competitionId: comp.id } });
     }
   }
 

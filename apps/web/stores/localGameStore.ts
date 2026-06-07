@@ -15,7 +15,7 @@ import { persist, createJSONStorage }  from 'zustand/middleware';
 import {
   simulate, applyResult, calcTax, calcDividend,
   genScore, genGoals, buildR32Pool, buildMatchesForDay,
-  pctOf, fmt,
+  pctOf, fmt, mulberry32, seedFromString,
 } from '@kickstock/game-engine';
 import { DIV_RATES, INIT_CASH }  from '@kickstock/constants';
 import { syncBestScore }          from '@/hooks/useAuth';
@@ -69,6 +69,8 @@ interface AdvanceDayResult {
 }
 
 interface LocalGameStore extends GameState {
+  gameId: string;
+
   // Bootstrap state (not persisted)
   _bootstrap:        BootstrapData | null;
   _teams:            TeamMeta[];
@@ -130,6 +132,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
   persist(
     (set, get) => ({
       ...baseState(),
+      gameId:           crypto.randomUUID(),
       _bootstrap:       null,
       _teams:           [],
       bootstrapLoading: false,
@@ -339,7 +342,9 @@ export const useLocalGameStore = create<LocalGameStore>()(
           const pA = newPrices[m.a] ?? tA.initialPrice;
           const pB = newPrices[m.b] ?? tB.initialPrice;
 
-          const sim            = simulate(tA.strength, tB.strength, day.is_ko);
+          const matchSeed = seedFromString(`${get().gameId}:${dayIndex}:${m.a}:${m.b}`);
+          const rng       = mulberry32(matchSeed);
+          const sim       = simulate(tA.strength, tB.strength, day.is_ko, rng);
           const [rawPA, rawPB]  = applyResult(pA, pB, sim.res as 'A' | 'B' | 'draw');
           const newPA          = Math.max(1, rawPA);
           const newPB          = Math.max(1, rawPB);
@@ -471,6 +476,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
         const { _teams, bestScore } = get();
         set({
           ...baseState(),
+          gameId:       crypto.randomUUID(),
           bestScore,
           prices:       emptyPrices(_teams),
           priceHistory: emptyHistory(_teams),
@@ -487,6 +493,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
         return localStorage;
       }),
       partialize: (state) => ({
+        gameId: state.gameId,
         cash: state.cash, portfolio: state.portfolio, avgCost: state.avgCost,
         txLog: state.txLog, prices: state.prices, priceHistory: state.priceHistory,
         dayIndex: state.dayIndex, eliminated: state.eliminated, champion: state.champion,

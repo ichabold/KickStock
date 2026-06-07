@@ -10,7 +10,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient }         from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import * as Sentry                   from '@sentry/nextjs';
+import { captureApiException }        from '@/lib/sentryCapture';
+import { checkRateLimit }            from '@/lib/rateLimitRedis';
+import { verifyDevice }              from '@/lib/verifyDevice';
 import { simulate, applyResult, genScore, genGoals } from '@kickstock/game-engine';
 import { DIV_RATES }                 from '@kickstock/constants';
 import { buildKOQualifiers }         from '@/lib/ko-qualifiers';
@@ -49,12 +51,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'competitionId requis' }, { status: 400 });
     }
 
+    const deviceErr = await verifyDevice(req, deviceId);
+    if (deviceErr) return deviceErr;
+
     let userId: string | null = null;
     try {
       const sb = await createServerClient();
       const { data: { user } } = await sb.auth.getUser();
       userId = user?.id ?? null;
     } catch { /* fine */ }
+
+    const rateLimitId = deviceId ?? userId ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
+    const rl = await checkRateLimit('advance', rateLimitId);
+    if (rl.limited) {
+      return NextResponse.json({ error: 'rate_limited' }, { status: 429 });
+    }
 
     // ── 1. Competition game state ─────────────────────────────────────────────
     const { data: gsRaw } = await A(admin)
@@ -390,7 +401,7 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (err) {
-    Sentry.captureException(err, { tags: { route: 'POST /api/game/advance' } });
+    captureApiException(err, { route: 'POST /api/game/advance' });
     console.error('[POST /api/game/advance]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

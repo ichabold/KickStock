@@ -4,17 +4,34 @@ Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   environment: process.env.NODE_ENV,
 
-  // Capture 100% of transactions in dev, 20% in prod (adjust for volume)
   tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.2 : 1.0,
 
-  // Replay captures user sessions around errors — useful for debugging UX bugs
   replaysSessionSampleRate: 0.05,
-  replaysOnErrorSampleRate: 1.0,
+  replaysOnErrorSampleRate: 0.5,
 
   integrations: [
-    Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+    Sentry.replayIntegration({
+      maskAllText: true,
+      blockAllMedia: true,
+      unmask: ['.sentry-unmask'],
+    }),
   ],
 
-  // Don't send errors from local dev unless DSN is set
+  beforeSend(event) {
+    return sanitizeSentryEvent(event);
+  },
+
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
 });
+
+function sanitizeSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent | null {
+  if (event.request?.cookies) {
+    event.request.cookies = {};
+  }
+  if (event.request?.headers) {
+    delete event.request.headers['x-device-id'];
+    delete event.request.headers['authorization'];
+    delete event.request.headers['cookie'];
+  }
+  return event;
+}

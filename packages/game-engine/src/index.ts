@@ -8,3 +8,4 @@ export { buildR32Pool, buildMatchesForDay, deriveGroupStandings, buildGroupStand
 export type { StandingRow } from './buildKOMatches';
 export { genScore } from './genScore';
 export { genGoals } from './genGoals';
+export { mulberry32, seedFromString } from './prng';

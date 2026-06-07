@@ -8,7 +8,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import * as Sentry from '@sentry/nextjs';
+import { captureApiException } from '@/lib/sentryCapture';
+import { checkRateLimit }      from '@/lib/rateLimitRedis';
+import { verifyDevice }        from '@/lib/verifyDevice';
 import type { StoredMatchResult } from '@kickstock/types';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +39,15 @@ export async function GET(req: NextRequest) {
 
     if (deviceId && !UUID_V4.test(deviceId)) {
       return NextResponse.json({ error: 'invalid_device_id' }, { status: 400 });
+    }
+
+    const deviceErr = await verifyDevice(req, deviceId);
+    if (deviceErr) return deviceErr;
+
+    const rateLimitId = deviceId ?? userId ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
+    const rl = await checkRateLimit('state', rateLimitId);
+    if (rl.limited) {
+      return NextResponse.json({ error: 'rate_limited' }, { status: 429 });
     }
 
     // ── Resolve competition ───────────────────────────────────────────────────
@@ -201,7 +212,7 @@ export async function GET(req: NextRequest) {
     });
 
   } catch (err) {
-    Sentry.captureException(err, { tags: { route: 'GET /api/game/state' } });
+    captureApiException(err, { route: 'GET /api/game/state' });
     console.error('[GET /api/game/state]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
