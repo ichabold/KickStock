@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { captureApiException } from '@/lib/sentryCapture';
+import { verifyDevice }   from '@/lib/verifyDevice';
+import { checkRateLimit } from '@/lib/rateLimitRedis';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +22,26 @@ export async function POST(req: NextRequest) {
 
     if (!competitionId || !deviceId) {
       return NextResponse.json({ error: 'competitionId et X-Device-ID requis' }, { status: 400 });
+    }
+
+    // ── Vérification de signature device_id (anti-usurpation) ─────────────────
+    const deviceErr = await verifyDevice(req, deviceId);
+    if (deviceErr) return deviceErr;
+
+    // ── Rate limiting (anti-spam reset) ───────────────────────────────────────
+    const rateLimitId = deviceId
+      ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
+    const rl = await checkRateLimit('reset', rateLimitId);
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: 'rate_limited', code: 'RESET_RATE_LIMITED' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rl.reset * 1000 - Date.now()) / 1000)),
+          },
+        },
+      );
     }
 
     const admin = createAdminClient();

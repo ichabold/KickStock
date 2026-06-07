@@ -17,6 +17,7 @@ const LIMITS = {
   advance: { requests: 10,  window: '1 m'  },
   state:   { requests: 120, window: '1 m'  },
   auth:    { requests: 5,   window: '10 m' },
+  reset:   { requests: 5,   window: '1 m'  }, // réinitialiser un portfolio est une action rare
 } as const;
 
 type Endpoint = keyof typeof LIMITS;
