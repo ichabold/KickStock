@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
       // Portfolio
       adm(admin)
         .from('portfolios')
-        .select('cash, avg_cost, tx_log, best_score')
+        .select('cash, avg_cost, tx_log, best_score, updated_at')
         .eq('id', portfolioId)
         .single(),
 
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
       return { dir: t.type as 'buy' | 'sell', flag: team?.flag ?? '', name: team?.name ?? t.nation_id, qty: t.quantity, price: t.price, day: t.day_index };
     });
 
-    const pf = pfRes.data as { cash: number; avg_cost: unknown; tx_log: unknown; best_score: number | null } | null;
+    const pf = pfRes.data as { cash: number; avg_cost: unknown; tx_log: unknown; best_score: number | null; updated_at: string | null } | null;
 
     const responseBody = {
       competitionId,
@@ -199,7 +199,12 @@ export async function GET(req: NextRequest) {
       bestScore:   pf?.best_score ?? null,
     };
 
-    const etag = `"c${competitionId}-d${gs.current_day_index}-p${portfolioId}"`;
+    // Include the portfolio's updated_at timestamp so that any mutation
+    // (trade, reset, score sync…) invalidates the cached response — otherwise
+    // dayIndex/portfolioId alone stay identical across trades and a stale
+    // 304 gets served (e.g. right after buying then reloading on login/logout).
+    const pfVersion = pf?.updated_at ? new Date(pf.updated_at).getTime() : 'new';
+    const etag = `"c${competitionId}-d${gs.current_day_index}-p${portfolioId}-u${pfVersion}"`;
     if (req.headers.get('If-None-Match') === etag) {
       return new Response(null, { status: 304 });
     }
