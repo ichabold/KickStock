@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
       // Played matches (competition-scoped)
       adm(admin)
         .from('matches')
-        .select('day_index, result_data')
+        .select('day_index, result_data, processed_at')
         .eq('competition_id', competitionId)
         .not('played_at', 'is', null)
         .order('day_index'),
@@ -157,7 +157,12 @@ export async function GET(req: NextRequest) {
 
     // ── Match results ─────────────────────────────────────────────────────────
     const matchResults: Record<number, StoredMatchResult[]> = {};
-    for (const m of (mRes.data ?? []) as Array<{ day_index: number; result_data: unknown }>) {
+    let maxProcessedAt = 0;
+    for (const m of (mRes.data ?? []) as Array<{ day_index: number; result_data: unknown; processed_at: string | null }>) {
+      if (m.processed_at) {
+        const t = new Date(m.processed_at).getTime();
+        if (t > maxProcessedAt) maxProcessedAt = t;
+      }
       if (!m.result_data) continue;
       if (!matchResults[m.day_index]) matchResults[m.day_index] = [];
       matchResults[m.day_index].push(m.result_data as StoredMatchResult);
@@ -203,8 +208,16 @@ export async function GET(req: NextRequest) {
     // (trade, reset, score sync…) invalidates the cached response — otherwise
     // dayIndex/portfolioId alone stay identical across trades and a stale
     // 304 gets served (e.g. right after buying then reloading on login/logout).
+    //
+    // Also include the most recent matches.processed_at across the whole
+    // competition. A results sync writes fresh `result_data`/prices for
+    // everyone, but neither current_day_index (only bumps on full phase
+    // advance) nor the player's own portfolios.updated_at (only touched if
+    // they hold a position in the affected team) necessarily change — so
+    // without this, players uninvolved in tonight's match keep getting a
+    // stale 304 until they hard-reload (which resets the client ETag cache).
     const pfVersion = pf?.updated_at ? new Date(pf.updated_at).getTime() : 'new';
-    const etag = `"c${competitionId}-d${gs.current_day_index}-p${portfolioId}-u${pfVersion}"`;
+    const etag = `"c${competitionId}-d${gs.current_day_index}-p${portfolioId}-u${pfVersion}-m${maxProcessedAt}"`;
     if (req.headers.get('If-None-Match') === etag) {
       return new Response(null, { status: 304 });
     }
