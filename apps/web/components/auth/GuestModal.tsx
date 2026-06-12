@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { getDeviceId } from '@/lib/device';
 import { getPseudo, setPseudo, isValidPseudoFormat, saveOAuthPending } from '@/lib/pseudo';
-import EmailAuthModal from '@/components/auth/EmailAuthModal';
 import { useGameStore } from '@/stores/gameStore';
 
 interface Props {
@@ -301,8 +300,6 @@ function AuthButtons() {
   const tc = useTranslations('common');
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError,   setGoogleError]   = useState('');
-  const [emailOpen,     setEmailOpen]     = useState(false);
-  const [emailView,     setEmailView]     = useState<'signin' | 'signup'>('signup');
 
   async function handleGoogle() {
     setGoogleLoading(true);
@@ -322,17 +319,6 @@ function AuthButtons() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Login link first — returning users find it immediately */}
-      <div style={s.loginRow}>
-        {t('alreadyAccount')}{' '}
-        <button
-          onClick={() => { setEmailView('signin'); setEmailOpen(true); }}
-          style={s.loginLink}
-        >
-          {t('signIn')}
-        </button>
-      </div>
-
       <button
         onClick={handleGoogle}
         disabled={googleLoading}
@@ -342,21 +328,6 @@ function AuthButtons() {
         {googleLoading ? tc('redirecting') : t('continueGoogle')}
       </button>
       {googleError && <div style={s.error}>{googleError}</div>}
-
-      <button
-        onClick={() => { setEmailView('signup'); setEmailOpen(true); }}
-        style={{ ...s.oauthBtn, fontSize: 12, color: 'var(--muted)' }}
-      >
-        <span style={s.oauthIcon}>✉</span>
-        {t('createEmailAccount')}
-      </button>
-
-      {emailOpen && (
-        <EmailAuthModal
-          defaultView={emailView}
-          onClose={() => setEmailOpen(false)}
-        />
-      )}
     </div>
   );
 }

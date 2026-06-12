@@ -3,33 +3,32 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { saveOAuthPending } from '@/lib/pseudo';
+import { getDeviceId } from '@/lib/device';
 
 export default function LoginPage() {
-  const router   = useRouter();
   const supabase = createClient();
-  const t        = useTranslations('auth.login');
+  const t  = useTranslations('auth.login');
+  const tw = useTranslations('authWidget');
 
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setError(''); setLoading(true);
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
+  async function handleGoogle() {
+    setLoading(true);
+    setError('');
+    saveOAuthPending();
+    document.cookie = `ks_pending_device=${getDeviceId()}; path=/; max-age=600; SameSite=Lax`;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
     if (error) {
-      setError(error.message);
+      setError(tw('googleError'));
       setLoading(false);
-    } else {
-      router.push('/');
-      router.refresh();
     }
   }
 
@@ -45,42 +44,11 @@ export default function LoginPage() {
 
         <h1 style={styles.title}>{t('title')}</h1>
 
-        <form onSubmit={handleLogin} style={styles.form}>
-          <label style={styles.label}>{t('emailLabel')}</label>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            placeholder={t('emailPlaceholder')}
-            style={styles.input}
-          />
-
-          <label style={styles.label}>{t('passwordLabel')}</label>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            placeholder="••••••••"
-            style={styles.input}
-          />
-
-          {error && <div style={styles.error}>{error}</div>}
-
-          <button type="submit" disabled={loading} style={styles.btn}>
-            {loading ? t('loadingButton') : t('submitButton')}
-          </button>
-        </form>
-
-        <div style={styles.divider}/>
-
-        <div style={styles.footer}>
-          {t('noAccount')}{' '}
-          <Link href="/register" style={styles.link}>{t('createAccount')}</Link>
-        </div>
+        <button onClick={handleGoogle} disabled={loading} style={{ ...styles.googleBtn, opacity: loading ? 0.6 : 1 }}>
+          <span style={styles.googleIcon}>G</span>
+          {loading ? tw('redirecting') : tw('continueGoogle')}
+        </button>
+        {error && <div style={styles.error}>{error}</div>}
 
         <div style={styles.guestRow}>
           <Link href="/" style={styles.guestLink}>{t('continueGuest')}</Link>
@@ -138,28 +106,34 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 24,
     textAlign: 'center',
   },
-  form: {
+  googleBtn: {
+    width: '100%',
     display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  label: {
-    fontSize: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    background: '#fff',
+    color: '#1a1a1a',
+    border: 'none',
+    borderRadius: 9,
+    padding: '13px 0',
+    fontFamily: "'Bebas Neue', sans-serif",
+    fontSize: 15,
     letterSpacing: 2,
-    color: '#666',
-    fontWeight: 700,
-    marginTop: 8,
+    cursor: 'pointer',
   },
-  input: {
-    background: '#181818',
-    border: '1px solid #2E2E2E',
-    borderRadius: 8,
-    padding: '11px 14px',
+  googleIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 18,
+    height: 18,
+    borderRadius: '50%',
+    background: '#4285F4',
     color: '#fff',
-    fontSize: 14,
-    outline: 'none',
-    fontFamily: 'inherit',
-    transition: 'border-color .15s',
+    fontSize: 11,
+    fontWeight: 700,
+    fontFamily: "'Inter Tight', sans-serif",
   },
   error: {
     background: 'rgba(255,59,92,.1)',
@@ -168,41 +142,12 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 12px',
     fontSize: 12,
     color: '#FF3B5C',
-    marginTop: 4,
-  },
-  btn: {
-    marginTop: 16,
-    background: '#FFDB00',
-    color: '#000',
-    border: 'none',
-    borderRadius: 9,
-    padding: '13px 0',
-    fontFamily: "'Bebas Neue', sans-serif",
-    fontSize: 17,
-    letterSpacing: 3,
-    cursor: 'pointer',
-    transition: 'opacity .15s',
-  },
-  divider: {
-    height: 1,
-    background: '#1E1E1E',
-    margin: '24px 0 16px',
-  },
-  footer: {
+    marginTop: 12,
     textAlign: 'center',
-    fontSize: 12,
-    color: '#666',
-  },
-  link: {
-    color: '#FFDB00',
-    textDecoration: 'none',
-    fontWeight: 700,
-    fontSize: 11,
-    letterSpacing: 1,
   },
   guestRow: {
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 20,
   },
   guestLink: {
     fontSize: 11,

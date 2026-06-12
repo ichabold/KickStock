@@ -12,7 +12,6 @@ import { getPseudo, clearPseudo, isValidPseudoFormat, getOAuthPending, clearOAut
 import { getDeviceId } from '@/lib/device';
 import { getCompetitionIdSync, setCompetitionId } from '@/stores/onlineGameStore';
 import BottomSheet from './BottomSheet';
-import EmailAuthModal from '@/components/auth/EmailAuthModal';
 
 interface Props {
   compact?: boolean;
@@ -53,9 +52,26 @@ export default function AuthWidget({ compact = false }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, profile?.id]);
 
-  const [panelOpen,     setPanelOpen]     = useState(false);
-  const [emailAuthOpen, setEmailAuthOpen] = useState(false);
+  const [panelOpen,      setPanelOpen]      = useState(false);
+  const [googleLoading,  setGoogleLoading]  = useState(false);
+  const [googleError,    setGoogleError]    = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
+
+  async function handleGoogle() {
+    setGoogleLoading(true);
+    setGoogleError('');
+    saveOAuthPending();
+    document.cookie = `ks_pending_device=${getDeviceId()}; path=/; max-age=600; SameSite=Lax`;
+    const sb = createClient();
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (error) {
+      setGoogleError(t('googleError'));
+      setGoogleLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!panelOpen || compact) return;
@@ -160,7 +176,8 @@ export default function AuthWidget({ compact = false }: Props) {
   return (
     <>
       <button
-        onClick={() => setEmailAuthOpen(true)}
+        onClick={handleGoogle}
+        disabled={googleLoading}
         style={{
           background: 'rgba(255,219,0,.12)',
           border: '1px solid var(--gold-dk)',
@@ -173,17 +190,16 @@ export default function AuthWidget({ compact = false }: Props) {
           cursor: 'pointer',
           fontFamily: 'var(--font-display)',
           whiteSpace: 'nowrap',
+          opacity: googleLoading ? 0.6 : 1,
         }}
       >
-        {compact ? t('loginCompact') : t('loginDesktop')}
+        {googleLoading ? t('redirecting') : (compact ? t('loginCompact') : t('loginDesktop'))}
       </button>
+      {googleError && !compact && <div style={s.errorTip}>{googleError}</div>}
       {!compact && (
         <div style={{ marginTop: 8 }}>
           <LanguageSwitcher />
         </div>
-      )}
-      {emailAuthOpen && (
-        <EmailAuthModal onClose={() => setEmailAuthOpen(false)} />
       )}
     </>
   );
@@ -525,7 +541,6 @@ function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void
   const t = useTranslations('authWidget');
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError,   setGoogleError]   = useState('');
-  const [emailOpen,     setEmailOpen]     = useState(false);
 
   async function handleGoogle() {
     setGoogleLoading(true);
@@ -575,18 +590,6 @@ function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void
           {googleLoading ? t('redirecting') : t('continueGoogle')}
         </button>
         {googleError && <div style={s.errorTip}>{googleError}</div>}
-        <button
-          onClick={() => setEmailOpen(true)}
-          style={s.oauthBtn}
-        >
-          <span style={s.oauthIcon}>✉</span>{t('emailPassword')}
-        </button>
-        {emailOpen && (
-          <EmailAuthModal
-            defaultView="signup"
-            onClose={() => setEmailOpen(false)}
-          />
-        )}
         <button disabled style={{ ...s.oauthBtn, opacity: 0.3, cursor: 'not-allowed' }}>
           <span style={s.oauthIcon}></span>Apple
           <span style={s.comingSoon}>{t('appleComingSoon')}</span>
