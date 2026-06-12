@@ -2,7 +2,7 @@
  * POST /api/auth/guest
  * Body: { pseudo: string, deviceId: string }
  * Validates pseudo, checks uniqueness, then:
- *   1. Ensures a portfolio exists for this deviceId (get_or_create_portfolio)
+ *   1. Ensures a portfolio exists for this deviceId (get_or_create_competition_portfolio)
  *   2. Sets guest_username via set_guest_username RPC
  * Returns { ok: true } or { error: string }
  */
@@ -87,10 +87,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'taken' }, { status: 409 });
   }
 
-  // Ensure portfolio exists for this deviceId
-  const { error: pidErr } = await adminRpc(admin, 'get_or_create_portfolio', {
-    p_device_id: deviceId,
-    p_user_id:   null,
+  // Resolve the active competition
+  const { data: comp } = await adminFrom(admin, 'competitions')
+    .select('id')
+    .eq('is_active', true)
+    .order('id', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!comp) {
+    return NextResponse.json({ error: 'portfolio_error' }, { status: 500 });
+  }
+
+  // Ensure portfolio exists for this deviceId (competition-scoped)
+  const { error: pidErr } = await adminRpc(admin, 'get_or_create_competition_portfolio', {
+    p_competition_id: (comp as { id: number }).id,
+    p_device_id:      deviceId,
+    p_user_id:        null,
   });
   if (pidErr) {
     return NextResponse.json({ error: 'portfolio_error' }, { status: 500 });

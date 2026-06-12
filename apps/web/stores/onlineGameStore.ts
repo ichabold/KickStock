@@ -26,10 +26,11 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const COMPETITION_KEY = 'kickstock:competition';
 
+// 0 = no explicit choice — loadBootstrap resolves to the active competition.
 export function getCompetitionIdSync(): number {
-  if (typeof window === 'undefined') return 1;
+  if (typeof window === 'undefined') return 0;
   const stored = localStorage.getItem(COMPETITION_KEY);
-  return stored ? parseInt(stored, 10) : 1;
+  return stored ? parseInt(stored, 10) : 0;
 }
 
 export function setCompetitionId(id: number): void {
@@ -113,7 +114,7 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     if (current._bootstrap || current.bootstrapLoading) return;
 
     set({ bootstrapLoading: true, bootstrapError: false });
-    const data = await getBootstrap(current._competitionId);
+    const data = await getBootstrap(current._competitionId || undefined);
 
     if (!data) {
       set({ bootstrapLoading: false, bootstrapError: true });
@@ -124,6 +125,8 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
       _bootstrap:       data,
       _teams:           bootstrapToTeams(data),
       bootstrapLoading: false,
+      // Resolve to the competition the server picked (active one, when none was chosen)
+      _competitionId:   data.competition.id,
     });
   },
 
@@ -158,33 +161,39 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   startSync: () => {
     if (get()._pollId || get()._realtimeChannel) return;
 
-    get().fetchState();
-
-    const supabase = createClient();
-    const competitionId = get()._competitionId;
-    const channel = supabase
-      .channel(`ks_game_state_${competitionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE', schema: 'public', table: 'competition_game_state',
-          filter: `competition_id=eq.${competitionId}`,
-        },
-        () => {
-          if (get().syncing) return;
-          set({ syncing: true });
-          get().fetchState();
-        },
-      )
-      .subscribe();
-
     const id = setInterval(() => {
       if (get().syncing) return;
       set({ syncing: true });
       get().fetchState();
     }, 30_000);
+    set({ _pollId: id });
 
-    set({ _pollId: id, _realtimeChannel: channel });
+    // fetchState() resolves the active competition (via loadBootstrap) before
+    // we read _competitionId for the realtime channel below.
+    get().fetchState().then(() => {
+      // stopSync ran while we were waiting — don't open a channel we'd never clean up
+      if (get()._pollId === null || get()._realtimeChannel) return;
+
+      const supabase     = createClient();
+      const competitionId = get()._competitionId;
+      const channel = supabase
+        .channel(`ks_game_state_${competitionId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE', schema: 'public', table: 'competition_game_state',
+            filter: `competition_id=eq.${competitionId}`,
+          },
+          () => {
+            if (get().syncing) return;
+            set({ syncing: true });
+            get().fetchState();
+          },
+        )
+        .subscribe();
+
+      set({ _realtimeChannel: channel });
+    });
   },
 
   // ── stopSync ─────────────────────────────────────────────────────────────────

@@ -24,10 +24,11 @@ import { getBootstrap, bootstrapToTeams, deriveDynamicKey, buildMatchesForCurren
 
 const COMPETITION_KEY = 'kickstock:competition';
 
+// 0 = no explicit choice — getBootstrap resolves to the active competition.
 function getLocalCompetitionId(): number {
-  if (typeof window === 'undefined') return 1;
+  if (typeof window === 'undefined') return 0;
   const stored = localStorage.getItem(COMPETITION_KEY);
-  return stored ? parseInt(stored, 10) : 1;
+  return stored ? parseInt(stored, 10) : 0;
 }
 import type {
   GameState, TradeMode, StoredMatchResult, Match,
@@ -149,7 +150,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
 
         set({ bootstrapLoading: true, bootstrapError: false });
         const competitionId = getLocalCompetitionId();
-        const data = await getBootstrap(competitionId);
+        const data = await getBootstrap(competitionId || undefined);
 
         if (!data) {
           set({ bootstrapLoading: false, bootstrapError: true });

@@ -10,13 +10,13 @@ import type { BootstrapData, GameState, Match, TeamMeta } from '@kickstock/types
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
-function cacheKey(competitionId: number) {
-  return `kickstock:bootstrap:v2:${competitionId}`;
+function cacheKey(competitionId?: number) {
+  return `kickstock:bootstrap:v2:${competitionId ?? 'active'}`;
 }
 
 interface CacheEntry { data: BootstrapData; fetchedAt: number; serverVersion?: string }
 
-function readCache(competitionId: number, serverVersion?: string): BootstrapData | null {
+function readCache(competitionId: number | undefined, serverVersion?: string): BootstrapData | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(cacheKey(competitionId));
@@ -29,7 +29,7 @@ function readCache(competitionId: number, serverVersion?: string): BootstrapData
   } catch { return null; }
 }
 
-function readStale(competitionId: number): BootstrapData | null {
+function readStale(competitionId: number | undefined): BootstrapData | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(cacheKey(competitionId));
@@ -38,18 +38,21 @@ function readStale(competitionId: number): BootstrapData | null {
   } catch { return null; }
 }
 
-function writeCache(competitionId: number, data: BootstrapData, serverVersion?: string): void {
+function writeCache(competitionId: number | undefined, data: BootstrapData, serverVersion?: string): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(cacheKey(competitionId), JSON.stringify({ data, fetchedAt: Date.now(), serverVersion }));
   } catch { /* storage full / private mode */ }
 }
 
-export async function getBootstrap(competitionId = 1): Promise<BootstrapData | null> {
+export async function getBootstrap(competitionId?: number): Promise<BootstrapData | null> {
+  // When no competition is specified, the API defaults to the active one.
+  const param = competitionId ? `competition_id=${competitionId}&` : '';
+
   // Fetch just the version (last_sync_at) cheaply before deciding to use cache
   let serverVersion: string | undefined;
   try {
-    const vRes = await fetch(`/api/competition/bootstrap?competition_id=${competitionId}&version_only=1`, { cache: 'no-store' });
+    const vRes = await fetch(`/api/competition/bootstrap?${param}version_only=1`, { cache: 'no-store' });
     if (vRes.ok) {
       const v = await vRes.json() as { version?: string };
       serverVersion = v.version;
@@ -60,7 +63,7 @@ export async function getBootstrap(competitionId = 1): Promise<BootstrapData | n
   if (cached) return cached;
 
   try {
-    const res = await fetch(`/api/competition/bootstrap?competition_id=${competitionId}`, { cache: 'no-store' });
+    const res = await fetch(`/api/competition/bootstrap?${param}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as BootstrapData;
 
@@ -78,7 +81,7 @@ export async function getBootstrap(competitionId = 1): Promise<BootstrapData | n
   }
 }
 
-export async function refreshBootstrap(competitionId = 1): Promise<BootstrapData | null> {
+export async function refreshBootstrap(competitionId?: number): Promise<BootstrapData | null> {
   if (typeof window !== 'undefined') localStorage.removeItem(cacheKey(competitionId));
   return getBootstrap(competitionId);
 }

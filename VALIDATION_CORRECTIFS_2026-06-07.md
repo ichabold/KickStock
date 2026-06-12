@@ -1,20 +1,68 @@
-# Validation des correctifs déployés (V22.4) — Tickets 1, 2, 3
+# Validation des correctifs déployés — Tickets 1, 2, 3
 **Cible :** https://kick-stock-web.vercel.app/ (prod, post-déploiement)
-**Commit vérifié :** `71f099d` (V22.4)
-**Date :** 2026-06-07
+**Date :** 2026-06-07 — **MISE À JOUR** : seconde passe après correctif additionnel sur le ticket 2
 **Méthode :** revue du diff de code + tests **en direct** sur la prod (requêtes réelles, non destructives)
 
 ---
 
-## Résumé
+## Résumé (mis à jour après seconde passe)
 
 | Ticket | Code (revue) | Comportement en prod (testé en direct) | Verdict |
 |---|---|---|---|
 | 1 — Rate limit `check-email` | ✅ Conforme aux specs | ✅ `429` déclenché à la 11ᵉ requête, comme prévu | 🟢 **VALIDÉ** |
 | 3 — Headers de sécurité HTTP | ✅ Conforme, CSP bien calibrée | ✅ Tous les headers présents et corrects sur `/`, `/login`, `/api/*` | 🟢 **VALIDÉ** |
-| 2 — Verrou anti-usurpation `device-init` | ✅ Code et tests unitaires propres | ❌ **Le verrou ne se déclenche JAMAIS en prod — la vulnérabilité d'origine reste pleinement exploitable** | 🔴 **NON VALIDÉ — RÉGRESSION DE SÉCURITÉ EN PROD** |
+| 2 — Verrou anti-usurpation `device-init` | ✅ Logique durcie (« premier arrivé, premier servi », sans heuristique) | ✅ **`409 device_already_bound` confirmé en direct sur 100 % des tentatives de réclamation, scénario d'attaque rejoué sans succès** | 🟢 **VALIDÉ** (1 point mineur résiduel — voir plus bas) |
 
-**⚠️ Point bloquant : le ticket 2 n'est PAS effectif en production.** Le code semble correct sur le papier (et les tests unitaires passent en mock), mais en conditions réelles, l'API `/api/auth/device-init` délivre un cookie signé valide pour **n'importe quel `device_id` réclamé**, peu importe à quel point l'empreinte diffère de la première signature. J'ai reproduit le scénario d'attaque décrit dans l'audit — **avec succès, à 100 % des tentatives**.
+### 🔄 Ce qui a changé depuis la première passe
+
+Lors de mon premier test, le verrou du ticket 2 ne se déclenchait **jamais** en prod (voir historique ci-dessous — section "Première passe"). La dev a depuis **remplacé l'heuristique par empreintes (réseau + navigateur) par une règle stricte "premier signataire gagne"** : toute tentative de signature pour un `device_id` déjà présent dans `device_bindings`, sans le cookie de signature correspondant, est désormais rejetée avec `409`, **sans aucune exception ni comparaison d'empreinte**. C'est exactement le changement qu'il fallait faire — et il corrige bien la faiblesse structurelle que j'avais identifiée (un attaquant partageant le réseau et/ou un `User-Agent` courant avec sa victime contournait l'ancienne logique "OR").
+
+J'ai **rejoué l'attaque de bout en bout** avec ce nouveau code en place :
+
+```
+Test 1 — réclamation d'un device_id déjà revendiqué lors de mon premier audit (sans cookie) :
+  → {"error":"device_already_bound","code":"DEVICE_ALREADY_BOUND"}  | HTTP 409  ✅
+
+Test 2 — nouveau device_id, 3 tentatives consécutives sans cookie, empreintes différentes à chaque fois :
+  tentative 1 (premier arrivant)        → {"ok":true}                                      | HTTP 200  (légitime, crée le verrou)
+  tentative 2 (empreinte différente)    → {"error":"device_already_bound", …}              | HTTP 409  ✅
+  tentative 3 (re-essai immédiat)       → {"error":"device_already_bound", …}              | HTTP 409  ✅
+
+Test 3 — vérification de bout en bout : le device_id "volé" du 1er audit, sans cookie, sur une route protégée :
+  GET /api/game/state -H "X-Device-ID: <device_id_victime>"
+  → {"error":"device_not_initialized","code":"DEVICE_NOT_INIT"}                            | HTTP 401  ✅
+  (l'attaquant ne peut plus obtenir le cookie ⇒ ne peut plus passer verifyDevice())
+
+Test 4 — non-régression : le vrai propriétaire (avec son cookie d'origine) :
+  POST /api/auth/device-init (avec cookie valide du test précédent)
+  → {"ok":true,"reused":true}                                                              | HTTP 200  ✅
+```
+
+➡️ **Le scénario d'attaque documenté dans l'audit initial ne fonctionne plus.** Un attaquant qui observerait le `device_id` d'une victime ne peut plus obtenir de cookie signé pour ce `device_id` — il se heurte systématiquement au `409`, et reste bloqué par `verifyDevice()` (`401 device_not_initialized`) sur toutes les routes protégées (`trade`, `game/state`, `game/advance`, `game/reset`). Le correctif ferme bien la porte. **Ticket 2 validé.**
+
+### ⚠️ Point résiduel mineur identifié pendant cette seconde passe : `/api/auth/device-init` n'a aucun rate limiting
+
+En testant la nouvelle logique, j'ai remarqué que la route **insère désormais une ligne en base (`device_bindings`) à chaque nouveau `device_id` présenté**, sans aucun `checkRateLimit` ni autre limite — alors que **toutes** les autres routes d'auth en ont une (`guest`, `check-email` désormais aussi). Test en direct : 15 requêtes consécutives avec des UUID différents → **15× HTTP 200**, 15 nouvelles lignes insérées :
+
+```
+200 200 200 200 200 200 200 200 200 200 200 200 200 200 200
+```
+
+**Impact :** un attaquant peut désormais spammer cet endpoint avec des UUID v4 générés à la volée pour :
+- gonfler artificiellement la table `device_bindings` (chaque ligne = 1 lecture + 1 écriture Supabase + 2 hachages SHA-256, sans aucun coût pour l'attaquant) → coût d'infrastructure et facture Supabase qui grimpent ;
+- effectuer une forme de déni de service à coût quasi nul pour l'attaquant.
+
+Ce n'est **pas une régression du correctif ticket 2** (le problème de fond — l'usurpation — est bien résolu), mais c'est une **nouvelle surface d'abus introduite par la création de la table `device_bindings`** elle-même, qui mérite une petite passe de durcissement :
+
+**Recommandation (rapide, ~15 min) :** ajouter `checkRateLimit('deviceInit', ip)` en tout début de la route, sur le même modèle que `check-email` (ex. 10-20 req / 10 min / IP — un vrai utilisateur n'appelle cette route qu'une fois par device).
+
+---
+
+## Historique — Première passe (avant le correctif additionnel)
+
+> Conservé ci-dessous à titre de traçabilité : voici ce que j'avais constaté **avant** que la dev ne corrige le ticket 2 une seconde fois.
+
+**⚠️ Point bloquant détecté initialement : le ticket 2 n'était PAS effectif en production.** Le code semblait correct sur le papier (et les tests unitaires passaient en mock), mais en conditions réelles, l'API `/api/auth/device-init` délivrait un cookie signé valide pour **n'importe quel `device_id` réclamé**, peu importe à quel point l'empreinte différait de la première signature. J'avais reproduit le scénario d'attaque décrit dans l'audit — **avec succès, à 100 % des tentatives** (7/7).
 
 ---
 
@@ -65,15 +113,17 @@ x-frame-options: DENY
 
 ---
 
-## Ticket 2 — Verrou anti-usurpation `device-init` 🔴 NON VALIDÉ
+## [ARCHIVE — Première passe] Ticket 2 — Verrou anti-usurpation `device-init` 🔴 NON VALIDÉ À L'ÉPOQUE
 
-### Ce que dit le code (en apparence correct)
+> ℹ️ **Ce constat date de la première passe de validation, AVANT le correctif additionnel décrit en haut de ce document.** La dev a depuis remplacé l'heuristique par empreintes par une règle stricte "premier arrivé, premier servi", et j'ai confirmé en seconde passe que **le ticket 2 est désormais bien validé** (voir le résumé tout en haut). Cette section est conservée telle quelle pour la traçabilité — elle explique le diagnostic qui a permis à la dev de corriger le tir rapidement.
 
-Le diff ajoute une table `device_bindings` (migration `018`), enregistre une empreinte hashée (jamais l'IP en clair — bon réflexe) du réseau et du navigateur au premier `POST /api/auth/device-init`, et rejette toute tentative ultérieure pour le même `device_id` avec une empreinte radicalement différente (`409 device_already_bound`). Les tests unitaires (`route.security.test.ts`) sont propres et couvrent bien les cas attendus — **mais ils tournent sur un client Supabase entièrement mocké**, donc ils valident la logique en isolation, pas son fonctionnement réel contre l'infrastructure de prod.
+### Ce que disait le code à l'époque (en apparence correct)
 
-### Ce qui se passe réellement en prod — reproduction de l'attaque décrite dans l'audit
+Le diff ajoutait une table `device_bindings` (migration `018`), enregistrait une empreinte hashée (jamais l'IP en clair — bon réflexe) du réseau et du navigateur au premier `POST /api/auth/device-init`, et rejetait toute tentative ultérieure pour le même `device_id` avec une empreinte radicalement différente (`409 device_already_bound`). Les tests unitaires (`route.security.test.ts`) étaient propres et couvraient bien les cas attendus — **mais ils tournaient sur un client Supabase entièrement mocké**, donc ils validaient la logique en isolation, pas son fonctionnement réel contre l'infrastructure de prod.
 
-J'ai rejoué **exactement** le scénario d'attaque documenté dans `AUDIT_SECURITE_INDEPENDANT_2026-06-07.md` (point 2) :
+### Ce qui se passait réellement en prod à l'époque — reproduction de l'attaque décrite dans l'audit
+
+J'avais rejoué **exactement** le scénario d'attaque documenté dans `AUDIT_SECURITE_INDEPENDANT_2026-06-07.md` (point 2) :
 
 **Test A — scénario victime / attaquant complet :**
 ```
