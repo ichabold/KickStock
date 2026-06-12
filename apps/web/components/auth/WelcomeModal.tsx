@@ -88,9 +88,20 @@ export default function WelcomeModal() {
   function handleDone() {
     clearPseudo();
     setStep(null);
-    cleanUrl();
-    // Reload so useAuth picks up the updated profile.username
-    window.location.reload();
+
+    // Full navigation to a cleaned URL (not router.replace + reload):
+    // router.replace() is a client-side history update and may not have
+    // taken effect yet when reload() fires, so reload() would reload the
+    // CURRENT (unclean) URL — re-triggering this same migration/username
+    // step from the top (infinite "Account created / Continue" loop).
+    // Assigning location.href both strips the ks_* params AND forces a
+    // full reload so useAuth picks up the updated profile.username.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('ks_migrated');
+    url.searchParams.delete('ks_new_user');
+    url.searchParams.delete('ks_pseudo');
+    url.searchParams.delete('ks_auth_error');
+    window.location.href = url.pathname + url.search;
   }
 
   // For the migration step: apply the guest-chosen pseudo to the freshly
