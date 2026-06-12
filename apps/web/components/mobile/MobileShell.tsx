@@ -37,7 +37,7 @@ export default function MobileShell() {
   useEffect(() => {
     function handleShowTut() {
       localStorage.setItem('kickstock_seen_tutorial', '1');
-      setTab('market');
+      setTab('schedule');
       setShowTut(true);
     }
     window.addEventListener('kickstock:show-tutorial', handleShowTut);
@@ -91,6 +91,9 @@ export default function MobileShell() {
             </div>
           </div>
         </div>
+        <button className={styles.helpBtn} onClick={() => setShowTut(true)} aria-label={t('help')}>
+          ❓
+        </button>
         <div className={styles.authArea}>
           <AuthWidget compact />
         </div>
@@ -134,7 +137,7 @@ export default function MobileShell() {
           : <SimulateTab onDone={() => setTab('schedule')} />
         )}
         {tab === 'market'    && <MarketTab />}
-        {tab === 'portfolio' && <PortfolioTab />}
+        {tab === 'portfolio' && <PortfolioTab onGoToMarket={() => setTab('schedule')} />}
       </main>
 
       <GuestModal onDone={() => {}} />

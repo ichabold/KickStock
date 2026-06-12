@@ -11,7 +11,11 @@ import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import type { Nation, TradeMode } from '@kickstock/types';
 import styles from './PortfolioTab.module.css';
 
-export default function PortfolioTab() {
+interface Props {
+  onGoToMarket?: () => void;
+}
+
+export default function PortfolioTab({ onGoToMarket }: Props) {
   const t = useTranslations('portfolio');
   const [modal,    setModal]    = useState<{ nation: Nation; mode: TradeMode } | null>(null);
   const [nationId, setNationId] = useState<string | null>(null);
@@ -94,6 +98,11 @@ export default function PortfolioTab() {
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
             {t('emptyHint')}
           </div>
+          {onGoToMarket && (
+            <button className={styles.emptyCta} onClick={onGoToMarket}>
+              {t('emptyCta')}
+            </button>
+          )}
         </div>
       ) : (
         <div className={styles.holdings}>

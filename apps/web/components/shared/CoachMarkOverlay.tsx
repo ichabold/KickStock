@@ -12,17 +12,15 @@ interface Beat {
 }
 
 const BROWSER_BEATS: Beat[] = [
-  { selector: '.stile',            labelKey: 'browser.rule1Label', textKey: 'browser.rule1Text', tip: 'bottom' },
-  { selector: '.tbs:first-child',  labelKey: 'browser.rule2Label', textKey: 'browser.rule2Text', tip: 'bottom' },
-  { selector: '.sim-inline-btn',   labelKey: 'browser.rule3Label', textKey: 'browser.rule3Text', tip: 'bottom' },
-  { selector: '.bbuy',             labelKey: 'browser.rule4Label', textKey: 'browser.rule4Text', tip: 'top'    },
+  { selector: '[data-coach="schedule-match"]', labelKey: 'schedule.rule1Label', textKey: 'schedule.rule1Text', tip: 'bottom' },
+  { selector: '.tbs:nth-child(2)',             labelKey: 'schedule.rule2Label', textKey: 'schedule.rule2Text', tip: 'bottom' },
+  { selector: '.sim-inline-btn',               labelKey: 'schedule.rule3Label', textKey: 'schedule.rule3Text', tip: 'bottom' },
 ];
 
 const MOBILE_BEATS: Beat[] = [
-  { selector: '[data-coach="nation-card"]',        labelKey: 'mobile.rule1Label', textKey: 'mobile.rule1Text', tip: 'bottom' },
-  { selector: '[data-coach="cash-stat"]',          labelKey: 'mobile.rule2Label', textKey: 'mobile.rule2Text', tip: 'bottom' },
-  { selector: '[data-coach="play-btn"]',           labelKey: 'mobile.rule3Label', textKey: 'mobile.rule3Text', tip: 'top'    },
-  { selector: '[data-coach="nation-card"] button', labelKey: 'mobile.rule4Label', textKey: 'mobile.rule4Text', tip: 'top'    },
+  { selector: '[data-coach="schedule-match"]', labelKey: 'schedule.rule1Label', textKey: 'schedule.rule1Text', tip: 'bottom' },
+  { selector: '[data-coach="cash-stat"]',      labelKey: 'schedule.rule2Label', textKey: 'schedule.rule2Text', tip: 'bottom' },
+  { selector: '[data-coach="play-btn"]',       labelKey: 'schedule.rule3Label', textKey: 'schedule.rule3Text', tip: 'top'    },
 ];
 
 interface Props {

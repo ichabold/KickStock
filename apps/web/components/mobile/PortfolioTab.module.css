@@ -70,6 +70,19 @@
   align-items: center;
   gap: 8px;
 }
+.emptyCta {
+  margin-top: 10px;
+  min-height: var(--tap-min);
+  padding: 0 24px;
+  background: var(--gold);
+  color: #000;
+  border: none;
+  border-radius: 9px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 2px;
+  cursor: pointer;
+}
 
 /* ── Holdings ─────────────────────────────────────────────────────────── */
 .holdings { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }

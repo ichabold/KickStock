@@ -21,7 +21,8 @@
       "noAccount": "No account yet?",
       "createAccount": "CREATE AN ACCOUNT",
       "continueGuest": "Continue without account →",
-      "emailPlaceholder": "player@email.com"
+      "emailPlaceholder": "player@email.com",
+      "legalNotice": "By continuing, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>."
     },
     "register": {
       "title": "CREATE AN ACCOUNT",
@@ -42,10 +43,12 @@
       "pseudoTooShort": "Username must be at least 3 characters"
     },
     "guest": {
-      "title": "CHOOSE YOUR USERNAME",
       "subtitle": "WORLD CUP 2026 · TRADING GAME",
+      "chooseModeLabel": "CHOOSE YOUR GAME MODE",
       "placeholder": "Your username (3–20 characters)",
-      "submitButton": "PLAY NOW",
+      "guestSubmitButton": "PLAY AS GUEST",
+      "guestTitle": "GUEST",
+      "orGuest": "or continue without an account",
       "loadingButton": "LOADING…",
       "validationError": "3 to 20 characters, letters, numbers, _ and - only.",
       "alreadyTaken": "Username already taken.",
@@ -54,6 +57,9 @@
       "alreadyAccount": "Already have an account?",
       "signIn": "LOG IN",
       "continueGoogle": "Continue with Google",
+      "googleBenefit1": "Progress saved",
+      "googleBenefit2": "Play on all your devices",
+      "googleBenefit3": "Leaderboard protected",
       "createEmailAccount": "Create an account with email",
       "turnstileNotice": "This site is protected by Cloudflare Turnstile.",
       "privacyPolicy": "Privacy Policy"
@@ -135,6 +141,7 @@
   "shell": {
     "cash": "CASH",
     "total": "TOTAL",
+    "help": "HELP",
     "tournamentEndedChampion": "🏆 END · {champion}",
     "tournamentEnded": "🏆 TOURNAMENT ENDED",
     "myPositions": "MY POSITIONS",
@@ -175,7 +182,8 @@
     "eliminatedNotice": "💀 Eliminated nations — automatic liquidation",
     "emptyIcon": "📊",
     "emptyTitle": "Empty portfolio",
-    "emptyHint": "Buy shares in the MARKET tab",
+    "emptyHint": "Buy shares from a match in the schedule",
+    "emptyCta": "VIEW MATCHES",
     "elimBadge": "💀 ELIMINATED",
     "pressDetails": "Tap for details →",
     "txHistory": "TRANSACTION HISTORY",
@@ -296,6 +304,14 @@
       "rule3Text": "The market freezes before each match. This button launches the day — trade first to catch the price movements.",
       "rule4Label": "RULE 4 · 4 — LAST",
       "rule4Text": "Buying is free. Selling costs 10% (groups) or 5% (KO). Now → pick a team and get started!"
+    },
+    "schedule": {
+      "rule1Label": "STEP 1 · 3",
+      "rule1Text": "Tap a country in a match to buy shares and bet on its win.",
+      "rule2Label": "STEP 2 · 3",
+      "rule2Text": "KC = KickCoins, your starting currency. The stronger a team, the higher its price — and its profit potential.",
+      "rule3Label": "STEP 3 · 3 — LAST",
+      "rule3Text": "When your team wins or qualifies, a dividend automatically lands in your cash. Selling costs 10% (5% in the final phase)."
     }
   },
   "matchDetail": {

@@ -297,7 +297,11 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                         pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
                     : res;
                   return (
-                    <div key={mi} className={`mrow${isCur ? ' cur' : isPast ? ' past' : ''}`}>
+                    <div
+                      key={mi}
+                      className={`mrow${isCur ? ' cur' : isPast ? ' past' : ''}`}
+                      {...(isCur && mi === 0 ? { 'data-coach': 'schedule-match' } : {})}
+                    >
                       <div className="mtime">J·{di+1}</div>
                       <div className="mteams">
                         <TeamName id={m.nation_a} color={res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
@@ -394,9 +398,10 @@ function ScheduleView({ onNationClick, onMatchClick }: {
 }
 
 // ─── PortfolioView ────────────────────────────────────────────────────────────
-function PortfolioView({ onTrade, onNationClick }: {
+function PortfolioView({ onTrade, onNationClick, onGoToSchedule }: {
   onTrade: (n: TeamMeta, m: TradeMode) => void;
   onNationClick: (id: string) => void;
+  onGoToSchedule: () => void;
 }) {
   const ts = useTranslations('shell');
   const tp = useTranslations('portfolio');
@@ -448,7 +453,19 @@ function PortfolioView({ onTrade, onNationClick }: {
           </div>
         )}
         {holdings.length === 0
-          ? <div style={{textAlign:'center',padding:40,color:'var(--di)',fontSize:12}}>{tp('emptyTitle')}</div>
+          ? (
+            <div style={{textAlign:'center',padding:'40px 20px',color:'var(--di)',fontSize:12,display:'flex',flexDirection:'column',alignItems:'center',gap:8}}>
+              <div style={{fontSize:40}}>{tp('emptyIcon')}</div>
+              <div>{tp('emptyTitle')}</div>
+              <div style={{fontSize:11,color:'var(--muted)'}}>{tp('emptyHint')}</div>
+              <button
+                onClick={onGoToSchedule}
+                style={{marginTop:6,minHeight:'var(--tap-min)',padding:'0 24px',background:'var(--gold)',color:'#000',border:'none',borderRadius:9,fontFamily:'var(--font-display)',fontSize:13,letterSpacing:2,cursor:'pointer'}}
+              >
+                {tp('emptyCta')}
+              </button>
+            </div>
+          )
           : holdings.map(h => (
               <div key={h.id} className="pos-row" style={{opacity: h.isElim ? 0.5 : 1, cursor: 'pointer'}}
                 onClick={() => onNationClick(h.id)}
@@ -506,7 +523,6 @@ function PortfolioView({ onTrade, onNationClick }: {
             onCardClick={() => onNationClick(h.id)}
           />)}
         </div>
-        {holdings.length === 0 && <div style={{textAlign:'center',padding:60,color:'var(--di)',fontSize:12}}>{tp('emptyHint')}</div>}
       </div>
     </div>
   );
@@ -982,7 +998,7 @@ export default function BrowserShell() {
   useEffect(() => {
     function handleShowTut() {
       localStorage.setItem('kickstock_seen_tutorial', '1');
-      setView('market'); // ensure market tiles are visible for coach marks
+      setView('schedule'); // tutorial anchors on the Schedule view
       setShowTut(true);
     }
     window.addEventListener('kickstock:show-tutorial', handleShowTut);
@@ -1059,7 +1075,7 @@ export default function BrowserShell() {
             <span style={{fontSize:16}}>🥇</span><span>RANK.</span>
           </button>
           <button className="ni-sm" onClick={() => setShowTut(true)}>
-            <span style={{fontSize:16}}>❓</span><span>HELP</span>
+            <span style={{fontSize:16}}>❓</span><span>{ts('help')}</span>
           </button>
           <div style={{padding: '8px 0'}}>
             <AuthWidget />
@@ -1112,7 +1128,7 @@ export default function BrowserShell() {
           {view === 'home'      && <HomeView      onTrade={doTrade} onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
           {view === 'schedule'  && <ScheduleView  onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
           {view === 'market'    && <MarketView    onTrade={doTrade} onNationClick={onNationClick}/>}
-          {view === 'portfolio' && <PortfolioView onTrade={doTrade} onNationClick={onNationClick}/>}
+          {view === 'portfolio' && <PortfolioView onTrade={doTrade} onNationClick={onNationClick} onGoToSchedule={() => setView('schedule')}/>}
           {view === 'standings' && <StandingsView onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
           {view === 'bracket'   && <BracketView   onNationClick={onNationClick} onMatchClick={onMatchClick}/>}
           {view === 'ranking'   && <RankingView   />}

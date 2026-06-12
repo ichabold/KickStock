@@ -590,10 +590,7 @@ function UpgradePanel({ pseudo, onClose }: { pseudo: string; onClose: () => void
           {googleLoading ? t('redirecting') : t('continueGoogle')}
         </button>
         {googleError && <div style={s.errorTip}>{googleError}</div>}
-        <button disabled style={{ ...s.oauthBtn, opacity: 0.3, cursor: 'not-allowed' }}>
-          <span style={s.oauthIcon}></span>Apple
-          <span style={s.comingSoon}>{t('appleComingSoon')}</span>
-        </button>
+        {/* Apple Sign-In — Sprint 4, retiré de l'UI jusque-là */}
       </div>
 
       <div style={s.migrationNote}>{t('migrationNote')}</div>

@@ -139,3 +139,6 @@ dist
 .yarn/install-state.gz
 .pnp.*
 .vercel
+
+# Claude Code session lock files
+.claude/*.lock

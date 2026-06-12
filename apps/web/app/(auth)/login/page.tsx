@@ -53,6 +53,13 @@ export default function LoginPage() {
         <div style={styles.guestRow}>
           <Link href="/" style={styles.guestLink}>{t('continueGuest')}</Link>
         </div>
+
+        <div style={styles.legalRow}>
+          {t.rich('legalNotice', {
+            terms: (chunks) => <Link href="/terms" style={styles.legalLink}>{chunks}</Link>,
+            privacy: (chunks) => <Link href="/privacy" style={styles.legalLink}>{chunks}</Link>,
+          })}
+        </div>
       </div>
     </div>
   );
@@ -154,5 +161,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#444',
     textDecoration: 'none',
     letterSpacing: 1,
+  },
+  legalRow: {
+    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 10,
+    color: '#444',
+    lineHeight: 1.6,
+  },
+  legalLink: {
+    color: '#666',
+    textDecoration: 'underline',
   },
 };

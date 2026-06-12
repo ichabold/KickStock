@@ -85,7 +85,11 @@ export default function ScheduleTab() {
                   : res?.res;
 
                 return (
-                  <div key={mi} className={`${styles.match} ${isCurrent ? styles.matchCurrent : ''} ${res ? styles.matchPlayed : ''}`}>
+                  <div
+                    key={mi}
+                    className={`${styles.match} ${isCurrent ? styles.matchCurrent : ''} ${res ? styles.matchPlayed : ''}`}
+                    {...(isCurrent && mi === 0 ? { 'data-coach': 'schedule-match' } : {})}
+                  >
                     <span className={styles.flag}>{nA?.flag}</span>
                     <button
                       className={`${styles.team} ${styles.nameBtn} ${elimA ? styles.elimTeam : ''}`}

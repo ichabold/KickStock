@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { getDeviceId } from '@/lib/device';
@@ -209,10 +210,21 @@ export default function GuestModal({ onDone }: Props) {
           <span style={s.logoText}>KICKSTOCK</span>
         </div>
         <div style={s.subtitle}>{t('subtitle')}</div>
+        <div style={s.modeLabel}>{t('chooseModeLabel')}</div>
 
-        {/* ── Guest block (primary) ────────────────────────────────── */}
-        <div style={s.block}>
-          <div style={s.blockTitle}>{t('title')}</div>
+        {/* ── Google (primary) ─────────────────────────────────────── */}
+        <GooglePrimary />
+
+        {/* ── Divider ──────────────────────────────────────────────── */}
+        <div style={s.dividerRow}>
+          <div style={s.dividerLine} />
+          <span style={s.dividerText}>{t('orGuest')}</span>
+          <div style={s.dividerLine} />
+        </div>
+
+        {/* ── Guest block (secondary, always fully visible) ───────────── */}
+        <div style={s.guestBlock}>
+          <div style={s.guestBlockTitle}>{t('guestTitle')}</div>
           <form onSubmit={handleSubmit} style={s.form}>
             <div style={s.inputWrap}>
               <input
@@ -273,28 +285,24 @@ export default function GuestModal({ onDone }: Props) {
             <button
               type="submit"
               disabled={!isSubmittable || submitting}
-              style={{ ...s.btn, opacity: !isSubmittable || submitting ? 0.45 : 1 }}
+              style={{ ...s.guestBtn, opacity: !isSubmittable || submitting ? 0.45 : 1 }}
             >
-              {submitting ? t('loadingButton') : t('submitButton')}
+              {submitting ? t('loadingButton') : t('guestSubmitButton')}
             </button>
           </form>
         </div>
 
-        {/* ── Divider ──────────────────────────────────────────────── */}
-        <div style={s.dividerRow}>
-          <div style={s.dividerLine} />
-          <span style={s.dividerText}>{tc('or')}</span>
-          <div style={s.dividerLine} />
+        {/* ── Already have an account? ────────────────────────────────── */}
+        <div style={s.loginRow}>
+          {t('alreadyAccount')}{' '}
+          <Link href="/login" style={s.loginLink}>{t('signIn')}</Link>
         </div>
-
-        {/* ── Auth block (secondary) ────────────────────────────────── */}
-        <AuthButtons />
       </div>
     </div>
   );
 }
 
-function AuthButtons() {
+function GooglePrimary() {
   const t = useTranslations('auth.guest');
   const te = useTranslations('auth.emailModal');
   const tc = useTranslations('common');
@@ -318,15 +326,20 @@ function AuthButtons() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 4 }}>
       <button
         onClick={handleGoogle}
         disabled={googleLoading}
-        style={{ ...s.oauthBtn, opacity: googleLoading ? 0.6 : 1 }}
+        style={{ ...s.googlePri, opacity: googleLoading ? 0.6 : 1 }}
       >
-        <span style={s.oauthIcon}>G</span>
+        <span style={s.googleIcon}>G</span>
         {googleLoading ? tc('redirecting') : t('continueGoogle')}
       </button>
+      <div style={s.benefitsList}>
+        <div style={s.benefit}>✓ {t('googleBenefit1')}</div>
+        <div style={s.benefit}>✓ {t('googleBenefit2')}</div>
+        <div style={s.benefit}>✓ {t('googleBenefit3')}</div>
+      </div>
       {googleError && <div style={s.error}>{googleError}</div>}
     </div>
   );
@@ -373,18 +386,27 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     marginBottom: 20,
   },
-  block: {
-    background: 'var(--s1)',
-    border: '1px solid var(--border)',
-    borderRadius: 16,
-    padding: '20px 20px 18px',
-  },
-  blockTitle: {
+  modeLabel: {
     fontFamily: 'var(--font-display)',
-    fontSize: 13,
+    fontSize: 11,
     letterSpacing: 3,
     color: 'var(--muted)',
+    textAlign: 'center',
     marginBottom: 14,
+  },
+  guestBlock: {
+    background: 'var(--s1)',
+    border: '1px solid var(--border-hi)',
+    borderRadius: 12,
+    padding: '16px 16px 14px',
+  },
+  guestBlockTitle: {
+    fontFamily: 'var(--font-display)',
+    fontSize: 11,
+    letterSpacing: 2.5,
+    color: 'var(--muted)',
+    marginBottom: 10,
+    textAlign: 'center',
   },
   form: {
     display: 'flex',
@@ -435,18 +457,18 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'var(--font-body)',
     textDecoration: 'underline',
   },
-  btn: {
+  guestBtn: {
     marginTop: 4,
-    background: 'var(--gold)',
-    color: '#000',
-    border: 'none',
+    background: 'transparent',
+    color: 'var(--text)',
+    border: '1px solid var(--border-hi)',
     borderRadius: 9,
-    padding: '13px 0',
+    padding: '12px 0',
     fontFamily: 'var(--font-display)',
-    fontSize: 17,
-    letterSpacing: 3,
+    fontSize: 14,
+    letterSpacing: 2,
     cursor: 'pointer',
-    transition: 'opacity .15s',
+    transition: 'opacity .15s, border-color .15s',
     width: '100%',
   },
   dividerRow: {
@@ -465,32 +487,49 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--dim)',
     fontFamily: 'var(--font-body)',
   },
-  oauthBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    width: '100%',
-    background: 'var(--s2)',
-    border: '1px solid var(--border-hi)',
-    borderRadius: 9,
-    padding: '11px 16px',
-    color: 'var(--text)',
-    fontSize: 13,
-    cursor: 'pointer',
-    fontFamily: 'var(--font-body)',
-    fontWeight: 500,
-    transition: 'border-color .15s',
-    textAlign: 'left',
-  },
-  oauthIcon: {
-    width: 20,
-    height: 20,
+  googlePri: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontWeight: 700,
+    gap: 10,
+    width: '100%',
+    background: 'var(--gold)',
+    color: '#000',
+    border: 'none',
+    borderRadius: 10,
+    padding: '13px 16px',
+    fontFamily: 'var(--font-display)',
+    fontSize: 16,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    transition: 'opacity .15s',
+  },
+  googleIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: '50%',
+    background: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 900,
     fontSize: 13,
+    color: '#333',
     flexShrink: 0,
+  },
+  benefitsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    padding: '4px 6px 0',
+  },
+  benefit: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 11,
+    color: 'var(--gain)',
   },
   loginRow: {
     textAlign: 'center',

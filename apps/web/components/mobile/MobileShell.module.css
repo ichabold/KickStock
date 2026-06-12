@@ -34,6 +34,22 @@
 
 .authArea { margin-left: 8px; flex-shrink: 0; }
 
+.helpBtn {
+  background: none;
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .statusBar {
   padding: 4px 12px;
   background: var(--s2);
