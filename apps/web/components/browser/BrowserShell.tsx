@@ -145,6 +145,7 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
   const prevResults  = matchResults[dayIndex - 1] ?? [];
 
   const todayMatches = useMemo(() => curDay ? buildMatchesForCurrentDay(state) : [], [curDay, state]);
+  const todayResults = matchResults[dayIndex] ?? [];
   const todayNations = useMemo(() => {
     const ids = new Set<string>();
     todayMatches.forEach(m => { ids.add(m.a); ids.add(m.b); });
@@ -185,17 +186,40 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
           <>
             <div className="day-hdr"><span className="dot" style={{background:'var(--gold)'}}/>{ts('currentMatchday', { label: curDay.full_label })}</div>
             <div className="matches-scroll">
-              {todayMatches.length > 0 ? todayMatches.map((m, i) => (
-                <div key={i} className="mrow">
-                  <div className="mteams">
-                    <TeamName id={m.a} onNationClick={onNationClick}/>
-                    <span className="vs"> vs </span>
-                    <TeamName id={m.b} onNationClick={onNationClick}/>
+              {todayMatches.length > 0 ? todayMatches.map((m, i) => {
+                const res = todayResults.find(r => (r.a === m.a && r.b === m.b) || (r.a === m.b && r.b === m.a));
+                const flipped = res && res.a === m.b;
+                const sA = flipped ? res!.scoreB : res?.scoreA;
+                const sB = flipped ? res!.scoreA : res?.scoreB;
+                const resA = flipped ? (res?.res === 'A' ? 'B' : res?.res === 'B' ? 'A' : 'draw') : res?.res;
+                const canonResult: StoredMatchResult | undefined = flipped
+                  ? { ...res!, a: m.a, b: m.b, scoreA: res!.scoreB, scoreB: res!.scoreA,
+                      res: res!.res === 'A' ? 'B' : res!.res === 'B' ? 'A' : 'draw',
+                      pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
+                  : res;
+                const winA = resA === 'A', winB = resA === 'B';
+                return (
+                  <div key={i} className={`mrow${res ? ' past' : ''}`}>
+                    <div className="mteams">
+                      <TeamName id={m.a} color={res ? (winA ? 'var(--gold)' : winB ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
+                      <span className="vs"> vs </span>
+                      <TeamName id={m.b} color={res ? (winB ? 'var(--gold)' : winA ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
+                    </div>
+                    {res && canonResult ? (
+                      <button
+                        className="mscore"
+                        style={{background:'none',border:'none',cursor:'pointer',color:'inherit',fontFamily:'inherit',fontWeight:'inherit',fontSize:'inherit'}}
+                        onClick={() => onMatchClick(canonResult, curDay?.full_label ?? '')}
+                      >
+                        {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
+                      </button>
+                    ) : (
+                      m.venue && <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>
+                    )}
+                    <div className={`mbadge ${res ? 'done' : 'soon'}`}>{res ? 'FT' : tsch('upcomingBadge')}</div>
                   </div>
-                  {m.venue && <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>}
-                  <div className="mbadge soon">{tsch('upcomingBadge')}</div>
-                </div>
-              )) : <div style={{padding: '12px', fontSize: 11, color: 'var(--di)'}}>Phase KO — matchs déterminés dynamiquement</div>}
+                );
+              }) : <div style={{padding: '12px', fontSize: 11, color: 'var(--di)'}}>Phase KO — matchs déterminés dynamiquement</div>}
             </div>
           </>
         )}

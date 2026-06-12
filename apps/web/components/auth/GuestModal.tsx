@@ -37,7 +37,24 @@ export default function GuestModal({ onDone }: Props) {
       if (getPseudo()) return; // already a guest
       const sb = createClient();
       const { data: { user } } = await sb.auth.getUser();
-      if (!user) setVisible(true);
+      if (user) return;
+
+      // Self-healing fallback: localStorage may have lost `kickstock_pseudo`
+      // (cleared storage, browser↔mobile shell remount edge cases, etc.)
+      // even though this device already registered a guest pseudo
+      // server-side. Check before showing the registration modal again —
+      // otherwise the player could pick a NEW pseudo and orphan their
+      // existing portfolio.
+      try {
+        const res = await fetch(`/api/auth/guest-status?deviceId=${encodeURIComponent(getDeviceId())}`);
+        const data = await res.json();
+        if (data.pseudo) {
+          setPseudo(data.pseudo);
+          return;
+        }
+      } catch { /* fall through to showing the modal */ }
+
+      setVisible(true);
     }
     check();
   }, []);
