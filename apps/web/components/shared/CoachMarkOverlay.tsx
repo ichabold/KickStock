@@ -42,7 +42,17 @@ export default function CoachMarkOverlay({ shell, onDone }: Props) {
 
   const measure = useCallback(() => {
     const el = document.querySelector(beat.selector) as HTMLElement | null;
-    if (!el) { setRect(null); setTipPos(null); return; }
+    if (!el) {
+      // Target not present in this game mode (e.g. offline-only button) —
+      // fall back to a centered tooltip so the user can still advance/finish.
+      setRect(null);
+      const TIP_H = 130;
+      setTipPos({
+        top:  Math.max(12, (window.innerHeight - TIP_H) / 2),
+        left: Math.max(12, Math.min((window.innerWidth - TIP_W) / 2, window.innerWidth - TIP_W - 12)),
+      });
+      return;
+    }
 
     const r = el.getBoundingClientRect();
     setRect(r);

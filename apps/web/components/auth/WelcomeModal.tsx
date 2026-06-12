@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameStore } from '@/stores/gameStore';
 import { fmt } from '@kickstock/game-engine';
-import { isValidPseudoFormat, getPseudo, clearPseudo } from '@/lib/pseudo';
+import { isValidPseudoFormat, getPseudo, clearPseudo, clearOAuthPending } from '@/lib/pseudo';
 
 type Step = 'migration' | 'username' | null;
 
@@ -31,11 +31,21 @@ export default function WelcomeModal() {
   const [savedGuestPseudo] = useState<string | null>(() => getPseudo());
 
   // Whether the player has a pending pseudo to apply (decides which step to show).
-  // The actual application is handled by AuthWidget (always mounted, never
-  // cancelled by an unmount mid-flow).
+  // For the 'migration' step, handleMigrationDone applies it directly below.
+  // AuthWidget also attempts this in the background as a fallback for flows
+  // that don't render this modal (e.g. isNewUser && hasPendingPseudo with no migration).
   const hasPendingPseudo =
     (ksPseudo    && isValidPseudoFormat(ksPseudo))    ||
     (savedGuestPseudo && isValidPseudoFormat(savedGuestPseudo));
+
+  // The pseudo chosen as a guest, to be applied to the freshly-created profile
+  // (which got an auto-generated username from the handle_new_user trigger).
+  const pendingPseudo =
+    (ksPseudo && isValidPseudoFormat(ksPseudo) && ksPseudo) ||
+    (savedGuestPseudo && isValidPseudoFormat(savedGuestPseudo) && savedGuestPseudo) ||
+    null;
+
+  const [applying, setApplying] = useState(false);
 
   // ── Determine which modal step to show ───────────────────────────────────
   useEffect(() => {
@@ -48,7 +58,7 @@ export default function WelcomeModal() {
     }
 
     if (isMigrated && hasPendingPseudo) {
-      // Migration with pending pseudo — show confirmation then let AuthWidget apply silently
+      // Migration with pending pseudo — show confirmation, apply pseudo on continue
       setStep('migration');
       return;
     }
@@ -83,12 +93,32 @@ export default function WelcomeModal() {
     window.location.reload();
   }
 
+  // For the migration step: apply the guest-chosen pseudo to the freshly
+  // created profile (still carrying its auto-generated username) BEFORE
+  // reloading. This must happen synchronously here — AuthWidget also tries
+  // to apply it in the background, but its fetch can be aborted by the
+  // reload below before it completes, leaving the auto-generated username.
+  async function handleMigrationDone() {
+    if (pendingPseudo) {
+      setApplying(true);
+      try {
+        await fetch('/api/auth/set-username', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: pendingPseudo }),
+        });
+      } catch { /* ignore — user can still rename later via account menu */ }
+      clearOAuthPending();
+    }
+    handleDone();
+  }
+
   if (!step) return null;
 
   return (
     <div style={s.overlay}>
       <div style={s.card}>
-        {step === 'migration' && <MigrationStep onNext={handleDone} />}
+        {step === 'migration' && <MigrationStep onNext={handleMigrationDone} applying={applying} />}
         {step === 'username'  && <UsernameStep  onDone={handleDone} guestPseudo={savedGuestPseudo} />}
       </div>
     </div>
@@ -97,7 +127,7 @@ export default function WelcomeModal() {
 
 // ─── Migration confirmation ───────────────────────────────────────────────────
 
-function MigrationStep({ onNext }: { onNext: () => void }) {
+function MigrationStep({ onNext, applying }: { onNext: () => void; applying: boolean }) {
   const t = useTranslations('auth.welcome');
   const cash      = useGameStore(s => s.cash);
   const portfolio = useGameStore(s => s.portfolio);
@@ -120,8 +150,8 @@ function MigrationStep({ onNext }: { onNext: () => void }) {
         {bestScore && <StatRow label={t('bestScore')} value={`${fmt(bestScore)} KC`} />}
       </div>
 
-      <button onClick={onNext} style={s.btn}>
-        {t('continueButton')}
+      <button onClick={onNext} disabled={applying} style={{ ...s.btn, opacity: applying ? 0.6 : 1 }}>
+        {applying ? t('savingButton') : t('continueButton')}
       </button>
     </>
   );

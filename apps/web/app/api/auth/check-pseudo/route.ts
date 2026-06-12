@@ -5,6 +5,7 @@
  * Returns { available: true } or { available: false, suggestion: "Zidane42" }
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 const RESERVED = new Set(['admin', 'kickstock', 'moderator', 'system', 'support', 'official']);
@@ -23,19 +24,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ available: false, suggestion: buildSuggestion(pseudo) });
   }
 
+  // If logged in, exclude the caller's own rows — a migrated guest's
+  // portfolio keeps its old `guest_username`, which would otherwise make
+  // re-checking that exact pseudo (e.g. in WelcomeModal) report "taken".
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: () => {},
+      },
+    },
+  );
+  const { data: { user } } = await supabase.auth.getUser();
+
   const admin = createAdminClient();
   const lower = pseudo.toLowerCase();
 
-  const [{ data: guestMatch }, { data: profileMatch }] = await Promise.all([
-    adminFrom(admin, 'portfolios')
-      .select('id')
-      .ilike('guest_username', lower)
-      .limit(1),
-    adminFrom(admin, 'profiles')
-      .select('id')
-      .ilike('username', lower)
-      .limit(1),
-  ]);
+  let guestQuery = adminFrom(admin, 'portfolios')
+    .select('id')
+    .ilike('guest_username', lower)
+    .limit(1);
+  let profileQuery = adminFrom(admin, 'profiles')
+    .select('id')
+    .ilike('username', lower)
+    .limit(1);
+
+  if (user) {
+    guestQuery   = guestQuery.or(`user_id.is.null,user_id.neq.${user.id}`);
+    profileQuery = profileQuery.neq('id', user.id);
+  }
+
+  const [{ data: guestMatch }, { data: profileMatch }] = await Promise.all([guestQuery, profileQuery]);
 
   const taken = (guestMatch?.length ?? 0) > 0 || (profileMatch?.length ?? 0) > 0;
 
