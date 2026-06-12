@@ -8,7 +8,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { buildKOQualifiers }  from '@/lib/ko-qualifiers';
+import { buildKOQualifiers, updateR32Bracket } from '@/lib/ko-qualifiers';
 import type { StoredMatchResult } from '@kickstock/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -203,7 +203,7 @@ export async function checkAndAdvancePhase(
     }
   }
 
-  // ── 5. Last group day → compute KO qualifiers (competition-agnostic) ──────
+  // ── 5. Group phase: incremental R32 placement + final qualifier computation ──
   if (gs.current_phase === 'Groups') {
     const { count: remainingGroup } = await adm(admin)
       .from('matches')
@@ -213,8 +213,51 @@ export async function checkAndAdvancePhase(
       .is('processed_at', null)
       .not('api_status', 'in', '("PST","SUSP","CANC","ABD")');
 
-    if ((remainingGroup ?? 1) === 0) {
-      // All group matches done — get next phase
+    // Load all group results so far (needed for both branches below)
+    const { data: allGroupRaw } = await adm(admin)
+      .from('matches')
+      .select('day_index, result_data')
+      .eq('competition_id', competitionId)
+      .eq('phase', 'Groups')
+      .not('processed_at', 'is', null);
+
+    const allGroupResults: Record<number, StoredMatchResult[]> = {};
+    for (const m of (allGroupRaw ?? []) as Array<{ day_index: number; result_data: StoredMatchResult }>) {
+      if (!m.result_data) continue;
+      if (!allGroupResults[m.day_index]) allGroupResults[m.day_index] = [];
+      allGroupResults[m.day_index].push(m.result_data);
+    }
+
+    // Number of groups determines which qualification strategy applies.
+    const { data: groupCodesRaw } = await adm(admin)
+      .from('competition_teams')
+      .select('group_code')
+      .eq('competition_id', competitionId);
+
+    const groupCount = new Set(
+      ((groupCodesRaw ?? []) as Array<{ group_code: string | null }>)
+        .map(r => r.group_code?.match(/Group ([A-Z])$/i)?.[1])
+        .filter(Boolean)
+    ).size;
+
+    if (groupCount === 12) {
+      // WC2026-style (12 groups → R32 + best-8-thirds): as soon as a group's
+      // 3 matchdays are processed, its winner/runner are placed into their
+      // official R32 slot(s) immediately. "Best 8 thirds" slots stay empty
+      // until ALL groups are complete.
+      const { r32Pool: updatedR32, eliminated: updatedElim, allGroupsComplete } =
+        await updateR32Bracket(competitionId, allGroupResults, eliminated, r32Pool, dayIndex);
+
+      r32Pool    = updatedR32;
+      eliminated = updatedElim;
+
+      // simulateMode only: ensure KO matches exist so the next simulate-day finds them.
+      // In production, real fixtures come from API-Football via sync-fixtures — never pre-empt them.
+      if (simulateMode && allGroupsComplete) {
+        await ensureKoMatchesExist(adm(admin), competitionId, 'R32', r32Pool, dayIndex);
+      }
+    } else if ((remainingGroup ?? 1) === 0) {
+      // Other formats (e.g. WC2022: 8 groups × top-2 → R16 direct).
       const { data: nextDayRow } = await adm(admin)
         .from('competition_days')
         .select('phase')
@@ -223,21 +266,6 @@ export async function checkAndAdvancePhase(
         .maybeSingle();
 
       const nextPhase = (nextDayRow as { phase: string } | null)?.phase ?? 'R16';
-
-      // Load all group results
-      const { data: allGroupRaw } = await adm(admin)
-        .from('matches')
-        .select('day_index, result_data')
-        .eq('competition_id', competitionId)
-        .eq('phase', 'Groups')
-        .not('processed_at', 'is', null);
-
-      const allGroupResults: Record<number, StoredMatchResult[]> = {};
-      for (const m of (allGroupRaw ?? []) as Array<{ day_index: number; result_data: StoredMatchResult }>) {
-        if (!m.result_data) continue;
-        if (!allGroupResults[m.day_index]) allGroupResults[m.day_index] = [];
-        allGroupResults[m.day_index].push(m.result_data);
-      }
 
       const { qualifiers, newEliminated } = await buildKOQualifiers(
         competitionId, allGroupResults, eliminated, nextPhase,

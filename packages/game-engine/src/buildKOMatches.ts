@@ -123,6 +123,37 @@ export function buildGroupStandingsUI(
   return gs;
 }
 
+// ─── OFFICIAL WC2026 R32 PAIRING MATRIX ──────────────────────────────────────
+//
+// Shared between the client-side (offline/simulated) pool builder below and
+// the server-side incremental bracket placement (apps/web/lib/ko-qualifiers.ts).
+// Each entry is [slotA, slotB] for one R32 match; the resulting pool is
+// flattened to 32 entries (2 per match) in matrix order.
+
+export type R32SlotSpec =
+  | { type: 'winner'; group: string }
+  | { type: 'runner'; group: string }
+  | { type: 'third';  candidates: string[] };
+
+export const WC2026_R32_PAIRINGS: [R32SlotSpec, R32SlotSpec][] = [
+  [{ type: 'winner', group: 'A' }, { type: 'third', candidates: ['C', 'E', 'F', 'H', 'I'] }],
+  [{ type: 'winner', group: 'B' }, { type: 'third', candidates: ['E', 'F', 'G', 'I', 'J'] }],
+  [{ type: 'runner', group: 'A' }, { type: 'runner', group: 'B' }],
+  [{ type: 'winner', group: 'C' }, { type: 'runner', group: 'F' }],
+  [{ type: 'winner', group: 'D' }, { type: 'third', candidates: ['B', 'E', 'F', 'I', 'J'] }],
+  [{ type: 'winner', group: 'E' }, { type: 'third', candidates: ['A', 'B', 'C', 'D', 'F'] }],
+  [{ type: 'runner', group: 'C' }, { type: 'winner', group: 'F' }],
+  [{ type: 'runner', group: 'D' }, { type: 'runner', group: 'G' }],
+  [{ type: 'runner', group: 'E' }, { type: 'runner', group: 'I' }],
+  [{ type: 'winner', group: 'G' }, { type: 'third', candidates: ['A', 'E', 'H', 'I', 'J'] }],
+  [{ type: 'winner', group: 'H' }, { type: 'runner', group: 'J' }],
+  [{ type: 'runner', group: 'K' }, { type: 'runner', group: 'L' }],
+  [{ type: 'winner', group: 'I' }, { type: 'third', candidates: ['C', 'D', 'F', 'G', 'H'] }],
+  [{ type: 'winner', group: 'J' }, { type: 'runner', group: 'H' }],
+  [{ type: 'winner', group: 'K' }, { type: 'third', candidates: ['D', 'E', 'I', 'J', 'L'] }],
+  [{ type: 'winner', group: 'L' }, { type: 'third', candidates: ['E', 'H', 'I', 'J', 'K'] }],
+];
+
 // ─── R32 POOL BUILDER ─────────────────────────────────────────────────────────
 
 export function buildR32Pool(
@@ -175,28 +206,14 @@ export function buildR32Pool(
     return null;
   };
 
-  // Official FIFA 2026 R32 pairings
-  const matches: [string | null, string | null][] = [
-    [winner('A'), pickThird(['C', 'E', 'F', 'H', 'I'])],
-    [winner('B'), pickThird(['E', 'F', 'G', 'I', 'J'])],
-    [runner('A'), runner('B')],
-    [winner('C'), runner('F')],
-    [winner('D'), pickThird(['B', 'E', 'F', 'I', 'J'])],
-    [winner('E'), pickThird(['A', 'B', 'C', 'D', 'F'])],
-    [runner('C'), winner('F')],
-    [runner('D'), runner('G')],
-    [runner('E'), runner('I')],
-    [winner('G'), pickThird(['A', 'E', 'H', 'I', 'J'])],
-    [winner('H'), runner('J')],
-    [runner('K'), runner('L')],
-    [winner('I'), pickThird(['C', 'D', 'F', 'G', 'H'])],
-    [winner('J'), runner('H')],
-    [winner('K'), pickThird(['D', 'E', 'I', 'J', 'L'])],
-    [winner('L'), pickThird(['E', 'H', 'I', 'J', 'K'])],
-  ];
-
   const pool: Array<string | null> = [];
-  for (const [a, b] of matches) { pool.push(a); pool.push(b); }
+  for (const [specA, specB] of WC2026_R32_PAIRINGS) {
+    for (const spec of [specA, specB]) {
+      if (spec.type === 'winner')      pool.push(winner(spec.group));
+      else if (spec.type === 'runner') pool.push(runner(spec.group));
+      else                              pool.push(pickThird(spec.candidates));
+    }
+  }
 
   // Fill nulls with best remaining non-eliminated teams
   const used = new Set(pool.filter(Boolean) as string[]);

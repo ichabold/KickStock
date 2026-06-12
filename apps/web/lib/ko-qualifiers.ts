@@ -11,6 +11,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { WC2026_R32_PAIRINGS } from '@kickstock/game-engine';
 import type { StoredMatchResult } from '@kickstock/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,4 +122,162 @@ export async function buildKOQualifiers(
   }
 
   return { qualifiers, newEliminated };
+}
+
+// ─── INCREMENTAL R32 BRACKET (WC2026 — 12 groups, official pairing matrix) ────
+//
+// Unlike `buildKOQualifiers` (called once, at the end of the group stage),
+// this is called on every `checkAndAdvancePhase` pass during the Groups
+// phase. As soon as a given group's 3 matchdays are all processed, that
+// group's winner/runner are placed into their official R32 slot(s)
+// immediately — opponent slots that depend on the "best 8 thirds" stay
+// empty ('') until ALL 12 groups are complete, at which point those slots
+// are resolved and the remaining 4 thirds are eliminated.
+
+interface GroupStanding extends TeamStanding {
+  played: number;
+}
+
+export async function updateR32Bracket(
+  competitionId:   number,
+  allGroupResults: Record<number, StoredMatchResult[]>,
+  eliminated:      string[],
+  r32PoolIn:       string[],
+  dayIndex:        number,
+): Promise<{ r32Pool: string[]; eliminated: string[]; allGroupsComplete: boolean }> {
+  const admin = createAdminClient();
+
+  // ── 1. Load teams with group assignments ──────────────────────────────────
+  interface CTRow { team_id: string; group_code: string | null; teams: { strength: number } | null }
+  const { data: ctRaw } = await adm(admin)
+    .from('competition_teams')
+    .select('team_id, group_code, teams(strength)')
+    .eq('competition_id', competitionId);
+
+  const ctTeams = (ctRaw ?? []) as CTRow[];
+
+  const groupOf = new Map<string, string>();
+  for (const t of ctTeams) {
+    const m = t.group_code?.match(/Group ([A-Z])$/i);
+    if (m) groupOf.set(t.team_id, m[1].toUpperCase());
+  }
+  const groupLetters = [...new Set(groupOf.values())].sort();
+
+  // ── 2. Compute standings (pts/gd/gf/played) for each group ─────────────────
+  const standings = new Map<string, GroupStanding[]>();
+  for (const g of groupLetters) {
+    standings.set(g, ctTeams
+      .filter(t => groupOf.get(t.team_id) === g)
+      .map(t => ({ id: t.team_id, pts: 0, gd: 0, gf: 0, str: t.teams?.strength ?? 75, played: 0 }))
+    );
+  }
+
+  for (const results of Object.values(allGroupResults)) {
+    for (const r of results) {
+      if (r.phase && r.phase !== 'Groups') continue;
+      for (const gTeams of standings.values()) {
+        const tA = gTeams.find(t => t.id === r.a);
+        const tB = gTeams.find(t => t.id === r.b);
+        if (!tA || !tB) continue;
+        tA.played++; tB.played++;
+        tA.gf += r.scoreA; tA.gd += r.scoreA - r.scoreB;
+        tB.gf += r.scoreB; tB.gd += r.scoreB - r.scoreA;
+        if (r.res === 'A')      { tA.pts += 3; }
+        else if (r.res === 'B') { tB.pts += 3; }
+        else                    { tA.pts++;  tB.pts++; }
+      }
+    }
+  }
+
+  const cmp = (a: TeamStanding, b: TeamStanding) =>
+    (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || (b.str - a.str);
+
+  // A group is "complete" once every team has played its 3 round-robin matches.
+  const sorted = new Map<string, GroupStanding[]>();
+  const completeGroups = new Set<string>();
+  for (const g of groupLetters) {
+    const teams = standings.get(g) ?? [];
+    if (teams.length === 4 && teams.every(t => t.played === 3)) {
+      completeGroups.add(g);
+      sorted.set(g, [...teams].sort(cmp));
+    }
+  }
+
+  // ── 3. Place winner/runner of completed groups into their official slots ──
+  const r32Pool = r32PoolIn.length === 32 ? [...r32PoolIn] : Array(32).fill('');
+
+  for (let i = 0; i < WC2026_R32_PAIRINGS.length; i++) {
+    const [specA, specB] = WC2026_R32_PAIRINGS[i];
+    [specA, specB].forEach((spec, j) => {
+      const slotIdx = 2 * i + j;
+      if (spec.type === 'winner' && completeGroups.has(spec.group)) {
+        r32Pool[slotIdx] = sorted.get(spec.group)![0].id;
+      } else if (spec.type === 'runner' && completeGroups.has(spec.group)) {
+        r32Pool[slotIdx] = sorted.get(spec.group)![1].id;
+      }
+      // 'third' slots are resolved below, once all groups are complete.
+    });
+  }
+
+  // ── 4. 4th-placed teams of completed groups are immediately eliminated ────
+  const newEliminated = [...eliminated];
+  for (const g of completeGroups) {
+    const fourth = sorted.get(g)![3];
+    if (fourth && !newEliminated.includes(fourth.id)) {
+      newEliminated.push(fourth.id);
+      await adm(admin).rpc('liquidate_competition_eliminated', {
+        p_competition_id: competitionId,
+        p_team_id:        fourth.id,
+        p_day_index:      dayIndex,
+      });
+    }
+  }
+
+  const allGroupsComplete = groupLetters.length === 12 && completeGroups.size === 12;
+
+  // ── 5. All groups done → resolve "best 8 thirds" and the remaining slots ──
+  if (allGroupsComplete) {
+    interface ThirdEntry extends GroupStanding { group: string }
+    const allThirds: ThirdEntry[] = groupLetters.map(g => ({ ...sorted.get(g)![2], group: g }));
+    allThirds.sort(cmp);
+    const best8 = allThirds.slice(0, 8);
+    const thirdGroups = new Set(best8.map(t => t.group));
+
+    const pickThird = (candidates: string[]): string | null => {
+      for (const g of candidates) {
+        if (thirdGroups.has(g)) {
+          const t = best8.find(t => t.group === g);
+          if (t) { thirdGroups.delete(g); return t.id; }
+        }
+      }
+      const t = best8.find(t => thirdGroups.has(t.group));
+      if (t) { thirdGroups.delete(t.group); return t.id; }
+      return null;
+    };
+
+    for (let i = 0; i < WC2026_R32_PAIRINGS.length; i++) {
+      const [specA, specB] = WC2026_R32_PAIRINGS[i];
+      [specA, specB].forEach((spec, j) => {
+        const slotIdx = 2 * i + j;
+        if (spec.type === 'third') {
+          const id = pickThird(spec.candidates);
+          if (id) r32Pool[slotIdx] = id;
+        }
+      });
+    }
+
+    // The 4 thirds not retained are eliminated now that the best-8 are known.
+    for (const t of allThirds) {
+      if (!best8.includes(t) && !newEliminated.includes(t.id)) {
+        newEliminated.push(t.id);
+        await adm(admin).rpc('liquidate_competition_eliminated', {
+          p_competition_id: competitionId,
+          p_team_id:        t.id,
+          p_day_index:      dayIndex,
+        });
+      }
+    }
+  }
+
+  return { r32Pool, eliminated: newEliminated, allGroupsComplete };
 }

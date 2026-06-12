@@ -166,6 +166,11 @@ export async function GET(req: Request) {
         const standings = await fetchGroupStandings(comp.league_id, comp.season);
         if (standings.length > 0) {
           for (const entry of standings) {
+            // API-Football returns a generic "Group Stage" pseudo-group (no
+            // letter suffix) alongside the real "Group Stage - Group X"
+            // entries for teams whose group was assigned late (e.g. playoff
+            // qualifiers). Skip it — it would overwrite the real group_code.
+            if (!/Group [A-Z]$/i.test(entry.group)) continue;
             const groupCode = entry.group.replace(/^Group\s+/i, '').trim();
             const teamId    = apiNameToTeamId(entry.team.name, comp.league_id);
             if (!teamId) continue;
