@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient }               from '@/lib/supabase/server';
 
 export const dynamic     = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   // ── Admin auth check ──────────────────────────────────────────────────────
