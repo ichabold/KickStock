@@ -52,7 +52,9 @@ export async function GET(req: Request) {
   const season    = (competitions as Array<{ id: number; league_id: number; season: number; name: string }>)[0].season;
 
   // ── Smart window check — skip if no matches expected now ───────────────────
-  const active = await isMatchWindowActive(compIds);
+  // `force=1` bypasses the window (used by the admin "Sync Results" button).
+  const force  = new URL(req.url).searchParams.get('force') === '1';
+  const active = force || await isMatchWindowActive(compIds);
   if (!active) {
     return Response.json({
       skipped: true,

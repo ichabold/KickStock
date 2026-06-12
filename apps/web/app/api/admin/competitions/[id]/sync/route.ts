@@ -48,7 +48,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // even if it's not yet active.
   const origin = new URL(req.url).origin;
   const competitionId = params.id;
-  const cronUrl = `${origin}${path}?competition_id=${competitionId}`;
+  // For results, bypass the smart match-window skip — an admin-triggered
+  // sync is a deliberate request, regardless of the current time.
+  const extra = type === 'results' ? '&force=1' : '';
+  const cronUrl = `${origin}${path}?competition_id=${competitionId}${extra}`;
   const response = await fetch(cronUrl, {
     method: 'GET',
     headers: { Authorization: `Bearer ${secret}` },
