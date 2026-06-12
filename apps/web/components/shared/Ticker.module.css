@@ -3,7 +3,6 @@
   border-bottom: 1px solid var(--border);
   height: 30px;
   overflow: hidden;
-  position: relative;
   flex-shrink: 0;
 }
 
@@ -11,7 +10,6 @@
   display: flex;
   align-items: center;
   height: 100%;
-  position: absolute;
   white-space: nowrap;
   animation: tick 40s linear infinite;
 }

@@ -166,11 +166,11 @@
     "onboardingTitle": "Bienvenue sur KickStock ⚽",
     "onboardingText": "Tu démarres avec 10 000 KC. Achète des actions sur les nations que tu penses les plus fortes — leur cours monte quand elles gagnent.",
     "searchPlaceholder": "Rechercher…",
-    "sortDefault": "PAR DÉFAUT",
+    "groupAll": "TOUS",
+    "groupsLabel": "GROUPES",
+    "sortAlpha": "A-Z",
     "sortPriceDesc": "PRIX ▼",
     "sortPriceAsc": "PRIX ▲",
-    "sortPerf": "PERF %",
-    "sortPortfolio": "PORTEFEUILLE",
     "hint": "Commence par acheter des actions sur les nations que tu penses les plus fortes !"
   },
   "portfolio": {

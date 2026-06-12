@@ -18,7 +18,7 @@ export default function MarketTab() {
   const tc = useTranslations('common');
   const [filter,   setFilter]   = useState('');
   const [group,    setGroup]    = useState('ALL');
-  const [sortBy,   setSortBy]   = useState<SortBy>('default');
+  const [sortBy,   setSortBy]   = useState<SortBy>('alpha');
   const [modal,    setModal]    = useState<{ nation: Nation; mode: TradeMode } | null>(null);
   const [nationId, setNationId] = useState<string | null>(null);
 
@@ -31,18 +31,15 @@ export default function MarketTab() {
 
   const isFirstRun = Object.values(portfolio).every(q => q === 0) && txLog.length === 0;
 
-  // Derive groups from bootstrap teams
-  const groups = useMemo(() => {
-    const codes = [...new Set(teams.map(t => t.group).filter(Boolean))].sort();
-    return ['ALL', ...codes];
+  // Derive group codes from bootstrap teams (e.g. "Stage - Group A")
+  const groupCodes = useMemo(() => {
+    return [...new Set(teams.map(t => t.group).filter(Boolean))].sort();
   }, [teams]);
 
   const SORTS: { id: SortBy; label: string }[] = [
-    { id: 'default',    label: t('sortDefault')   },
-    { id: 'price_desc', label: t('sortPriceDesc') },
+    { id: 'alpha',      label: t('sortAlpha')     },
     { id: 'price_asc',  label: t('sortPriceAsc')  },
-    { id: 'change',     label: t('sortPerf')      },
-    { id: 'held',       label: t('sortPortfolio') },
+    { id: 'price_desc', label: t('sortPriceDesc') },
   ];
 
   const filtered = useMemo(() => {
@@ -52,17 +49,12 @@ export default function MarketTab() {
     );
 
     switch (sortBy) {
+      case 'alpha':      list = list.slice().sort((a, b) => a.name.localeCompare(b.name)); break;
       case 'price_desc': list = list.slice().sort((a, b) => (prices[b.id] ?? b.initialPrice) - (prices[a.id] ?? a.initialPrice)); break;
       case 'price_asc':  list = list.slice().sort((a, b) => (prices[a.id] ?? a.initialPrice) - (prices[b.id] ?? b.initialPrice)); break;
-      case 'change':     list = list.slice().sort((a, b) => {
-        const pctA = ((prices[a.id] ?? a.initialPrice) - a.initialPrice) / a.initialPrice;
-        const pctB = ((prices[b.id] ?? b.initialPrice) - b.initialPrice) / b.initialPrice;
-        return pctB - pctA;
-      }); break;
-      case 'held': list = list.slice().sort((a, b) => (portfolio[b.id] ?? 0) - (portfolio[a.id] ?? 0)); break;
     }
     return list;
-  }, [teams, group, filter, sortBy, prices, portfolio]);
+  }, [teams, group, filter, sortBy, prices]);
 
   // (modal.nation already holds the full Nation object)
 
@@ -88,13 +80,20 @@ export default function MarketTab() {
 
       {/* Group filter */}
       <div className={styles.groupRow}>
-        {groups.map(g => (
+        <button
+          className={`${styles.groupBtn} ${group === 'ALL' ? styles.groupActive : ''}`}
+          onClick={() => setGroup('ALL')}
+        >
+          {t('groupAll')}
+        </button>
+        <span className={styles.groupLabel}>{t('groupsLabel')}</span>
+        {groupCodes.map(g => (
           <button
             key={g}
             className={`${styles.groupBtn} ${group === g ? styles.groupActive : ''}`}
             onClick={() => setGroup(g)}
           >
-            {g}
+            {g.slice(-1)}
           </button>
         ))}
       </div>

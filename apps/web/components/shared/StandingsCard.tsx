@@ -53,7 +53,7 @@ export default function StandingsCard({ group, teams, matchday, onNationClick }:
               </span>
               <span className={`${styles.price} ${styles[upDown]}`}>
                 {Math.round(t.price)}
-                <small> {ch >= 0 ? '▲' : '▼'}{Math.abs(ch)}%</small>
+                <small> {ch === 0 ? '▶' : ch > 0 ? '▲' : '▼'}{Math.abs(ch)}%</small>
               </span>
             </li>
           );

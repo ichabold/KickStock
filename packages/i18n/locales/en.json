@@ -166,11 +166,11 @@
     "onboardingTitle": "Welcome to KickStock ⚽",
     "onboardingText": "You start with 10,000 KC. Buy shares in the nations you think are strongest — their price rises when they win.",
     "searchPlaceholder": "Search…",
-    "sortDefault": "DEFAULT",
+    "groupAll": "ALL",
+    "groupsLabel": "GROUPS",
+    "sortAlpha": "A-Z",
     "sortPriceDesc": "PRICE ▼",
     "sortPriceAsc": "PRICE ▲",
-    "sortPerf": "PERF %",
-    "sortPortfolio": "PORTFOLIO",
     "hint": "Start by buying shares in the nations you think are strongest!"
   },
   "portfolio": {

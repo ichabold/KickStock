@@ -38,15 +38,17 @@ export function PriceDisplay({
   changeDnClassName,
 }: Props) {
   const price = useGameStore(s => s.prices[nation.id] ?? nation.p);
-  const pct   = ((price - nation.p) / nation.p * 100).toFixed(1);
+  const pct   = Number(((price - nation.p) / nation.p * 100).toFixed(1));
   const up    = price >= nation.p;
+  const flat  = pct === 0;
+  const arrow = flat ? '▶ ' : up ? '▲ +' : '▼ ';
 
   return (
     <div className={wrapClassName}>
       <span className={priceClassName}>{Math.round(price)}</span>
       <span className={kcClassName}>KC</span>
       <span className={up ? changeUpClassName : changeDnClassName}>
-        {up ? '▲ +' : '▼ '}{Math.abs(Number(pct))}%
+        {arrow}{Math.abs(pct)}%
       </span>
     </div>
   );

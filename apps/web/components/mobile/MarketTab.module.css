@@ -1,47 +1,73 @@
-.filters { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
-.search {
-  flex: 1; min-width: 120px;
-  background: var(--s1); border: 1px solid var(--border);
-  color: var(--text); border-radius: 8px; padding: 7px 10px;
-  font-size: 11px; outline: none; min-height: 44px;
-}
-.search:focus { border-color: var(--border-hi); }
+.wrap { display: flex; flex-direction: column; }
 
-.groups { display: flex; gap: 3px; flex-wrap: wrap; }
-.gp {
-  background: var(--s1); border: 1px solid var(--border); color: var(--dim);
-  border-radius: var(--radius-sm); padding: 0 10px; font-size: var(--fs-eyebrow); font-weight: 700;
-  min-height: 44px; display: inline-flex; align-items: center;
-}
-.gpOn { background: rgba(255,219,0,0.1); border-color: var(--gold-dk); color: var(--gold); }
-
-.sortRow { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
-.sortBtn {
-  padding: 0 10px; font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .5px;
-  border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--s1); color: var(--dim);
-  min-height: 36px; display: inline-flex; align-items: center;
-}
-.sortBtnOn { border-color: var(--gold-dk); color: var(--gold); background: rgba(255,219,0,0.06); }
-
-.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
-
-/* ── Onboarding banner (first run) ──────────────────────────────────────── */
-.onboarding {
+/* ── Onboarding hint ─────────────────────────────────────────────────────── */
+.hint {
   background: rgba(255,219,0,.06);
   border: 1px solid var(--gold-dk);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   margin-bottom: var(--space-3);
-}
-.onboardingTitle {
-  font-family: var(--font-display);
-  font-size: var(--fs-body);
-  letter-spacing: 2px;
-  color: var(--gold);
-  margin-bottom: var(--space-1);
-}
-.onboardingBody {
   font-size: var(--fs-label);
   color: var(--muted);
   line-height: 1.5;
 }
+
+/* ── Search ──────────────────────────────────────────────────────────────── */
+.searchRow { margin-bottom: 8px; }
+.search {
+  width: 100%;
+  background: var(--s1); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 10px;
+  font-size: 11px; outline: none; min-height: var(--tap-min);
+  box-sizing: border-box;
+}
+.search:focus { border-color: var(--border-hi); }
+
+/* ── Group filter ────────────────────────────────────────────────────────── */
+.groupRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.groupLabel {
+  font-family: var(--font-display);
+  font-size: var(--fs-eyebrow);
+  letter-spacing: 2px;
+  color: var(--dim);
+  margin: 0 4px;
+}
+.groupBtn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.groupActive {
+  border-color: var(--gold-dk);
+  color: var(--gold);
+  background: rgba(255,219,0,0.08);
+}
+
+/* ── Sort filter ─────────────────────────────────────────────────────────── */
+.sortRow { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.sortBtn {
+  padding: 0 10px; font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .5px;
+  border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--s1); color: var(--dim);
+  min-height: 36px; display: inline-flex; align-items: center; cursor: pointer;
+}
+.sortActive { border-color: var(--gold-dk); color: var(--gold); background: rgba(255,219,0,0.06); }
+
+/* ── Nation cards ────────────────────────────────────────────────────────── */
+.list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }

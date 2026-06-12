@@ -187,7 +187,7 @@ export interface TradePayload {
 // ─── UI ───────────────────────────────────────────────────────────────────────
 export type LayoutType = 'mobile' | 'browser';
 export type TabId = 'schedule' | 'standings' | 'simulate' | 'market' | 'portfolio';
-export type SortBy = 'default' | 'price_asc' | 'price_desc' | 'change' | 'held';
+export type SortBy = 'alpha' | 'price_asc' | 'price_desc';
 
 // ─── MECHANICS CONTRACT ───────────────────────────────────────────────────────
 /**
