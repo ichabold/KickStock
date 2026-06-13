@@ -11,12 +11,14 @@ import styles from './ScheduleTab.module.css';
 export default function ScheduleTab() {
   const t  = useTranslations('schedule');
   const tc = useTranslations('common');
+  const tlive = useTranslations('live');
   const [matchDetail, setMatchDetail] = useState<{ result: StoredMatchResult; dayLabel: string } | null>(null);
   const [nationId,    setNationId]    = useState<string | null>(null);
 
   const dayIndex     = useGameStore(s => s.dayIndex);
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
+  const liveMatches  = useGameStore(s => s.liveMatches);
   const state        = useGameStore(s => s);
   const bootstrap = useGameStore(s => s._bootstrap);
   const teams     = useGameStore(s => s._teams);
@@ -94,6 +96,18 @@ export default function ScheduleTab() {
                   ? (res?.res === 'A' ? 'B' : res?.res === 'B' ? 'A' : 'draw')
                   : res?.res;
 
+                // Live score / lock status from /api/game/live-matches (not yet processed into matchResults)
+                const live = !res
+                  ? liveMatches.find(lm => (lm.nation_a === m.a && lm.nation_b === m.b) || (lm.nation_a === m.b && lm.nation_b === m.a))
+                  : undefined;
+                const isLive = !!live && ['1H','HT','2H','ET','BT','P'].includes(live.api_status);
+                const isDone = !!live && ['FT','AET','PEN'].includes(live.api_status);
+                const lockUntil = live?.trade_lock_until ? new Date(live.trade_lock_until) : null;
+                const locked = !!live && (!isDone || (!!lockUntil && lockUntil > new Date()));
+                const liveFlipped = !!live && live.nation_a === m.b;
+                const liveSA = liveFlipped ? live!.score_b : live?.score_a;
+                const liveSB = liveFlipped ? live!.score_a : live?.score_b;
+
                 return (
                   <div
                     key={mi}
@@ -133,6 +147,15 @@ export default function ScheduleTab() {
                           <span style={{ color: pctA >= 0 ? 'var(--gain)' : 'var(--loss)' }}>{pctA >= 0 ? '▲' : '▼'}{Math.abs(pctA)}%</span>
                           {' / '}
                           <span style={{ color: pctB >= 0 ? 'var(--gain)' : 'var(--loss)' }}>{pctB >= 0 ? '▲' : '▼'}{Math.abs(pctB)}%</span>
+                        </div>
+                      </div>
+                    ) : live && (isLive || isDone) ? (
+                      <div style={{ marginLeft: 'auto', textAlign: 'right', minWidth: 52 }}>
+                        <div className={styles.scoreBtn} style={{ color: isLive ? 'var(--gain)' : 'var(--muted)' }}>
+                          {liveSA}–{liveSB}
+                        </div>
+                        <div style={{ fontSize: 8, fontWeight: 700, color: isLive ? 'var(--gain)' : 'var(--dim)' }}>
+                          {isLive ? `${tlive('inPlay')}${locked ? ' 🔒' : ''}` : `FT${locked ? ' 🔒' : ''}`}
                         </div>
                       </div>
                     ) : (
