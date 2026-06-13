@@ -135,8 +135,10 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
 }) {
   const ts   = useTranslations('shell');
   const tsch = useTranslations('schedule');
+  const tlive = useTranslations('live');
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
+  const liveMatches  = useGameStore(s => s.liveMatches);
   const state        = useGameStore(s => s);
   const bootstrap = useGameStore(s => s._bootstrap);
   const teams     = useGameStore(s => s._teams);
@@ -198,6 +200,19 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
                       pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
                   : res;
                 const winA = resA === 'A', winB = resA === 'B';
+
+                // Live score / lock status from /api/game/live-matches (not yet processed into matchResults)
+                const live = !res
+                  ? liveMatches.find(lm => (lm.nation_a === m.a && lm.nation_b === m.b) || (lm.nation_a === m.b && lm.nation_b === m.a))
+                  : undefined;
+                const isLive = !!live && ['1H','HT','2H','ET','BT','P'].includes(live.api_status);
+                const isDone = !!live && ['FT','AET','PEN'].includes(live.api_status);
+                const lockUntil = live?.trade_lock_until ? new Date(live.trade_lock_until) : null;
+                const locked = !!live && (!isDone || (!!lockUntil && lockUntil > new Date()));
+                const liveFlipped = !!live && live.nation_a === m.b;
+                const liveSA = liveFlipped ? live!.score_b : live?.score_a;
+                const liveSB = liveFlipped ? live!.score_a : live?.score_b;
+
                 return (
                   <div key={i} className={`mrow${res ? ' past' : ''}`}>
                     <div className="mteams">
@@ -213,10 +228,22 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
                       >
                         {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
                       </button>
+                    ) : (live && (isLive || isDone)) ? (
+                      <div className="mscore" style={{color: isLive ? 'var(--gain)' : 'var(--dim)'}}>
+                        {liveSA}–{liveSB}
+                      </div>
                     ) : (
                       m.venue && <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>
                     )}
-                    <div className={`mbadge ${res ? 'done' : 'soon'}`}>{res ? 'FT' : tsch('upcomingBadge')}</div>
+                    <div className={`mbadge ${res ? 'done' : isLive ? 'live' : isDone ? 'done' : 'soon'}`}>
+                      {res
+                        ? 'FT'
+                        : isLive
+                          ? `${tlive('inPlay')}${locked ? ' 🔒' : ''}`
+                          : isDone
+                            ? `FT${locked ? ' 🔒' : ''}`
+                            : tsch('upcomingBadge')}
+                    </div>
                   </div>
                 );
               }) : <div style={{padding: '12px', fontSize: 11, color: 'var(--di)'}}>Phase KO — matchs déterminés dynamiquement</div>}

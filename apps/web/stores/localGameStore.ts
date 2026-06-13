@@ -21,6 +21,7 @@ import { DIV_RATES, INIT_CASH }  from '@kickstock/constants';
 import { syncBestScore }          from '@/hooks/useAuth';
 import { createClient }           from '@/lib/supabase/client';
 import { getBootstrap, bootstrapToTeams, deriveDynamicKey, buildMatchesForCurrentDayFromBootstrap } from '@/lib/bootstrap';
+import type { LiveMatch } from './onlineGameStore';
 
 const COMPETITION_KEY = 'kickstock:competition';
 
@@ -85,6 +86,8 @@ interface LocalGameStore extends GameState {
 
   /** Offline mode never locks trading — always empty. Kept for type parity with onlineGameStore. */
   lockedTeams: Set<string>;
+  /** Offline mode has no live feed — always empty. Kept for type parity with onlineGameStore. */
+  liveMatches: LiveMatch[];
 
   fetchState:       () => Promise<void>;
   loadBootstrap:    () => Promise<void>;
@@ -157,6 +160,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
       error:            null,
       _pollId:          null,
       lockedTeams:      new Set<string>(),
+      liveMatches:      [],
 
       // ── loadBootstrap ────────────────────────────────────────────────────────
       loadBootstrap: async () => {

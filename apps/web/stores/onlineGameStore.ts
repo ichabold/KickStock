@@ -48,11 +48,15 @@ interface AdvanceDayResult {
 }
 
 // Shape returned by GET /api/game/live-matches (subset of `matches` columns)
-interface LiveMatch {
+export interface LiveMatch {
+  fixture_id:       number | null;
   nation_a:         string;
   nation_b:         string;
   api_status:       string;
+  score_a:          number | null;
+  score_b:          number | null;
   trade_lock_until: string | null;
+  processed_at:     string | null;
 }
 
 interface OnlineGameStore extends GameState {
@@ -70,6 +74,8 @@ interface OnlineGameStore extends GameState {
 
   /** Team IDs whose match is currently live or in its post-match trade-lock window. */
   lockedTeams:      Set<string>;
+  /** Raw rows from /api/game/live-matches — used to show live scores on the schedule. */
+  liveMatches:      LiveMatch[];
   _lockPollId:      ReturnType<typeof setInterval> | null;
 
   loadBootstrap:    () => Promise<void>;
@@ -121,6 +127,7 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   _pollId:          null,
   _realtimeChannel: null,
   lockedTeams:      new Set<string>(),
+  liveMatches:      [],
   _lockPollId:      null,
 
   // ── loadBootstrap ────────────────────────────────────────────────────────────
@@ -195,7 +202,7 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
           locked.add(m.nation_b);
         }
       }
-      set({ lockedTeams: locked });
+      set({ lockedTeams: locked, liveMatches: data.matches ?? [] });
     } catch { /* best-effort — UI lock is advisory, server enforces it */ }
   },
 
