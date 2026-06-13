@@ -19,5 +19,15 @@ export function createAdminClient() {
 
   return createSupabaseClient<Database>(url, key, {
     auth: { persistSession: false },
+    // [LIVE DATA FIX] Force every request through this client to bypass
+    // Next.js's fetch Data Cache. Without this, `export const dynamic =
+    // 'force-dynamic'` does NOT reliably propagate to fetches issued deep
+    // inside supabase-js on Vercel — the first invocation after a deploy can
+    // get cached (sometimes for a very long time), causing routes like
+    // /api/game/live-matches to serve a frozen snapshot (e.g. stuck at
+    // "NS"/null or a stale score) instead of the live DB state.
+    global: {
+      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+    },
   });
 }

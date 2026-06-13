@@ -41,7 +41,12 @@ export async function GET(req: NextRequest) {
   const { data: comp } = await compQuery.single();
   if (!comp) return NextResponse.json({ matches: [], teams: {} });
 
-  // Today's matches (UTC day window)
+  // Today's matches (UTC day window) — PLUS any match that has already
+  // kicked off but isn't processed yet, even if its scheduled_at falls on
+  // the previous UTC day (late-evening kickoffs, e.g. 22:00 UTC + 2h+,
+  // crossing midnight UTC). Without this, a match still live at 00:xx UTC
+  // would silently drop out of "today" and both its trade lock (computed
+  // client-side from this endpoint) and its live score would disappear.
   const now   = new Date();
   const start = new Date(now); start.setUTCHours(0, 0, 0, 0);
   const end   = new Date(now); end.setUTCHours(23, 59, 59, 999);
@@ -51,8 +56,10 @@ export async function GET(req: NextRequest) {
     .select('fixture_id, nation_a, nation_b, scheduled_at, api_status, score_a, score_b, trade_lock_until, processed_at, phase, venue')
     .eq('competition_id', comp.id)
     .not('api_status', 'in', '("PST","SUSP","CANC","ABD")')
-    .gte('scheduled_at', start.toISOString())
-    .lte('scheduled_at', end.toISOString())
+    .or(
+      `and(scheduled_at.gte.${start.toISOString()},scheduled_at.lte.${end.toISOString()}),` +
+      `and(processed_at.is.null,scheduled_at.lte.${now.toISOString()})`
+    )
     .order('scheduled_at', { ascending: true });
 
   type DbMatch = {
