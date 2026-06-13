@@ -12,12 +12,11 @@ import { Suspense } from 'react';
 import AuthWidget from '@/components/shared/AuthWidget';
 import GuestModal from '@/components/auth/GuestModal';
 import WelcomeModal from '@/components/auth/WelcomeModal';
-import { getPseudo } from '@/lib/pseudo';
+import RankingPanel from '@/components/shared/RankingPanel';
 import { PriceDisplay, TradeActions, SimulateButton, usePortfolioTotals } from '@/components/mechanics';
 import { useGameMode } from '@/hooks/useGameMode';
 import CoachMarkOverlay from '@/components/shared/CoachMarkOverlay';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
-import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useAuth } from '@/hooks/useAuth';
 import type { Nation, TradeMode, StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
 
@@ -859,142 +858,8 @@ function BracketView({ onNationClick, onMatchClick }: {
 
 // ─── RankingView ──────────────────────────────────────────────────────────────
 function RankingView() {
-  const ts = useTranslations('shell');
-  const tc = useTranslations('common');
-  const { entries, loading, refresh } = useLeaderboard(50);
-  const { user, profile } = useAuth();
-  const cash      = useGameStore(s => s.cash);
-  const prices    = useGameStore(s => s.prices);
-  const portfolio = useGameStore(s => s.portfolio);
-  const myBest    = useGameStore(s => s.bestScore);
-
-  const [guestPseudo, setGuestPseudo] = useState<string | null>(null);
-  useEffect(() => {
-    setGuestPseudo(getPseudo());
-    function onSaved() { setGuestPseudo(getPseudo()); }
-    window.addEventListener('kickstock:pseudo-saved', onSaved);
-    return () => window.removeEventListener('kickstock:pseudo-saved', onSaved);
-  }, []);
-
-  const portVal = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
-  const myTotal = cash + portVal;
-
-  const myRank = profile
-    ? entries.findIndex(e => e.username === profile.username) + 1
-    : guestPseudo
-      ? entries.findIndex(e => e.username === guestPseudo) + 1
-      : null;
-
-  return (
-    <div className="rnk-wrap">
-      {/* My score card */}
-      <div style={{background:'rgba(255,219,0,.04)',border:'1px solid var(--gold-dk)',borderRadius:9,padding:'12px 16px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <div>
-          <div style={{fontSize:9,letterSpacing:2,color:'var(--dim)',fontWeight:700,marginBottom:3}}>{ts('total')}</div>
-          <div style={{fontFamily:'var(--font-mono)',fontSize:20,fontWeight:700,color:'var(--gold)'}}>{fmt(myTotal)} KC</div>
-          {myBest && <div style={{fontSize:9,color:'var(--muted)',marginTop:2}}>🏆 {fmt(myBest)} KC</div>}
-        </div>
-        {!user && !guestPseudo
-          ? <a href="/login" style={{background:'rgba(255,219,0,.12)',border:'1px solid var(--gold-dk)',color:'var(--gold)',padding:'6px 14px',borderRadius:6,fontSize:11,fontWeight:700,letterSpacing:1,textDecoration:'none'}}>
-              ⚽ LOGIN
-            </a>
-          : myRank
-            ? <div style={{fontFamily:'var(--font-display)',fontSize:32,letterSpacing:2,color:'var(--gold)'}}>#{myRank}</div>
-            : <div style={{fontSize:10,color:'var(--dim)'}}>{ts('tournamentEnded')}</div>
-        }
-      </div>
-
-      <div className="rnk-tabs">
-        <button className="rtab on">{ts('bestScoresTab')}</button>
-        <button className="rtab" style={{opacity:.5,cursor:'not-allowed'}} title="Phase 3">{ts('liveCompetitionTab')}</button>
-      </div>
-
-      {loading && <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:11}}>{tc('loading')}</div>}
-
-      {!loading && entries.length === 0 && (
-        <div style={{padding:32,textAlign:'center',color:'var(--dim)',fontSize:12}}>
-          <div style={{fontSize:32,marginBottom:8}}>🏆</div>
-          <div>{ts('noScores')}</div>
-        </div>
-      )}
-
-      <div className="rnk-list">
-        {entries.map((p, i) => {
-          const isMe = (!!profile && p.username === profile.username)
-                    || (!!guestPseudo && p.username === guestPseudo);
-          return (
-            <div key={`${p.username}-${i}`} className={`rnk-row${isMe ? ' me' : ''}`}>
-              <div className={`rnk-rank${i < 3 ? ' top' : ''}`}>{i+1}</div>
-              <div className="rnk-av" style={isMe ? {background:'var(--gold)',color:'#000'} : {}}>
-                {p.username[0].toUpperCase()}
-              </div>
-              <div className="rnk-info">
-                <div className="rnk-name">
-                  {p.username}{isMe ? ' 👤' : ''}
-                  {p.user_type === 'guest' && (
-                    <span style={{marginLeft:5,fontSize:7,letterSpacing:1,color:'var(--muted)',fontFamily:'var(--font-display)'}}>GUEST</span>
-                  )}
-                </div>
-                <div className="rnk-sub">{p.country ?? '🌍'}</div>
-              </div>
-              <div className="rnk-val">{fmt(p.best_score)} KC</div>
-            </div>
-          );
-        })}
-
-        {/* Guest row if not logged in */}
-        {!user && (
-          <div className="rnk-row" style={{opacity:.5,borderStyle:'dashed'}}>
-            <div className="rnk-rank">?</div>
-            <div className="rnk-av">?</div>
-            <div className="rnk-info">
-              <div className="rnk-name">–</div>
-              <div className="rnk-sub">{ts('myPositions')}</div>
-            </div>
-            <div className="rnk-val">{fmt(myTotal)} KC</div>
-          </div>
-        )}
-      </div>
-
-      <div style={{textAlign:'center',marginTop:12}}>
-        <button onClick={refresh} style={{background:'none',border:'1px solid #222',color:'#444',padding:'5px 14px',borderRadius:5,fontSize:9,letterSpacing:1,cursor:'pointer',fontFamily:'var(--font-body)'}}>
-          {ts('refresh')}
-        </button>
-        <div style={{fontSize:8,color:'#333',marginTop:6}}>{ts('rankingAutoRefresh')}</div>
-      </div>
-    </div>
-  );
+  return <RankingPanel />;
 }
-
-// ─── RankingView (old mock — kept for reference) ──────────────────────────────
-function _OldRankingView() {
-  const cash      = useGameStore(s => s.cash);
-  const prices    = useGameStore(s => s.prices);
-  const portfolio = useGameStore(s => s.portfolio);
-  const portVal  = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
-  const myTotal  = portVal + cash;
-  const mockRanking = [
-    { name: 'GoldenBoot', country: '🇫🇷', positions: 12, total: 18420 },
-    { name: 'Toi',        country: '🌍',  positions: 0,  total: myTotal, isMe: true },
-  ].sort((a, b) => b.total - a.total);
-  return (
-    <div className="rnk-wrap">
-      <div className="rnk-list">
-        {mockRanking.map((p, i) => (
-          <div key={p.name} className={`rnk-row${p.isMe ? ' me' : ''}`}>
-            <div className={`rnk-rank${i < 3 ? ' top' : ''}`}>{i+1}</div>
-            <div className="rnk-av">{p.name[0]}</div>
-            <div className="rnk-info">
-              <div className="rnk-name">{p.name}</div>
-              <div className="rnk-sub">{p.country}</div>
-            </div>
-            <div className="rnk-val">{fmt(p.total)} KC</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-} // end _OldRankingView
 
 // ─── Main BrowserShell ────────────────────────────────────────────────────────
 type ViewId = 'home' | 'schedule' | 'market' | 'portfolio' | 'standings' | 'bracket' | 'ranking';
@@ -1057,6 +922,8 @@ export default function BrowserShell() {
   const portfolio = useGameStore(s => s.portfolio);
 
   const dayIndex  = useGameStore(s => s.dayIndex);
+  const matchResults = useGameStore(s => s.matchResults);
+  const gameState     = useGameStore(s => s);
   const resetGame = useGameStore(s => s.resetGame);
   const champion  = useGameStore(s => s.champion);
 
@@ -1073,6 +940,16 @@ export default function BrowserShell() {
     { id: 'standings',  icon: '🏆', label: 'STAND.'  },
     { id: 'bracket',    icon: '🎯', label: 'BRACKET' },
   ];
+
+  // Ticker: teams involved in the last played matchday + today's matches.
+  const tickerTeams = useMemo(() => {
+    const ids = new Set<string>();
+    const prevResults = matchResults[dayIndex - 1] ?? [];
+    prevResults.forEach(r => { ids.add(r.a); ids.add(r.b); });
+    buildMatchesForCurrentDay(gameState).forEach(m => { ids.add(m.a); ids.add(m.b); });
+    const filtered = teams.filter(team => ids.has(team.id));
+    return filtered.length > 0 ? filtered : teams;
+  }, [teams, matchResults, dayIndex, gameState]);
 
   function doTrade(n: TeamMeta, m: TradeMode) { setModal({nation: teamToNation(n), mode: m}); }
   function onNationClick(id: string) { setNationId(id); }
@@ -1139,7 +1016,7 @@ export default function BrowserShell() {
         {/* TICKER */}
         <div className="ticker-wrap">
           <div className="ticker-t">
-            {[...teams, ...teams].map((n, i) => {
+            {[...tickerTeams, ...tickerTeams].map((n, i) => {
               const p = prices[n.id] ?? n.initialPrice; const up = p >= n.initialPrice;
               const pct = ((p - n.initialPrice) / n.initialPrice * 100).toFixed(1);
               return <span key={i} className="ti">{n.flag} {n.id} <span className={up ? 'up' : 'dn'}>{Math.round(p)} {up ? '▲+' : '▼'}{Math.abs(Number(pct))}%</span></span>;

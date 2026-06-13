@@ -173,7 +173,8 @@
   flex-shrink: 0;
 }
 .ticker-t {
-  display: flex;
+  display: inline-flex;
+  width: max-content;
   align-items: center;
   height: 100%;
   white-space: nowrap;
@@ -482,6 +483,39 @@
 .rnk-name { font-size: 14px; font-weight: 600; }
 .rnk-sub  { font-size: 9px; color: var(--dim); margin-top: 1px; }
 .rnk-val  { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+.rnk-guest {
+  margin-left: 5px; font-size: 7px; letter-spacing: 1px; color: var(--muted);
+  font-family: var(--font-display);
+}
+.rnk-sep {
+  text-align: center; color: var(--dim); font-size: 11px;
+  letter-spacing: 4px; padding: 2px 0 6px;
+}
+
+.rnk-mycard {
+  background: rgba(255,219,0,.04); border: 1px solid var(--gold-dk);
+  border-radius: 9px; padding: 12px 16px; margin: 12px; flex-shrink: 0;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.rnk-mylbl { font-size: 9px; letter-spacing: 2px; color: var(--dim); font-weight: 700; margin-bottom: 3px; }
+.rnk-myval { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--gold); }
+.rnk-mybest { font-size: 9px; color: var(--muted); margin-top: 2px; }
+.rnk-login {
+  background: rgba(255,219,0,.12); border: 1px solid var(--gold-dk); color: var(--gold);
+  padding: 6px 14px; border-radius: 6px; font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-decoration: none;
+}
+.rnk-myrank { font-family: var(--font-display); font-size: 32px; letter-spacing: 2px; color: var(--gold); }
+.rnk-noscore { font-size: 10px; color: var(--dim); }
+.rnk-empty { padding: 32px; text-align: center; color: var(--dim); font-size: 12px; }
+.rnk-emoji { font-size: 32px; margin-bottom: 8px; }
+.rnk-foot { text-align: center; margin: 4px 0 12px; flex-shrink: 0; }
+.rnk-refresh-btn {
+  background: none; border: 1px solid #222; color: #444; padding: 5px 14px;
+  border-radius: 5px; font-size: 9px; letter-spacing: 1px; cursor: pointer;
+  font-family: var(--font-body);
+}
+.rnk-refresh-note { font-size: 8px; color: #333; margin-top: 6px; }
 
 /* ─── SIMULATE PANEL ─────────────────────────────────────────────────────── */
 .sim-panel {

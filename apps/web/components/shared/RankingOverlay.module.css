@@ -1,0 +1,42 @@
+@keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.90);
+  z-index: 400;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation: fadeIn .15s ease-out;
+}
+
+.sheet {
+  background: var(--s1);
+  border: 1px solid var(--border-hi);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  height: 85dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp .2s ease-out;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.title { font-family: var(--font-display); font-size: 14px; letter-spacing: 3px; color: var(--text); }
+.closeBtn {
+  background: none; border: none; color: var(--muted);
+  font-size: 18px; cursor: pointer; padding: 0; line-height: 1;
+}

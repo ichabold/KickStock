@@ -7,15 +7,21 @@
 }
 
 .ticker {
-  display: flex;
+  display: inline-flex;
+  width: max-content;
   align-items: center;
   height: 100%;
   white-space: nowrap;
-  animation: tick 40s linear infinite;
+  animation: ticker-scroll 40s linear infinite;
 }
 
 .ticker:hover {
   animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }
 
 .item {

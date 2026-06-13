@@ -2,25 +2,40 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { TeamMeta } from '@kickstock/types';
-import { useGameStore } from '@/stores/gameStore';
+import { useGameStore, buildMatchesForCurrentDay } from '@/stores/gameStore';
 import NationDetailOverlay from './NationDetailOverlay';
 import styles from './Ticker.module.css';
 
 export default function Ticker() {
   const t = useTranslations('ticker');
-  const prices    = useGameStore(s => s.prices);
-  const portfolio = useGameStore(s => s.portfolio);
-  const teams = useGameStore(s => s._teams);
+  const prices       = useGameStore(s => s.prices);
+  const portfolio    = useGameStore(s => s.portfolio);
+  const teams        = useGameStore(s => s._teams);
+  const dayIndex     = useGameStore(s => s.dayIndex);
+  const matchResults = useGameStore(s => s.matchResults);
+  const state        = useGameStore(s => s);
   const [nationId, setNationId] = useState<string | null>(null);
 
+  // Teams involved in the last played matchday + today's matches.
+  const relevantIds = useMemo(() => {
+    const ids = new Set<string>();
+    const prevResults = matchResults[dayIndex - 1] ?? [];
+    prevResults.forEach(r => { ids.add(r.a); ids.add(r.b); });
+    const todayMatches = buildMatchesForCurrentDay(state);
+    todayMatches.forEach(m => { ids.add(m.a); ids.add(m.b); });
+    return ids;
+  }, [matchResults, dayIndex, state]);
+
   const items = useMemo(() => {
-    return [...(teams ?? [])].sort((a, b) => {
+    const all = teams ?? [];
+    const filtered = all.filter(team => relevantIds.has(team.id));
+    const base = filtered.length > 0 ? filtered : all;
+    return [...base].sort((a, b) => {
       const heldA = (portfolio[a.id] ?? 0) > 0 ? 1 : 0;
       const heldB = (portfolio[b.id] ?? 0) > 0 ? 1 : 0;
       return heldB - heldA;
     });
-  }, [teams, portfolio]);
+  }, [teams, portfolio, relevantIds]);
 
   const doubled = [...items, ...items];
 

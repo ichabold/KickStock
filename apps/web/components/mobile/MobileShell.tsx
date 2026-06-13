@@ -6,6 +6,7 @@ import { useGameStore, fmt } from '@/stores/gameStore';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { usePortfolioTotals } from '@/components/mechanics';
 import Ticker from '@/components/shared/Ticker';
+import RankingOverlay from '@/components/shared/RankingOverlay';
 import { Suspense } from 'react';
 import AuthWidget from '@/components/shared/AuthWidget';
 import GuestModal from '@/components/auth/GuestModal';
@@ -27,6 +28,7 @@ export default function MobileShell() {
   const t = useTranslations('shell');
   const [tab, setTab]         = useState<TabId>('schedule');
   const [showTut, setShowTut] = useState(false);
+  const [showRanking, setShowRanking] = useState(false);
   const { user: mobileUser }  = useAuth();
 
   useEffect(() => {
@@ -94,6 +96,9 @@ export default function MobileShell() {
         <button className={styles.helpBtn} onClick={() => setShowTut(true)} aria-label={t('help')}>
           ❓
         </button>
+        <button className={styles.helpBtn} onClick={() => setShowRanking(true)} aria-label={t('rankingTitle')}>
+          🏆
+        </button>
         <div className={styles.authArea}>
           <AuthWidget compact />
         </div>
@@ -143,6 +148,7 @@ export default function MobileShell() {
       <GuestModal onDone={() => {}} />
       <Suspense><WelcomeModal /></Suspense>
       {showTut && <CoachMarkOverlay shell="mobile" onDone={() => setShowTut(false)} />}
+      {showRanking && <RankingOverlay onClose={() => setShowRanking(false)} />}
 
       {/* BOTTOM NAV */}
       <BottomNav

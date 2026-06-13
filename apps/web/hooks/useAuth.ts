@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { getDeviceId } from '@/lib/device';
 import type { User } from '@supabase/supabase-js';
 
 export interface AuthProfile {
@@ -54,13 +55,25 @@ export function useAuth() {
 export async function syncBestScore(score: number): Promise<void> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
 
-  // Only update if the new score is higher than what's stored
-  // (Use .update with .lt to let Postgres handle the comparison atomically)
-  await supabase
-    .from('portfolios')
-    .update({ best_score: score } as never)
-    .eq('user_id', user.id)
-    .or(`best_score.is.null,best_score.lt.${score}`);
+  if (user) {
+    // Only update if the new score is higher than what's stored
+    // (Use .update with .lt to let Postgres handle the comparison atomically)
+    await supabase
+      .from('portfolios')
+      .update({ best_score: score } as never)
+      .eq('user_id', user.id)
+      .or(`best_score.is.null,best_score.lt.${score}`);
+    return;
+  }
+
+  // Guest (no Supabase auth session): RLS blocks a direct .update() on
+  // portfolios for anonymous rows, so go through a SECURITY DEFINER RPC
+  // keyed on device_id instead — required for guest scores to appear on
+  // the offline ranking ("leaderboard" view).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).rpc('sync_guest_best_score', {
+    p_device_id: getDeviceId(),
+    p_score: score,
+  });
 }
