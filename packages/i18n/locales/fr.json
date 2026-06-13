@@ -224,8 +224,8 @@
   "standings": {
     "groupStandings": "CLASSEMENT DES GROUPES",
     "matchday": "J{n} / {total}",
-    "r32": "HUITIÈMES · R32",
-    "r16": "SEIZIÈMES · R16",
+    "r32": "SEIZIÈMES · R32",
+    "r16": "HUITIÈMES · R16",
     "quarterFinals": "QUARTS DE FINALE",
     "semiFinals": "DEMI-FINALES",
     "final": "🏆 FINALE",
@@ -329,8 +329,8 @@
   },
   "matchAnimation": {
     "groupStage": "PHASE DE GROUPES",
-    "r32": "HUITIÈMES",
-    "r16": "SEIZIÈMES",
+    "r32": "SEIZIÈMES",
+    "r16": "HUITIÈMES",
     "quarterFinal": "QUART DE FINALE",
     "semiFinal": "DEMI-FINALE",
     "final": "🏆 FINALE",

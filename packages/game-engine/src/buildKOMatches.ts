@@ -266,7 +266,7 @@ export function buildMatchesForDay(
   }
 
   const qfSlices: Record<string, [number, number]> = {
-    qf_1: [0, 2], qf_2: [2, 4], qf_3: [4, 8],
+    qf_1: [0, 4], qf_2: [4, 8],
   };
   if (qfSlices[dynamic]) {
     const [s, e] = qfSlices[dynamic];

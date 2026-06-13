@@ -119,6 +119,17 @@ function getDay(bootstrap: BootstrapData | null, dayIndex: number): BootstrapDay
   return bootstrap.days.find(d => d.day_index === dayIndex) ?? null;
 }
 
+/**
+ * The calendar has gaps between phases (rest days with no competition_days
+ * row, e.g. day 23 between the last R32 day and the first R16 day).
+ * Returns the smallest day_index >= fromIndex, or fromIndex itself if no
+ * day exists at or after it (tournament truly over).
+ */
+function nextDayIndex(bootstrap: BootstrapData, fromIndex: number): number {
+  const upcoming = bootstrap.days.map(d => d.day_index).filter(di => di >= fromIndex);
+  return upcoming.length > 0 ? Math.min(...upcoming) : fromIndex;
+}
+
 /** Returns group-stage fixtures for a given dayIndex. */
 function getGroupFixtures(bootstrap: BootstrapData | null, dayIndex: number): Match[] {
   if (!bootstrap) return [];
@@ -305,7 +316,14 @@ export const useLocalGameStore = create<LocalGameStore>()(
         }
 
         const day = getDay(_bootstrap, dayIndex);
-        if (!day) return null; // tournament over
+        if (!day) {
+          // dayIndex landed on a calendar gap (rest day with no
+          // competition_days row) — skip ahead to the next real day.
+          const next = nextDayIndex(_bootstrap, dayIndex);
+          if (next === dayIndex) return null; // tournament truly over
+          set({ dayIndex: next });
+          return { results: [], flash: {} };
+        }
 
         // Build today's matches
         const engineState = s as unknown as GameState;
@@ -320,7 +338,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
             );
 
         if (todayMatches.length === 0 && day.is_ko) {
-          set({ dayIndex: dayIndex + 1 });
+          set({ dayIndex: nextDayIndex(_bootstrap, dayIndex + 1) });
           return { results: [], flash: {} };
         }
 
@@ -439,7 +457,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
           if (qty > 0) newCash += Math.round((newPrices[newChampion] ?? 1) * champRate * qty * 10) / 10;
         }
 
-        const newDayIndex      = dayIndex + 1;
+        const newDayIndex      = nextDayIndex(_bootstrap, dayIndex + 1);
         const newPriceHistory  = { ...priceHistory };
         for (const [id, price] of Object.entries(newPrices)) {
           newPriceHistory[id] = [...(newPriceHistory[id] ?? []), price];

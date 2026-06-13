@@ -91,7 +91,7 @@ export function deriveDynamicKey(phase: string, dayIndex: number, bootstrap: Boo
   const posInPhase = koDays.findIndex(d => d.day_index === dayIndex);
   if (phase === 'R32')   return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[posInPhase] ?? 'r32_1';
   if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[posInPhase] ?? 'r16_1';
-  if (phase === 'QF')    return (['qf_1','qf_2','qf_3'])[posInPhase] ?? 'qf_1';
+  if (phase === 'QF')    return posInPhase === 0 ? 'qf_1' : 'qf_2';
   if (phase === 'SF')    return posInPhase === 0 ? 'sf_1' : 'sf_2';
   if (phase === '3rd')   return '3rd';
   if (phase === 'Final') return 'final';

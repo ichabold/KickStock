@@ -29,7 +29,7 @@ function getDynamicKey(bootstrap: BootstrapData, phase: string, dayIndex: number
   const pos = phaseDays.findIndex(d => d.day_index === dayIndex);
   if (phase === 'R32')   return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[pos]  ?? 'r32_1';
   if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[pos]                      ?? 'r16_1';
-  if (phase === 'QF')    return (['qf_1','qf_2','qf_3'])[pos]                                 ?? 'qf_1';
+  if (phase === 'QF')    return pos === 0 ? 'qf_1' : 'qf_2';
   if (phase === 'SF')    return pos === 0 ? 'sf_1' : 'sf_2';
   if (phase === '3rd')   return '3rd';
   if (phase === 'Final') return 'final';
@@ -371,7 +371,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                 const isCur   = di === dayIndex;
                 const displayMatches = played
                   ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue }))
-                  : isCur
+                  : di >= dayIndex
                     ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
                     : [];
 
@@ -768,7 +768,7 @@ function BracketView({ onNationClick, onMatchClick }: {
                 const isCur  = di === dayIndex;
                 const displayMatches = played
                   ? played.map(r => ({ a: r.a, b: r.b }))
-                  : isCur
+                  : di >= dayIndex
                     ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
                     : [];
 

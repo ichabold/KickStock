@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useGameStore, pctOf, buildMatchesForCurrentDay } from '@/stores/gameStore';
 import type { StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
@@ -22,6 +22,12 @@ export default function ScheduleTab() {
   const teams     = useGameStore(s => s._teams);
 
   const gN = (id: string) => teams.find(t => t.id === id);
+
+  const currentDayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    currentDayRef.current?.scrollIntoView({ block: 'center' });
+  }, []);
 
   if (!bootstrap) {
     return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>{tc('loading')}</div>;
@@ -50,7 +56,11 @@ export default function ScheduleTab() {
                 : [];
 
           return (
-            <div key={di} className={`${styles.dayBlock} ${isCurrent ? styles.current : ''} ${isPast ? styles.past : ''}`}>
+            <div
+              key={di}
+              ref={isCurrent ? currentDayRef : undefined}
+              className={`${styles.dayBlock} ${isCurrent ? styles.current : ''} ${isPast ? styles.past : ''}`}
+            >
               <div className={styles.dayHeader}>
                 <span className={styles.dayLabel}>{isCurrent ? '▶ ' : ''}{day.full_label}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
