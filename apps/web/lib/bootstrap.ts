@@ -120,7 +120,7 @@ export function bootstrapToTeams(data: BootstrapData): TeamMeta[] {
     id:            t.id,
     name:          t.name,
     flag:          t.flag_emoji ?? '',
-    group:         t.group_code ?? '',
+    group:         t.group_code?.match(/Group ([A-Z])$/i)?.[1] ?? t.group_code ?? '',
     strength:      t.strength,
     initialPrice:  t.initial_price,
     confederation: t.confederation ?? undefined,

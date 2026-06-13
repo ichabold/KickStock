@@ -1,6 +1,6 @@
 # Smart Polling — Plan de mise en place
 
-> Statut : **proposition validée (décisions ci-dessous), rien n'est codé**. Ce doc sert de base de discussion avant implémentation.
+> Statut : **implémenté** (V1 — voir §6 pour le détail des fichiers modifiés/créés).
 
 ## 0. Décisions prises
 
@@ -105,3 +105,32 @@ Le souci soulevé ("pas de cron dynamique") est réel : `vercel.json` est figé 
 4. `sync-results` : aucun changement de code, juste vérifier qu'il n'entre pas en conflit avec `live-poll` sur le traitement d'un même match (idempotence de `processRealMatchResult` — déjà garantie via `processed_at`).
 5. Tests : simuler un match en fenêtre (`scheduled_at` proche de `now`) en local/staging, vérifier le court-circuit, la mise à jour des scores, et le passage `processed_at` → sortie de fenêtre.
 6. Monitoring : logger le nombre d'appels API-Football réellement effectués par jour (Sentry breadcrumb ou `console.log`) pour confirmer l'estimation du §3 en conditions réelles.
+
+## 6. Implémentation réalisée
+
+### Fichiers créés
+- **`apps/web/app/api/cron/live-poll/route.ts`** (nouveau cron) :
+  - Court-circuit via `isMatchWindowActive(compIds)` (réutilisé tel quel depuis `sync-results` — fenêtre `[now-3h, now+3h]`).
+  - Si actif : `fetchLiveFixtures(leagueIds)` → met à jour `matches.score_a/score_b/api_status` pour les fixtures `1H/HT/2H/ET/BT/P`, en respectant `WHERE fixture_id = ... AND processed_at IS NULL` (jamais d'écrasement d'un match déjà traité).
+  - Puis `fetchFinishedFixtures(leagueIds, season)` (déjà cachée 30 min côté `football-api.ts`, donc quasi gratuite à cette fréquence) → `processRealMatchResult()` pour chaque fixture `FT/AET/PEN`, idempotent via `processed_at`. Si au moins un match traité, `checkAndAdvancePhase()` par compétition (même logique que `sync-results`, juste plus réactif).
+  - `processed_at` étant rempli, le match sort automatiquement de la fenêtre `isMatchWindowActive` au tick suivant → **arrêt automatique** du polling pour ce match.
+
+### Fichiers modifiés
+- **`vercel.json`** (root) et **`apps/web/vercel.json`** : ajout de l'entrée cron `{ "path": "/api/cron/live-poll", "schedule": "*/2 6-23 * * *" }`.
+- **`apps/web/app/api/game/live-matches/route.ts`** (étape 3) : suppression de l'appel `fetchLiveFixtures()` par requête front — la route lit désormais uniquement `matches` en DB, tenue à jour par `live-poll`. Donnée au pire ~2 min "stale", cohérent avec la cadence du live-poll.
+
+### ⚠️ Découverte en cours d'implémentation : `sync-results` ne tourne pas via `vercel.json`
+`sync-results` n'était **pas** dans `vercel.json` — il est déclenché par **GitHub Actions** (`.github/workflows/sync-results.yml`, `*/30 * * * *`, `curl` vers `/api/cron/sync-results` avec `CRON_SECRET`). C'est probablement un reliquat d'une période où le plan Vercel ne permettait pas de cron à cette fréquence.
+
+→ Pour `live-poll`, j'ai choisi **Vercel Cron** (via `vercel.json`, `*/2 6-23 * * *`) plutôt que GitHub Actions, car :
+- Le plan Pro le permet sans restriction (§3),
+- Les schedules GitHub Actions à `*/2` ne sont **pas garantis** par GitHub (le minimum recommandé est 5 min, et les exécutions peuvent être retardées de plusieurs minutes en période de forte charge sur l'infra GitHub) — incompatible avec l'objectif "toutes les 2 min pendant un match".
+- `sync-results` reste inchangé (GitHub Actions, 30 min) — c'est le filet de sécurité, sa fréquence plus large tolère ces retards GitHub.
+
+**Point d'attention pour toi** : vérifie que le cron Vercel `live-poll` est bien activé après déploiement (Dashboard Vercel → Project → Settings → Cron Jobs), et que `CRON_SECRET` est bien défini dans les env vars Vercel (déjà utilisé par les autres crons, donc normalement déjà en place).
+
+### Mode offline — vérifié non impacté
+- `LiveTab.tsx` (consommateur de `/api/game/live-matches`) est explicitement le composant **online** ("Online mode replacement for SimulateTab").
+- Le mode offline (`localGameStore.ts`, `gameStore.ts`, `useGameMode.ts`, route `/api/game/advance`) n'importe ni `football-api`, ni `/api/game/live-matches`, ni `live-poll` — aucun chemin de code partagé avec les changements ci-dessus.
+- `apps/web/app/api/game/advance/route.ts` écrit aussi dans `matches` (lignes simulées `m_sim_*`, sans `fixture_id`) — `live-poll` filtre sur `fixture_id` retourné par l'API (toujours un fixture réel), donc aucun risque de collision avec ces lignes simulées.
+- `pnpm --filter web type-check` passe sans erreur après les modifications.

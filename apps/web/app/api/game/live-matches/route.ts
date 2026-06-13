@@ -5,18 +5,18 @@
  * Used by LiveTab to show real-time match status.
  *
  * [G3 FIX] Reads X-Competition-ID header (same as all other game routes).
- * [G7 FIX] For matches currently in progress (1H/HT/2H/ET/BT/P), enriches
- *          the response with live scores from API-Football (/fixtures?live=all).
+ * [SMART POLLING] Scores/status for in-progress matches (1H/HT/2H/ET/BT/P) are
+ *                  now kept fresh directly in `matches` by the `/api/cron/live-poll`
+ *                  cron (every 2 min during active match windows — see
+ *                  SMART_POLLING_PLAN.md). This route now reads the DB only and
+ *                  no longer calls API-Football on every request (data is at
+ *                  most ~2 min stale, in line with the live-poll cadence).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient }          from '@/lib/supabase/admin';
-import { fetchLiveFixtures }          from '@/lib/football-api';
 
 export const dynamic = 'force-dynamic';
-
-// API-Football statuses that mean "currently playing"
-const LIVE_STATUSES = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P']);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adm = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   let compQuery = adm(admin)
     .from('competitions')
-    .select('id, league_id')
+    .select('id')
     .eq('is_active', true);
 
   if (headerCompId && /^\d+$/.test(headerCompId)) {
@@ -67,33 +67,8 @@ export async function GET(req: NextRequest) {
   const matches = (matchesRaw ?? []) as DbMatch[];
   if (!matches.length) return NextResponse.json({ matches: [], teams: {} });
 
-  // [G7 FIX] If any match is in live status, fetch real-time scores from API
-  const hasLiveMatch = matches.some(m => LIVE_STATUSES.has(m.api_status));
-  const liveScores = new Map<number, { scoreA: number; scoreB: number; status: string }>();
-
-  if (hasLiveMatch) {
-    try {
-      const liveFixtures = await fetchLiveFixtures([comp.league_id]);
-      for (const lf of liveFixtures) {
-        liveScores.set(lf.fixture.id, {
-          scoreA: lf.goals.home ?? 0,
-          scoreB: lf.goals.away ?? 0,
-          status: lf.fixture.status.short,
-        });
-      }
-    } catch {
-      // non-blocking: if live fetch fails, return DB data as-is
-    }
-  }
-
-  // Merge live API data into DB matches
-  const enriched = matches.map(m => {
-    if (m.fixture_id && liveScores.has(m.fixture_id)) {
-      const live = liveScores.get(m.fixture_id)!;
-      return { ...m, score_a: live.scoreA, score_b: live.scoreB, api_status: live.status };
-    }
-    return m;
-  });
+  // Live scores/status for in-progress matches are kept fresh in the DB by
+  // the `/api/cron/live-poll` cron (every 2 min during active match windows).
 
   // Load team display info
   const teamIds = [...new Set(matches.flatMap(m => [m.nation_a, m.nation_b]))];
@@ -108,7 +83,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { matches: enriched, teams },
+    { matches, teams },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }
