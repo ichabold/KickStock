@@ -51,19 +51,27 @@ export function useAuth() {
   return { user, profile, loading, signOut };
 }
 
-/** Fire-and-forget: sync best_score to Supabase when beaten */
-export async function syncBestScore(score: number): Promise<void> {
+/**
+ * Fire-and-forget: sync best_score to Supabase when beaten.
+ *
+ * Scoped to `competitionId` — each competition has its own portfolio row,
+ * so the update must not leak a high score from one competition into
+ * another's "best score" record.
+ */
+export async function syncBestScore(score: number, competitionId: number | null): Promise<void> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
     // Only update if the new score is higher than what's stored
     // (Use .update with .lt to let Postgres handle the comparison atomically)
-    await supabase
+    let query = supabase
       .from('portfolios')
       .update({ best_score: score } as never)
       .eq('user_id', user.id)
       .or(`best_score.is.null,best_score.lt.${score}`);
+    query = competitionId != null ? query.eq('competition_id', competitionId) : query.is('competition_id', null);
+    await query;
     return;
   }
 
@@ -75,5 +83,6 @@ export async function syncBestScore(score: number): Promise<void> {
   await (supabase as any).rpc('sync_guest_best_score', {
     p_device_id: getDeviceId(),
     p_score: score,
+    p_competition_id: competitionId,
   });
 }

@@ -227,10 +227,10 @@ export const useLocalGameStore = create<LocalGameStore>()(
         if (existing) return;
         get().loadBootstrap();
         const { bestScore } = get();
-        if (bestScore) syncBestScore(bestScore).catch(() => {});
+        if (bestScore) syncBestScore(bestScore, get()._bootstrap?.competition.id ?? null).catch(() => {});
         const id = setInterval(() => {
           const { bestScore: bs } = get();
-          if (bs) syncBestScore(bs).catch(() => {});
+          if (bs) syncBestScore(bs, get()._bootstrap?.competition.id ?? null).catch(() => {});
         }, 60_000);
         set({ _pollId: id });
       },
@@ -477,7 +477,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
           bestScore: newBestScore,
         });
 
-        if (newBestScore !== s.bestScore) syncBestScore(newBestScore).catch(() => {});
+        if (newBestScore !== s.bestScore) syncBestScore(newBestScore, _bootstrap?.competition.id ?? null).catch(() => {});
 
         getLoggedInUserId().then(userId => {
           if (!userId) return;

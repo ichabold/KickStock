@@ -104,6 +104,19 @@ export default function GuestModal({ onDone }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
+  // Cloudflare Turnstile tokens are single-use and short-lived. If a
+  // submission fails for any reason, the consumed/stale token must be
+  // discarded and a fresh one requested — otherwise every retry reuses
+  // the same dead token, the server keeps returning `captcha_failed`,
+  // and the user sees "Network error, please retry." forever.
+  const resetTurnstile = useCallback(() => {
+    setCfToken(null);
+    if (turnstileWidget.current) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).turnstile?.reset(turnstileWidget.current);
+    }
+  }, []);
+
   const checkAvailability = useCallback(async (value: string) => {
     if (!isValidPseudoFormat(value)) {
       setPseudoState('invalid');
@@ -196,11 +209,14 @@ export default function GuestModal({ onDone }: Props) {
       } else if (data.error === 'taken') {
         setPseudoState('taken');
         setSubmitError(t('alreadyTaken'));
+        resetTurnstile();
       } else {
         setSubmitError(tc('networkError'));
+        resetTurnstile();
       }
     } catch {
       setSubmitError(tc('networkError'));
+      resetTurnstile();
     } finally {
       setSubmitting(false);
     }

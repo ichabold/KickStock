@@ -38,7 +38,6 @@ export default function RankingPanel() {
   const cash      = useGameStore(s => s.cash);
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
-  const myBest    = useGameStore(s => s.bestScore);
 
   const [guestPseudo, setGuestPseudo] = useState<string | null>(null);
   useEffect(() => {
@@ -68,6 +67,10 @@ export default function RankingPanel() {
   const refresh = tab === 'offline' ? offline.refresh : online.refresh;
   const entriesEmpty = tab === 'offline' ? offline.entries.length === 0 : online.entries.length === 0;
 
+  const leaderScore = tab === 'offline'
+    ? (offline.entries[0] ? Number(offline.entries[0].best_score) : null)
+    : (online.entries[0] ? Number(online.entries[0].total_value) : null);
+
   return (
     <div className="rnk-wrap">
       {/* My score card */}
@@ -75,7 +78,7 @@ export default function RankingPanel() {
         <div>
           <div className="rnk-mylbl">{ts('total')}</div>
           <div className="rnk-myval">{fmt(myTotal)} KC</div>
-          {myBest != null && <div className="rnk-mybest">🏆 {fmt(myBest)} KC</div>}
+          {leaderScore != null && <div className="rnk-mybest">🏆 {fmt(leaderScore)} KC</div>}
         </div>
         {!user && !guestPseudo
           ? <a href="/login" className="rnk-login">⚽ LOGIN</a>
