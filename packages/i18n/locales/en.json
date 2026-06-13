@@ -248,6 +248,8 @@
   "trade": {
     "subtitle": "Group {group} · {held} shares held",
     "eliminated": "Eliminated — buys disabled",
+    "locked": "🔒 Trading locked during the match",
+    "lockedBadge": "🔒 LIVE",
     "buy": "BUY",
     "sell": "SELL",
     "pricePerShare": "Price per share",
@@ -356,7 +358,8 @@
   },
   "nationDetail": {
     "initialPrice": "Start",
-    "noMatchesPlayed": "No matches played"
+    "noMatchesPlayed": "No matches played",
+    "lockedDuringMatch": "🔒 Trading locked during the match"
   },
   "live": {
     "loading": "Loading…",

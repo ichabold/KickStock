@@ -27,7 +27,9 @@ export default function TradeModal({ nation, initMode, onClose }: Props) {
   const portfolio  = useGameStore(s => s.portfolio);
   const dayIndex   = useGameStore(s => s.dayIndex);
   const eliminated = useGameStore(s => s.eliminated);
+  const lockedTeams = useGameStore(s => s.lockedTeams);
   const trade      = useGameStore(s => s.trade);
+  const isLocked   = lockedTeams.has(nation.id);
 
   const bootstrap = useGameStore(s => s._bootstrap);
   const currentDay = bootstrap?.days.find(d => d.day_index === dayIndex) ?? null;
@@ -60,9 +62,10 @@ export default function TradeModal({ nation, initMode, onClose }: Props) {
     ? ((held + (mode === 'buy' ? safeQty : 0)) * price / totVal * 100).toFixed(1)
     : '0.0';
 
-  const ctaDisabled =
+  const ctaDisabled = isLocked || (
     mode === 'buy'  ? isElim || total > cash || maxBuy === 0
-                    : safeQty > held || held === 0;
+                    : safeQty > held || held === 0
+  );
 
   async function confirm() {
     const err = await trade(mode, nation.id, safeQty);
@@ -97,6 +100,10 @@ export default function TradeModal({ nation, initMode, onClose }: Props) {
 
         {isElim && (
           <div className={styles.elimWarn}>{t('eliminated')}</div>
+        )}
+
+        {isLocked && (
+          <div className={styles.elimWarn}>{t('locked')}</div>
         )}
 
         <div className={styles.modeRow} role="tablist">

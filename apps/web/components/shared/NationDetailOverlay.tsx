@@ -48,6 +48,7 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
   const portfolio    = useGameStore(s => s.portfolio);
   const avgCost      = useGameStore(s => s.avgCost);
   const eliminated   = useGameStore(s => s.eliminated);
+  const lockedTeams  = useGameStore(s => s.lockedTeams);
   const matchResults = useGameStore(s => s.matchResults);
   const teams     = useGameStore(s => s._teams);
   const bootstrap = useGameStore(s => s._bootstrap);
@@ -61,7 +62,8 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
   const price  = prices[nationId] ?? teamMeta.initialPrice;
   const held   = portfolio[nationId] ?? 0;
   const avg    = avgCost[nationId] ?? teamMeta.initialPrice;
-  const isElim = eliminated.includes(nationId);
+  const isElim  = eliminated.includes(nationId);
+  const isLocked = lockedTeams.has(nationId);
   const ch     = pctOf(price, teamMeta.initialPrice);
   const val    = held * price;
   const pnl    = (price - avg) * held;
@@ -216,22 +218,30 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
         ))}
 
         {/* Trade buttons */}
-        <div className={styles.tradeBtns}>
-          <button
-            className={styles.buyBtn}
-            disabled={isElim}
-            onClick={() => setTradeMode('buy')}
-          >
-            + ACHETER
-          </button>
-          <button
-            className={styles.sellBtn}
-            disabled={held === 0}
-            onClick={() => setTradeMode('sell')}
-          >
-            − VENDRE
-          </button>
-        </div>
+        {isLocked ? (
+          <div className={styles.tradeBtns}>
+            <button className={styles.buyBtn} disabled>
+              {t('lockedDuringMatch')}
+            </button>
+          </div>
+        ) : (
+          <div className={styles.tradeBtns}>
+            <button
+              className={styles.buyBtn}
+              disabled={isElim}
+              onClick={() => setTradeMode('buy')}
+            >
+              + ACHETER
+            </button>
+            <button
+              className={styles.sellBtn}
+              disabled={held === 0}
+              onClick={() => setTradeMode('sell')}
+            >
+              − VENDRE
+            </button>
+          </div>
+        )}
 
         <div style={{ height: 16 }} />
       </div>

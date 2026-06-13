@@ -54,8 +54,9 @@
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
-.tagHeld { background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-dk); }
-.tagOut  { background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss-dk); }
+.tagHeld   { background: var(--gain-bg); color: var(--gain); border: 1px solid var(--gain-dk); }
+.tagOut    { background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss-dk); }
+.tagLocked { background: var(--gold-bg, rgba(255,200,0,0.12)); color: var(--gold); border: 1px solid var(--gold); }
 
 /* ── Price row ── */
 .priceRow { display: flex; align-items: baseline; gap: var(--space-1); margin-bottom: var(--space-1); }

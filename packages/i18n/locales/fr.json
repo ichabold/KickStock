@@ -248,6 +248,8 @@
   "trade": {
     "subtitle": "Groupe {group} · {held} actions détenues",
     "eliminated": "Éliminée — achat désactivé",
+    "locked": "🔒 Trading verrouillé pendant le match",
+    "lockedBadge": "🔒 EN COURS",
     "buy": "ACHETER",
     "sell": "VENDRE",
     "pricePerShare": "Prix par action",
@@ -356,7 +358,8 @@
   },
   "nationDetail": {
     "initialPrice": "Départ",
-    "noMatchesPlayed": "Aucun match joué"
+    "noMatchesPlayed": "Aucun match joué",
+    "lockedDuringMatch": "🔒 Trading verrouillé pendant le match"
   },
   "live": {
     "loading": "Chargement…",

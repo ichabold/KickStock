@@ -83,6 +83,9 @@ interface LocalGameStore extends GameState {
   error:    string | null;
   _pollId:  ReturnType<typeof setInterval> | null;
 
+  /** Offline mode never locks trading — always empty. Kept for type parity with onlineGameStore. */
+  lockedTeams: Set<string>;
+
   fetchState:       () => Promise<void>;
   loadBootstrap:    () => Promise<void>;
   startSync:        () => void;
@@ -153,6 +156,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
       syncing:          false,
       error:            null,
       _pollId:          null,
+      lockedTeams:      new Set<string>(),
 
       // ── loadBootstrap ────────────────────────────────────────────────────────
       loadBootstrap: async () => {

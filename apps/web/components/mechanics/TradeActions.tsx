@@ -46,8 +46,19 @@ export function TradeActions({
   const t      = useTranslations('trade');
   const held   = useGameStore(s => s.portfolio[nation.id] ?? 0);
   const isElim = useGameStore(s => s.eliminated.includes(nation.id));
+  const locked = useGameStore(s => s.lockedTeams.has(nation.id));
 
   if (isElim) return null;
+
+  if (locked) {
+    return (
+      <div className={wrapClassName} onClick={e => e.stopPropagation()}>
+        <button className={buyClassName} disabled aria-label={t('locked')}>
+          {t('lockedBadge')}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={wrapClassName} onClick={e => e.stopPropagation()}>

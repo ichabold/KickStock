@@ -47,6 +47,14 @@ interface AdvanceDayResult {
   flash:   Record<string, 'fu' | 'fd'>;
 }
 
+// Shape returned by GET /api/game/live-matches (subset of `matches` columns)
+interface LiveMatch {
+  nation_a:         string;
+  nation_b:         string;
+  api_status:       string;
+  trade_lock_until: string | null;
+}
+
 interface OnlineGameStore extends GameState {
   _competitionId:    number;
   _bootstrap:        BootstrapData | null;
@@ -60,10 +68,15 @@ interface OnlineGameStore extends GameState {
   _pollId:          ReturnType<typeof setInterval> | null;
   _realtimeChannel: RealtimeChannel | null;
 
+  /** Team IDs whose match is currently live or in its post-match trade-lock window. */
+  lockedTeams:      Set<string>;
+  _lockPollId:      ReturnType<typeof setInterval> | null;
+
   loadBootstrap:    () => Promise<void>;
   fetchState:       () => Promise<void>;
   startSync:        () => void;
   stopSync:         () => void;
+  refreshLockedTeams: () => Promise<void>;
   trade:            (mode: TradeMode, nationId: string, quantity: number) => Promise<string | null>;
   advanceDay:       () => Promise<AdvanceDayResult | null>;
   resetGame:        () => Promise<void>;
@@ -107,6 +120,8 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   error:            null,
   _pollId:          null,
   _realtimeChannel: null,
+  lockedTeams:      new Set<string>(),
+  _lockPollId:      null,
 
   // ── loadBootstrap ────────────────────────────────────────────────────────────
   loadBootstrap: async () => {
@@ -157,6 +172,33 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     }
   },
 
+  // ── refreshLockedTeams ───────────────────────────────────────────────────────
+  // Mirrors the server-side check added to execute_competition_trade
+  // (db/migrations/023): a team is locked while its match is currently live
+  // (api_status IN 1H/HT/2H/ET/BT/P) or while its post-match `trade_lock_until`
+  // window (set by process-real-result.ts, +15min) is still active.
+  refreshLockedTeams: async () => {
+    const LIVE_STATUSES = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P']);
+    try {
+      const res = await fetch('/api/game/live-matches', {
+        headers: { 'X-Competition-ID': String(get()._competitionId) },
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { matches?: LiveMatch[] };
+      const now = Date.now();
+      const locked = new Set<string>();
+      for (const m of data.matches ?? []) {
+        const lockUntil = m.trade_lock_until ? new Date(m.trade_lock_until).getTime() : null;
+        const isLocked  = LIVE_STATUSES.has(m.api_status) || (lockUntil !== null && lockUntil > now);
+        if (isLocked) {
+          locked.add(m.nation_a);
+          locked.add(m.nation_b);
+        }
+      }
+      set({ lockedTeams: locked });
+    } catch { /* best-effort — UI lock is advisory, server enforces it */ }
+  },
+
   // ── startSync ────────────────────────────────────────────────────────────────
   startSync: () => {
     if (get()._pollId || get()._realtimeChannel) return;
@@ -167,6 +209,10 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
       get().fetchState();
     }, 30_000);
     set({ _pollId: id });
+
+    const lockId = setInterval(() => { get().refreshLockedTeams(); }, 30_000);
+    set({ _lockPollId: lockId });
+    get().refreshLockedTeams();
 
     // fetchState() resolves the active competition (via loadBootstrap) before
     // we read _competitionId for the realtime channel below.
@@ -198,10 +244,11 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
 
   // ── stopSync ─────────────────────────────────────────────────────────────────
   stopSync: () => {
-    const { _pollId, _realtimeChannel } = get();
+    const { _pollId, _realtimeChannel, _lockPollId } = get();
     if (_pollId) clearInterval(_pollId);
+    if (_lockPollId) clearInterval(_lockPollId);
     if (_realtimeChannel) createClient().removeChannel(_realtimeChannel);
-    set({ _pollId: null, _realtimeChannel: null });
+    set({ _pollId: null, _realtimeChannel: null, _lockPollId: null });
   },
 
   // ── trade ────────────────────────────────────────────────────────────────────
@@ -214,6 +261,8 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
     const held       = s.portfolio[nationId] ?? 0;
     const currentDay = s._bootstrap?.days.find(d => d.day_index === s.dayIndex) ?? null;
     const isKO       = currentDay?.is_ko ?? (s.dayIndex >= 17);
+
+    if (s.lockedTeams.has(nationId)) return '🔒 Trading verrouillé pendant le match';
 
     if (mode === 'buy') {
       if (s.eliminated.includes(nationId)) return 'Nation éliminée 💀';

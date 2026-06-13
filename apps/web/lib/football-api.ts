@@ -197,18 +197,25 @@ export async function fetchAllFixtures(
 
 /**
  * Finished fixtures (FT/AET/PEN) for the given league IDs.
- * Used by sync-results cron (every 30 min).
- * Cache: 30-minute bucket — two calls within the same 30-min window share one response.
+ * Used by live-poll (every 2 min during active match windows) and
+ * sync-results (every 30 min, safety net).
+ *
+ * Cache: 2-minute bucket — aligned with live-poll's cadence, so a fixture
+ * that turns FT is detected (and processed_at/trade_lock_until set) within
+ * ~2 min instead of being masked by a stale cached "not yet FT" response
+ * for up to 30 min. API-Football quota has ample headroom for this (Pro
+ * plan, 7500 req/day) even with one extra call per league every 2 min
+ * during active windows.
  */
 export async function fetchFinishedFixtures(
   leagueIds: number[],
   season:    number,
 ): Promise<ApiFixture[]> {
-  const bucket   = Math.floor(Date.now() / 1_800_000); // 30-min bucket
+  const bucket   = Math.floor(Date.now() / 120_000); // 2-min bucket
   const hash     = leagueIds.sort().join('-');
   const cacheKey = `api:finished:${hash}:${bucket}`;
 
-  return fetchWithCache(cacheKey, 1800, async () => {
+  return fetchWithCache(cacheKey, 120, async () => {
     const allFixtures: ApiFixture[] = [];
 
     for (const leagueId of leagueIds) {

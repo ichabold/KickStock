@@ -60,14 +60,17 @@ export default function NationCard({
   nation, onBuy, onSell, onCardClick, density = 'comfortable', flash, coachTarget,
 }: Props) {
   const ts         = useTranslations('shell');
+  const tt         = useTranslations('trade');
   const prices     = useGameStore(s => s.prices);
   const history    = useGameStore(s => s.priceHistory[nation.id] ?? []);
   const portfolio  = useGameStore(s => s.portfolio);
   const eliminated = useGameStore(s => s.eliminated);
+  const lockedTeams = useGameStore(s => s.lockedTeams);
 
   const price  = prices[nation.id] ?? nation.p;
   const held   = portfolio[nation.id] ?? 0;
   const isElim = eliminated.includes(nation.id);
+  const isLocked = lockedTeams.has(nation.id);
   const up     = price >= nation.p;
 
   const cardClass = [
@@ -96,6 +99,9 @@ export default function NationCard({
           <span className={`${styles.tag} ${styles.tagHeld}`}>×{held}</span>
         )}
         {isElim && <span className={`${styles.tag} ${styles.tagOut}`}>{ts('elimOut')}</span>}
+        {!isElim && isLocked && (
+          <span className={`${styles.tag} ${styles.tagLocked}`}>{tt('lockedBadge')}</span>
+        )}
       </div>
 
       <PriceDisplay
