@@ -16,6 +16,7 @@ import RankingPanel from '@/components/shared/RankingPanel';
 import { PriceDisplay, TradeActions, SimulateButton, usePortfolioTotals } from '@/components/mechanics';
 import { useGameMode } from '@/hooks/useGameMode';
 import CoachMarkOverlay from '@/components/shared/CoachMarkOverlay';
+import FirstTradeUpsellModal from '@/components/shared/FirstTradeUpsellModal';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { useAuth } from '@/hooks/useAuth';
 import type { Nation, TradeMode, StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
@@ -875,6 +876,7 @@ export default function BrowserShell() {
   const [nationId,     setNationId]     = useState<string | null>(null);
   const [matchDetail,  setMatchDetail]  = useState<{ result: StoredMatchResult; dayLabel: string } | null>(null);
   const [showTut,      setShowTut]      = useState(false);
+  const [showUpsell,   setShowUpsell]   = useState(false);
   const { user: browserUser }           = useAuth();
   const { mode: gameMode }              = useGameMode();
 
@@ -893,6 +895,15 @@ export default function BrowserShell() {
     window.addEventListener('kickstock:show-tutorial', handleShowTut);
     return () => window.removeEventListener('kickstock:show-tutorial', handleShowTut);
   }, []);
+
+  // After a guest's first buy, offer to link a Google account
+  useEffect(() => {
+    function handleFirstTrade() {
+      if (!browserUser) setShowUpsell(true);
+    }
+    window.addEventListener('kickstock:first-trade', handleFirstTrade);
+    return () => window.removeEventListener('kickstock:first-trade', handleFirstTrade);
+  }, [browserUser]);
 
   // Cross-device sync: load server state when a registered user logs in
   const syncUser = useGameStore(s => (s as { syncFromServer?: () => Promise<void> }).syncFromServer);
@@ -1113,6 +1124,7 @@ export default function BrowserShell() {
         />
       )}
       {showTut && <CoachMarkOverlay shell="browser" onDone={() => setShowTut(false)} />}
+      {showUpsell && <FirstTradeUpsellModal onClose={() => setShowUpsell(false)} />}
     </div>
     </>
   );

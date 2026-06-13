@@ -309,12 +309,16 @@
       "rule4Text": "Buying is free. Selling costs 10% (groups) or 5% (KO). Now → pick a team and get started!"
     },
     "schedule": {
-      "rule1Label": "STEP 1 · 3",
+      "rule1Label": "STEP 1 · 5",
       "rule1Text": "Tap a country in a match to buy shares and bet on its win.",
-      "rule2Label": "STEP 2 · 3",
+      "rule2Label": "STEP 2 · 5",
       "rule2Text": "KC = KickCoins, your starting currency. The stronger a team, the higher its price — and its profit potential.",
-      "rule3Label": "STEP 3 · 3 — LAST",
-      "rule3Text": "When your team wins or qualifies, a dividend automatically lands in your cash. Selling costs 10% (5% in the final phase)."
+      "rule3Label": "STEP 3 · 5",
+      "rule3Text": "When your team wins or qualifies, a dividend automatically lands in your cash. Selling costs 10% (5% in the final phase).",
+      "rule4Label": "STEP 4 · 5",
+      "rule4Text": "Before the quarter-finals, you can't invest more than 40% of your portfolio in a single team. Spread your bets!",
+      "rule5Label": "STEP 5 · 5 — LAST",
+      "rule5Text": "When a match is played, the winner gains 50% of the opponent's value, and the loser loses 50% of its own value."
     }
   },
   "matchDetail": {
@@ -394,5 +398,13 @@
     "languageEn": "🇬🇧 English",
     "googleError": "Google login failed. Please retry.",
     "redirecting": "Redirecting…"
+  },
+  "upgradePrompt": {
+    "title": "Nice, first trade done!",
+    "subtitle": "Link your Google account to keep your progress safe, or continue as a guest on this device.",
+    "or": "or",
+    "continueGuestButton": "Continue as guest",
+    "continueGuestNote": "Guest mode: your progress stays on this device and browser only.",
+    "close": "Close"
   }
 }

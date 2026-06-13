@@ -15,12 +15,16 @@ const BROWSER_BEATS: Beat[] = [
   { selector: '[data-coach="schedule-match"]', labelKey: 'schedule.rule1Label', textKey: 'schedule.rule1Text', tip: 'bottom' },
   { selector: '.tbs:nth-child(2)',             labelKey: 'schedule.rule2Label', textKey: 'schedule.rule2Text', tip: 'bottom' },
   { selector: '.sim-inline-btn',               labelKey: 'schedule.rule3Label', textKey: 'schedule.rule3Text', tip: 'bottom' },
+  { selector: '.tbs:nth-child(1)',             labelKey: 'schedule.rule4Label', textKey: 'schedule.rule4Text', tip: 'bottom' },
+  { selector: '[data-coach="schedule-match"]', labelKey: 'schedule.rule5Label', textKey: 'schedule.rule5Text', tip: 'bottom' },
 ];
 
 const MOBILE_BEATS: Beat[] = [
   { selector: '[data-coach="schedule-match"]', labelKey: 'schedule.rule1Label', textKey: 'schedule.rule1Text', tip: 'bottom' },
   { selector: '[data-coach="cash-stat"]',      labelKey: 'schedule.rule2Label', textKey: 'schedule.rule2Text', tip: 'bottom' },
   { selector: '[data-coach="play-btn"]',       labelKey: 'schedule.rule3Label', textKey: 'schedule.rule3Text', tip: 'top'    },
+  { selector: '[data-coach="total-stat"]',     labelKey: 'schedule.rule4Label', textKey: 'schedule.rule4Text', tip: 'bottom' },
+  { selector: '[data-coach="schedule-match"]', labelKey: 'schedule.rule5Label', textKey: 'schedule.rule5Text', tip: 'bottom' },
 ];
 
 interface Props {

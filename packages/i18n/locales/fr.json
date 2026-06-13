@@ -309,12 +309,16 @@
       "rule4Text": "Acheter est gratuit. Vendre coûte 10% (groupes) ou 5% (KO). Maintenant → choisis une équipe et lance-toi !"
     },
     "schedule": {
-      "rule1Label": "ÉTAPE 1 · 3",
+      "rule1Label": "ÉTAPE 1 · 5",
       "rule1Text": "Tape sur un pays dans un match pour acheter des actions et parier sur sa victoire.",
-      "rule2Label": "ÉTAPE 2 · 3",
+      "rule2Label": "ÉTAPE 2 · 5",
       "rule2Text": "KC = KickCoins, ta monnaie de départ. Plus une équipe est forte, plus son prix — et son potentiel de gain — est élevé.",
-      "rule3Label": "ÉTAPE 3 · 3 — DERNIÈRE",
-      "rule3Text": "Quand ton équipe gagne ou se qualifie, un dividende tombe automatiquement dans ton cash. Vendre coûte 10% (5% en phase finale)."
+      "rule3Label": "ÉTAPE 3 · 5",
+      "rule3Text": "Quand ton équipe gagne ou se qualifie, un dividende tombe automatiquement dans ton cash. Vendre coûte 10% (5% en phase finale).",
+      "rule4Label": "ÉTAPE 4 · 5",
+      "rule4Text": "Avant les 1/4 de finale, tu ne peux pas investir plus de 40% de ton portefeuille dans une seule équipe. Diversifie tes paris !",
+      "rule5Label": "ÉTAPE 5 · 5 — DERNIÈRE",
+      "rule5Text": "Lors d'un match, le gagnant gagne 50% de la valeur de l'adversaire, et le perdant perd 50% de sa propre valeur."
     }
   },
   "matchDetail": {
@@ -394,5 +398,13 @@
     "languageEn": "🇬🇧 English",
     "googleError": "Connexion Google échouée. Réessaie.",
     "redirecting": "Redirection…"
+  },
+  "upgradePrompt": {
+    "title": "Bravo pour ton premier trade !",
+    "subtitle": "Lie ton compte à Google pour sécuriser ta progression, ou continue en invité sur cet appareil.",
+    "or": "ou",
+    "continueGuestButton": "Continuer en invité",
+    "continueGuestNote": "Mode invité : ta progression reste uniquement sur cet appareil et ce navigateur.",
+    "close": "Fermer"
   }
 }

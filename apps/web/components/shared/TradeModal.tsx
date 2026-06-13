@@ -14,6 +14,8 @@ interface Props {
   onClose: () => void;
 }
 
+const FIRST_TRADE_KEY = 'kickstock_first_trade_done';
+
 export default function TradeModal({ nation, initMode, onClose }: Props) {
   const t = useTranslations('trade');
   const [mode, setMode]   = useState<TradeMode>(initMode);
@@ -70,6 +72,10 @@ export default function TradeModal({ nation, initMode, onClose }: Props) {
       return;
     }
     if ('vibrate' in navigator) navigator.vibrate(8);
+    if (mode === 'buy' && !localStorage.getItem(FIRST_TRADE_KEY)) {
+      localStorage.setItem(FIRST_TRADE_KEY, '1');
+      window.dispatchEvent(new Event('kickstock:first-trade'));
+    }
     onClose();
   }
 

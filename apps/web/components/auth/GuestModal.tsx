@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { getDeviceId } from '@/lib/device';
-import { getPseudo, setPseudo, isValidPseudoFormat, saveOAuthPending } from '@/lib/pseudo';
+import { getPseudo, setPseudo, isValidPseudoFormat } from '@/lib/pseudo';
 import { useGameStore } from '@/stores/gameStore';
+import GoogleSignInBlock from '@/components/shared/GoogleSignInBlock';
 
 interface Props {
   onDone: () => void;
@@ -246,7 +247,7 @@ export default function GuestModal({ onDone }: Props) {
         <div style={s.modeLabel}>{t('chooseModeLabel')}</div>
 
         {/* ── Google (primary) ─────────────────────────────────────── */}
-        <GooglePrimary />
+        <GoogleSignInBlock />
 
         {/* ── Divider ──────────────────────────────────────────────── */}
         <div style={s.dividerRow}>
@@ -331,49 +332,6 @@ export default function GuestModal({ onDone }: Props) {
           <Link href="/login" style={s.loginLink}>{t('signIn')}</Link>
         </div>
       </div>
-    </div>
-  );
-}
-
-function GooglePrimary() {
-  const t = useTranslations('auth.guest');
-  const te = useTranslations('auth.emailModal');
-  const tc = useTranslations('common');
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [googleError,   setGoogleError]   = useState('');
-
-  async function handleGoogle() {
-    setGoogleLoading(true);
-    setGoogleError('');
-    saveOAuthPending();
-    document.cookie = `ks_pending_device=${getDeviceId()}; path=/; max-age=600; SameSite=Lax`;
-    const sb = createClient();
-    const { error } = await sb.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (error) {
-      setGoogleError(te('googleError'));
-      setGoogleLoading(false);
-    }
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 4 }}>
-      <button
-        onClick={handleGoogle}
-        disabled={googleLoading}
-        style={{ ...s.googlePri, opacity: googleLoading ? 0.6 : 1 }}
-      >
-        <span style={s.googleIcon}>G</span>
-        {googleLoading ? tc('redirecting') : t('continueGoogle')}
-      </button>
-      <div style={s.benefitsList}>
-        <div style={s.benefit}>✓ {t('googleBenefit1')}</div>
-        <div style={s.benefit}>✓ {t('googleBenefit2')}</div>
-        <div style={s.benefit}>✓ {t('googleBenefit3')}</div>
-      </div>
-      {googleError && <div style={s.error}>{googleError}</div>}
     </div>
   );
 }
@@ -519,50 +477,6 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 11,
     color: 'var(--dim)',
     fontFamily: 'var(--font-body)',
-  },
-  googlePri: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    width: '100%',
-    background: 'var(--gold)',
-    color: '#000',
-    border: 'none',
-    borderRadius: 10,
-    padding: '13px 16px',
-    fontFamily: 'var(--font-display)',
-    fontSize: 16,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-    transition: 'opacity .15s',
-  },
-  googleIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: '50%',
-    background: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 900,
-    fontSize: 13,
-    color: '#333',
-    flexShrink: 0,
-  },
-  benefitsList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    padding: '4px 6px 0',
-  },
-  benefit: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: 11,
-    color: 'var(--gain)',
   },
   loginRow: {
     textAlign: 'center',

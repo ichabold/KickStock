@@ -50,6 +50,17 @@ export default function RankingPanel() {
   const offline = useLeaderboard(50);
   const online  = useOnlineRanking(50);
 
+  // Re-fetch both rankings whenever the player's identity changes (login,
+  // logout, or a fresh guest pseudo). Without this, switching accounts in
+  // the same session keeps showing the previous identity's cached rows
+  // (wrong "me" highlight, wrong pseudo, stale total/trophy) until the
+  // next 30s poll.
+  useEffect(() => {
+    online.refresh();
+    offline.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, guestPseudo]);
+
   const portVal = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
   const myTotal = cash + portVal;
 

@@ -12,6 +12,7 @@ import AuthWidget from '@/components/shared/AuthWidget';
 import GuestModal from '@/components/auth/GuestModal';
 import WelcomeModal from '@/components/auth/WelcomeModal';
 import CoachMarkOverlay from '@/components/shared/CoachMarkOverlay';
+import FirstTradeUpsellModal from '@/components/shared/FirstTradeUpsellModal';
 import { useAuth } from '@/hooks/useAuth';
 import MarketTab from './MarketTab';
 import ScheduleTab from './ScheduleTab';
@@ -29,6 +30,7 @@ export default function MobileShell() {
   const [tab, setTab]         = useState<TabId>('schedule');
   const [showTut, setShowTut] = useState(false);
   const [showRanking, setShowRanking] = useState(false);
+  const [showUpsell, setShowUpsell] = useState(false);
   const { user: mobileUser }  = useAuth();
 
   useEffect(() => {
@@ -45,6 +47,15 @@ export default function MobileShell() {
     window.addEventListener('kickstock:show-tutorial', handleShowTut);
     return () => window.removeEventListener('kickstock:show-tutorial', handleShowTut);
   }, []);
+
+  // After a guest's first buy, offer to link a Google account
+  useEffect(() => {
+    function handleFirstTrade() {
+      if (!mobileUser) setShowUpsell(true);
+    }
+    window.addEventListener('kickstock:first-trade', handleFirstTrade);
+    return () => window.removeEventListener('kickstock:first-trade', handleFirstTrade);
+  }, [mobileUser]);
 
   const syncUser = useGameStore(s => (s as { syncFromServer?: () => Promise<void> }).syncFromServer);
   useEffect(() => {
@@ -86,7 +97,7 @@ export default function MobileShell() {
             <div className={styles.statLbl}>{t('cash')}</div>
             <div className={styles.statVal}>{fmt(cash)}</div>
           </div>
-          <div className={styles.stat}>
+          <div className={styles.stat} data-coach="total-stat">
             <div className={styles.statLbl}>{t('total')}</div>
             <div className={styles.statVal} style={{ color: pl >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
               {fmt(totVal)}
@@ -149,6 +160,7 @@ export default function MobileShell() {
       <Suspense><WelcomeModal /></Suspense>
       {showTut && <CoachMarkOverlay shell="mobile" onDone={() => setShowTut(false)} />}
       {showRanking && <RankingOverlay onClose={() => setShowRanking(false)} />}
+      {showUpsell && <FirstTradeUpsellModal onClose={() => setShowUpsell(false)} />}
 
       {/* BOTTOM NAV */}
       <BottomNav
