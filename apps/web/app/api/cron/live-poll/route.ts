@@ -1,7 +1,16 @@
 /**
  * GET /api/cron/live-poll
  *
- * Cron (every 2 min, 06:00-23:59 UTC) — smart live-score polling.
+ * Cron (every 2 min, 24/7) — smart live-score polling.
+ *
+ * [GAP FIX] Previously restricted to 06:00-23:59 UTC, which missed World Cup
+ * fixtures kicked off in the 00:00-06:00 UTC window (late-evening US kickoffs,
+ * e.g. 22:00/22:45 local Pacific = 05:00/05:45 UTC). Those matches relied
+ * solely on the `sync-results` GitHub Actions cron (every 30 min), which can be
+ * delayed by hours on scheduled triggers — leaving live scores/locks stale
+ * for the whole match. Now runs every 2 min around the clock; the
+ * isMatchWindowActive() short-circuit below keeps the no-op cost at ~0 calls
+ * outside match windows.
  *
  * Short-circuit: reuses isMatchWindowActive() (same guard as sync-results).
  * If no unprocessed match is scheduled within ±3h of now, exits immediately

@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/live-poll",
-      "schedule": "*/2 6-23 * * *"
+      "schedule": "*/2 * * * *"
     }
   ]
 }
