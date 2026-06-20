@@ -39,6 +39,11 @@ export default function Ticker() {
 
   const doubled = [...items, ...items];
 
+  // Don't render the ticker wrap at all while items aren't loaded yet.
+  // Avoids an invisible 30px bar AND ensures the CSS animation starts only
+  // once real content is present (iOS Safari won't animate an empty element).
+  if (doubled.length === 0) return null;
+
   return (
     <>
       <div className={styles.wrap} aria-label={t('ariaLabel')}>

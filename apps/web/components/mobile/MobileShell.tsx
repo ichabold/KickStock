@@ -159,7 +159,7 @@ export default function MobileShell() {
 
       {/* CONTENT */}
       <main className={styles.scroll}>
-        {tab === 'schedule'  && <ScheduleTab />}
+        {tab === 'schedule'  && <ScheduleTab activeView={standingsView} />}
         {tab === 'standings' && <StandingsTab activeView={standingsView} />}
         {tab === 'simulate'  && (isOnline
           ? <LiveTab />

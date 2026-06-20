@@ -29,9 +29,10 @@ export default function StandingsCard({ group, teams, matchday, onNationClick }:
 
       <ol className={styles.list}>
         {teams.map((t, i) => {
-          const hist   = priceHistory[t.id] ?? [];
-          const prevP  = hist.length >= 2 ? hist[hist.length - 2] : t.initP;
-          const ch     = pctOf(t.price, prevP);
+          const hist    = priceHistory[t.id] ?? [];
+          const rawPrev = hist.length >= 2 ? hist[hist.length - 2] : null;
+          const prevP   = (rawPrev != null && rawPrev > 0) ? rawPrev : t.initP;
+          const ch      = pctOf(t.price, prevP);
           const isQ    = i < 2;
           const held   = (portfolio[t.id] ?? 0) > 0;
           const upDown = ch >= 0 ? 'up' : 'dn';

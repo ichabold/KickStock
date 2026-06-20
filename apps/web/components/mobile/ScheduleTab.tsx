@@ -17,7 +17,7 @@ function formatR32SlotLabel(slot: LiveR32Slot): string {
   return `3e (${slot.candidates?.join('/') ?? '?'})`;
 }
 
-export default function ScheduleTab() {
+export default function ScheduleTab({ activeView = 'groups' }: { activeView?: 'groups' | 'ko' }) {
   const t  = useTranslations('schedule');
   const tc = useTranslations('common');
   const tlive = useTranslations('live');
@@ -41,18 +41,29 @@ export default function ScheduleTab() {
 
   const currentDayRef = useRef<HTMLDivElement>(null);
 
+  // Scroll to the right anchor whenever activeView changes too.
   useEffect(() => {
     currentDayRef.current?.scrollIntoView({ block: 'center' });
-  }, []);
+  }, [activeView]);
 
   if (!bootstrap) {
     return <div style={{ padding: 24, color: 'var(--muted)', textAlign: 'center' }}>{tc('loading')}</div>;
   }
 
+  // Filter days by the active view: groups = non-KO days; ko = KO days.
+  const visibleDays = bootstrap.days.filter(d =>
+    activeView === 'groups' ? !d.is_ko : d.is_ko
+  );
+
+  // Scroll target:
+  //  – groups view → last played day (dayIndex - 1) so the user sees yesterday's results
+  //  – ko view     → current/next day
+  const scrollTargetDi = activeView === 'groups' ? dayIndex - 1 : dayIndex;
+
   return (
     <>
       <div>
-        {bootstrap.days.map((day) => {
+        {visibleDays.map((day) => {
           const di        = day.day_index;
           const isPast    = di < dayIndex;
           const isCurrent = di === dayIndex;
@@ -89,7 +100,7 @@ export default function ScheduleTab() {
           return (
             <div
               key={di}
-              ref={isCurrent ? currentDayRef : undefined}
+              ref={di === scrollTargetDi ? currentDayRef : undefined}
               className={`${styles.dayBlock} ${isCurrent ? styles.current : ''} ${isPast ? styles.past : ''}`}
             >
               <div className={styles.dayHeader}>

@@ -739,9 +739,10 @@ function StandingsView({ onNationClick, onMatchClick }: {
               </tr></thead>
               <tbody>
                 {standTeams.map((t, i) => {
-                  const hist  = priceHistory[t.id] ?? [];
-                  const prevP = hist.length >= 2 ? hist[hist.length - 2] : t.initP;
-                  const ch    = pctOf(t.price, prevP);
+                  const hist    = priceHistory[t.id] ?? [];
+                  const rawPrev = hist.length >= 2 ? hist[hist.length - 2] : null;
+                  const prevP   = (rawPrev != null && rawPrev > 0) ? rawPrev : t.initP;
+                  const ch      = pctOf(t.price, prevP);
                   const up    = ch >= 0;
                   const isQ   = i < 2 || r32Pool.includes(t.id);
                   const held  = (portfolio[t.id] ?? 0) > 0;
@@ -1109,7 +1110,9 @@ export default function BrowserShell() {
             {[...tickerTeams, ...tickerTeams].map((n, i) => {
               const p = prices[n.id] ?? n.initialPrice;
               const hst = priceHistMain[n.id] ?? [];
-              const prevPt = hst.length >= 2 ? hst[hst.length - 2] : n.initialPrice;
+              // hst may be a sparse array from the server (null at gaps) — guard against null/0.
+              const rawPrevPt = hst.length >= 2 ? hst[hst.length - 2] : null;
+              const prevPt = (rawPrevPt != null && rawPrevPt > 0) ? rawPrevPt : n.initialPrice;
               const up = p >= prevPt;
               const pct = ((p - prevPt) / prevPt * 100).toFixed(1);
               return <span key={i} className="ti">{n.flag} {n.id} <span className={up ? 'up' : 'dn'}>{Math.round(p)} {up ? '▲+' : '▼'}{Math.abs(Number(pct))}%</span></span>;
