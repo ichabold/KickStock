@@ -52,6 +52,7 @@ export interface LiveMatch {
   fixture_id:       number | null;
   nation_a:         string;
   nation_b:         string;
+  scheduled_at:     string | null;
   api_status:       string;
   score_a:          number | null;
   score_b:          number | null;
@@ -77,6 +78,7 @@ interface OnlineGameStore extends GameState {
   /** Raw rows from /api/game/live-matches — used to show live scores on the schedule. */
   liveMatches:      LiveMatch[];
   _lockPollId:      ReturnType<typeof setInterval> | null;
+  _visibilityHandler: (() => void) | null;
 
   loadBootstrap:    () => Promise<void>;
   fetchState:       () => Promise<void>;
@@ -126,9 +128,10 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   error:            null,
   _pollId:          null,
   _realtimeChannel: null,
-  lockedTeams:      new Set<string>(),
-  liveMatches:      [],
-  _lockPollId:      null,
+  lockedTeams:         new Set<string>(),
+  liveMatches:         [],
+  _lockPollId:         null,
+  _visibilityHandler:  null,
 
   // ── loadBootstrap ────────────────────────────────────────────────────────────
   loadBootstrap: async () => {
@@ -180,10 +183,11 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
   },
 
   // ── refreshLockedTeams ───────────────────────────────────────────────────────
-  // Mirrors the server-side check added to execute_competition_trade
-  // (db/migrations/023): a team is locked while its match is currently live
-  // (api_status IN 1H/HT/2H/ET/BT/P) or while its post-match `trade_lock_until`
-  // window (set by process-real-result.ts, +15min) is still active.
+  // Mirrors the server-side lock check in execute_competition_trade
+  // (db/migrations/024): a team is locked when its match is unprocessed AND any of:
+  //   - scheduled_at <= now (kick-off time reached, even before cron confirms 1H)
+  //   - api_status is a live value (1H/HT/2H/ET/BT/P)
+  //   - trade_lock_until is still in the future (15-min post-match window)
   refreshLockedTeams: async () => {
     const LIVE_STATUSES = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P']);
     try {
@@ -195,8 +199,12 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
       const now = Date.now();
       const locked = new Set<string>();
       for (const m of data.matches ?? []) {
-        const lockUntil = m.trade_lock_until ? new Date(m.trade_lock_until).getTime() : null;
-        const isLocked  = LIVE_STATUSES.has(m.api_status) || (lockUntil !== null && lockUntil > now);
+        const scheduledAt = m.scheduled_at ? new Date(m.scheduled_at).getTime() : null;
+        const lockUntil   = m.trade_lock_until ? new Date(m.trade_lock_until).getTime() : null;
+        const isLocked    =
+          LIVE_STATUSES.has(m.api_status)
+          || (lockUntil !== null && lockUntil > now)
+          || (scheduledAt !== null && scheduledAt <= now && !m.processed_at);
         if (isLocked) {
           locked.add(m.nation_a);
           locked.add(m.nation_b);
@@ -219,6 +227,17 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
 
     const lockId = setInterval(() => { get().refreshLockedTeams(); }, 30_000);
     set({ _lockPollId: lockId });
+
+    // Refresh immediately when the player returns to the tab — browsers throttle
+    // setInterval in backgrounded tabs (Chrome/Firefox: ≥1 min), so the lock
+    // state can be arbitrarily stale. visibilitychange fires the instant the tab
+    // becomes visible, closing the window where a stale-cache trade could succeed.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') get().refreshLockedTeams();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    set({ _visibilityHandler: onVisible });
+
     get().refreshLockedTeams();
 
     // fetchState() resolves the active competition (via loadBootstrap) before
@@ -251,15 +270,22 @@ export const useOnlineGameStore = create<OnlineGameStore>((set, get) => ({
 
   // ── stopSync ─────────────────────────────────────────────────────────────────
   stopSync: () => {
-    const { _pollId, _realtimeChannel, _lockPollId } = get();
+    const { _pollId, _realtimeChannel, _lockPollId, _visibilityHandler } = get();
     if (_pollId) clearInterval(_pollId);
     if (_lockPollId) clearInterval(_lockPollId);
+    if (_visibilityHandler) document.removeEventListener('visibilitychange', _visibilityHandler);
     if (_realtimeChannel) createClient().removeChannel(_realtimeChannel);
-    set({ _pollId: null, _realtimeChannel: null, _lockPollId: null });
+    set({ _pollId: null, _realtimeChannel: null, _lockPollId: null, _visibilityHandler: null });
   },
 
   // ── trade ────────────────────────────────────────────────────────────────────
   trade: async (mode, nationId, quantity) => {
+    // Force a fresh lock check before any client-side validation or API call.
+    // The store's lockedTeams can be stale (backgrounded tab, interval not yet
+    // fired) — refreshing here ensures the UI gives an accurate error instead of
+    // silently sending a request that the server will reject with 422.
+    await get().refreshLockedTeams();
+
     const s     = get();
     const team  = s._teams.find(t => t.id === nationId);
     if (!team) return 'Nation introuvable';

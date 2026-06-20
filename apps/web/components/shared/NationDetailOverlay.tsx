@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { fmt, pctOf } from '@kickstock/game-engine';
 import { useGameStore } from '@/stores/gameStore';
@@ -44,11 +44,12 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
   const t = useTranslations('nationDetail');
   const [tradeMode, setTradeMode] = useState<TradeMode | null>(null);
 
-  const prices       = useGameStore(s => s.prices);
-  const portfolio    = useGameStore(s => s.portfolio);
-  const avgCost      = useGameStore(s => s.avgCost);
-  const eliminated   = useGameStore(s => s.eliminated);
-  const lockedTeams  = useGameStore(s => s.lockedTeams);
+  const prices             = useGameStore(s => s.prices);
+  const portfolio          = useGameStore(s => s.portfolio);
+  const avgCost            = useGameStore(s => s.avgCost);
+  const eliminated         = useGameStore(s => s.eliminated);
+  const lockedTeams        = useGameStore(s => s.lockedTeams);
+  const refreshLockedTeams = useGameStore(s => s.refreshLockedTeams);
   const matchResults = useGameStore(s => s.matchResults);
   const teams     = useGameStore(s => s._teams);
   const bootstrap = useGameStore(s => s._bootstrap);
@@ -64,6 +65,13 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
   const avg    = avgCost[nationId] ?? teamMeta.initialPrice;
   const isElim  = eliminated.includes(nationId);
   const isLocked = lockedTeams.has(nationId);
+
+  const openTrade = useCallback(async (m: TradeMode) => {
+    await refreshLockedTeams();
+    // Re-read after refresh — lockedTeams is updated in the store
+    if (useGameStore.getState().lockedTeams.has(nationId)) return;
+    setTradeMode(m);
+  }, [nationId, refreshLockedTeams]);
   const ch     = pctOf(price, teamMeta.initialPrice);
   const val    = held * price;
   const pnl    = (price - avg) * held;
@@ -229,14 +237,14 @@ export default function NationDetailOverlay({ nationId, onClose }: Props) {
             <button
               className={styles.buyBtn}
               disabled={isElim}
-              onClick={() => setTradeMode('buy')}
+              onClick={() => openTrade('buy')}
             >
               + ACHETER
             </button>
             <button
               className={styles.sellBtn}
               disabled={held === 0}
-              onClick={() => setTradeMode('sell')}
+              onClick={() => openTrade('sell')}
             >
               − VENDRE
             </button>

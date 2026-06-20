@@ -88,6 +88,8 @@ interface LocalGameStore extends GameState {
   lockedTeams: Set<string>;
   /** Offline mode has no live feed — always empty. Kept for type parity with onlineGameStore. */
   liveMatches: LiveMatch[];
+  /** No-op in offline mode — kept for type parity with onlineGameStore. */
+  refreshLockedTeams: () => Promise<void>;
 
   fetchState:       () => Promise<void>;
   loadBootstrap:    () => Promise<void>;
@@ -248,6 +250,8 @@ export const useLocalGameStore = create<LocalGameStore>()(
         if (id) clearInterval(id);
         set({ _pollId: null });
       },
+
+      refreshLockedTeams: async () => { /* no-op: offline mode never locks trades */ },
 
       // ── trade ────────────────────────────────────────────────────────────────
       trade: async (mode, nationId, quantity) => {
