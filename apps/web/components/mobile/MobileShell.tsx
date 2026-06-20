@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useGameStore, fmt } from '@/stores/gameStore';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
@@ -88,8 +88,16 @@ export default function MobileShell() {
   const progressPct = Math.min(100, (dayIndex / Math.max(1, totalDays)) * 100);
 
   // Groups / KO view toggle (lifted from StandingsTab so the status bar can control it)
-  const isKOPhase = !day || day.phase !== 'Groups';
-  const [standingsView, setStandingsView] = useState<'groups' | 'ko'>(() => isKOPhase ? 'ko' : 'groups');
+  // Only switch to 'ko' once bootstrap is loaded AND we're past the group phase.
+  // (!day alone is not enough — bootstrap may still be loading.)
+  const isKOPhase = !!bootstrap && !!day && day.phase !== 'Groups';
+  const [standingsView, setStandingsView] = useState<'groups' | 'ko'>('groups');
+  // Auto-switch to 'ko' the first time KO phase is confirmed (won't re-fire on every render).
+  const prevIsKORef = useRef(false);
+  useEffect(() => {
+    if (isKOPhase && !prevIsKORef.current) setStandingsView('ko');
+    prevIsKORef.current = isKOPhase;
+  }, [isKOPhase]);
 
   return (
     <div className={styles.shell}>

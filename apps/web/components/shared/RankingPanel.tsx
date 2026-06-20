@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameMode } from '@/hooks/useGameMode';
-import { useLeaderboard } from '@/hooks/useLeaderboard';
+import { useOfflineRanking } from '@/hooks/useOfflineRanking';
 import { useOnlineRanking } from '@/hooks/useOnlineRanking';
 import { useGameStore, fmt } from '@/stores/gameStore';
-import { getPseudo } from '@/lib/pseudo';
 
 type Tab = 'online' | 'offline';
 
@@ -16,11 +15,10 @@ type Tab = 'online' | 'offline';
  * ranking overlay.
  *
  * - "Online" tab: live standings (cash + holdings value) for every player
- *   in the active competition, sorted descending. If the logged-in player
- *   isn't in the visible top N, their row is appended at the end with
- *   their actual rank.
- * - "Offline" tab: best scores reached at the end of finished offline games
- *   (portfolios.best_score, via the `leaderboard` view).
+ *   in the active competition, sorted descending.
+ * - "Offline" tab: best-ever scores of REGISTERED players only (1 row per
+ *   player, MAX across all competitions). Guests are excluded to keep the
+ *   ranking meaningful.
  *
  * Defaults to the tab matching the player's current game mode.
  */
@@ -39,63 +37,63 @@ export default function RankingPanel() {
   const prices    = useGameStore(s => s.prices);
   const portfolio = useGameStore(s => s.portfolio);
 
-  const [guestPseudo, setGuestPseudo] = useState<string | null>(null);
-  useEffect(() => {
-    setGuestPseudo(getPseudo());
-    function onSaved() { setGuestPseudo(getPseudo()); }
-    window.addEventListener('kickstock:pseudo-saved', onSaved);
-    return () => window.removeEventListener('kickstock:pseudo-saved', onSaved);
-  }, []);
-
-  const offline = useLeaderboard(50);
+  const offline = useOfflineRanking(50);
   const online  = useOnlineRanking(50);
 
-  // Re-fetch both rankings whenever the player's identity changes (login,
-  // logout, or a fresh guest pseudo). Without this, switching accounts in
-  // the same session keeps showing the previous identity's cached rows
-  // (wrong "me" highlight, wrong pseudo, stale total/trophy) until the
-  // next 30s poll.
+  // Re-fetch when identity changes (login / logout)
   useEffect(() => {
     online.refresh();
     offline.refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, guestPseudo]);
+  }, [user?.id]);
 
-  const portVal = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
-  const myTotal = cash + portVal;
+  const portVal  = Object.entries(portfolio).reduce((a, [id, q]) => a + q * (prices[id] ?? 0), 0);
+  const myTotal  = cash + portVal;
 
-  const offlineRank = profile
-    ? offline.entries.findIndex(e => e.username === profile.username) + 1
-    : guestPseudo
-      ? offline.entries.findIndex(e => e.username === guestPseudo) + 1
-      : 0;
+  // "me" in offline tab: matched by user_id via the API
+  const offlineMe   = offline.me;
+  const offlineRank = offlineMe?.rank ?? null;
 
   const myRank = tab === 'offline'
-    ? (offlineRank > 0 ? offlineRank : null)
+    ? offlineRank
     : (online.me?.rank ?? null);
 
-  const loading = tab === 'offline' ? offline.loading : online.loading;
-  const refresh = tab === 'offline' ? offline.refresh : online.refresh;
+  const loading     = tab === 'offline' ? offline.loading : online.loading;
+  const refresh     = tab === 'offline' ? offline.refresh : online.refresh;
   const entriesEmpty = tab === 'offline' ? offline.entries.length === 0 : online.entries.length === 0;
 
   const leaderScore = tab === 'offline'
     ? (offline.entries[0] ? Number(offline.entries[0].best_score) : null)
-    : (online.entries[0] ? Number(online.entries[0].total_value) : null);
+    : (online.entries[0]  ? Number(online.entries[0].total_value) : null);
+
+  // My best score (offline tab) — from the API row
+  const myBestScore = tab === 'offline' ? (offlineMe ? Number(offlineMe.best_score) : null) : null;
 
   return (
     <div className="rnk-wrap">
       {/* My score card */}
       <div className="rnk-mycard">
         <div>
-          <div className="rnk-mylbl">{ts('total')}</div>
-          <div className="rnk-myval">{fmt(myTotal)} KC</div>
-          {leaderScore != null && <div className="rnk-mybest">🏆 {fmt(leaderScore)} KC</div>}
+          <div className="rnk-mylbl">{tab === 'offline' ? 'BEST SCORE' : ts('total')}</div>
+          <div className="rnk-myval">
+            {tab === 'offline'
+              ? (myBestScore != null ? `${fmt(myBestScore)} KC` : '—')
+              : `${fmt(myTotal)} KC`
+            }
+          </div>
+          {leaderScore != null && (
+            <div className="rnk-mybest">🏆 {fmt(leaderScore)} KC</div>
+          )}
         </div>
-        {!user && !guestPseudo
+        {!user
           ? <a href="/login" className="rnk-login">⚽ LOGIN</a>
           : myRank
             ? <div className="rnk-myrank">#{myRank}</div>
-            : <div className="rnk-noscore">{ts('tournamentEnded')}</div>
+            : tab === 'offline'
+              ? <div className="rnk-noscore" style={{fontSize:10,color:'var(--muted)',textAlign:'center',maxWidth:80}}>
+                  Finissez une partie offline pour apparaître
+                </div>
+              : <div className="rnk-noscore">{ts('tournamentEnded')}</div>
         }
       </div>
 
@@ -108,6 +106,13 @@ export default function RankingPanel() {
         </button>
       </div>
 
+      {/* Offline tab: registered-only notice */}
+      {tab === 'offline' && !loading && (
+        <div style={{fontSize:9,color:'var(--muted)',textAlign:'center',padding:'4px 0 8px',letterSpacing:1}}>
+          🔒 JOUEURS ENREGISTRÉS · 1 SCORE PAR JOUEUR
+        </div>
+      )}
+
       {loading && <div className="rnk-empty">{tc('loading')}</div>}
 
       {!loading && entriesEmpty && (
@@ -118,29 +123,32 @@ export default function RankingPanel() {
       )}
 
       <div className="rnk-list">
+        {/* ── Offline tab ──────────────────────────────────────────────────── */}
         {!loading && tab === 'offline' && offline.entries.map((p, i) => {
-          const isMe = (!!profile && p.username === profile.username)
-                    || (!!guestPseudo && p.username === guestPseudo);
+          const isMe = !!user && p.user_id === user.id;
+          const isOutOfRange = isMe && i === offline.entries.length - 1
+            && offline.entries.length > 1 && p.rank !== offline.entries.length;
           return (
-            <div key={`${p.username}-${i}`} className={`rnk-row${isMe ? ' me' : ''}`}>
-              <div className={`rnk-rank${i < 3 ? ' top' : ''}`}>{i + 1}</div>
-              <div className="rnk-av" style={isMe ? { background: 'var(--gold)', color: '#000' } : {}}>
-                {p.username[0]?.toUpperCase() ?? '?'}
-              </div>
-              <div className="rnk-info">
-                <div className="rnk-name">
-                  {p.username}{isMe ? ' 👤' : ''}
-                  {p.user_type === 'guest' && <span className="rnk-guest">GUEST</span>}
+            <div key={p.user_id}>
+              {isOutOfRange && <div className="rnk-sep">⋯</div>}
+              <div className={`rnk-row${isMe ? ' me' : ''}`}>
+                <div className={`rnk-rank${p.rank <= 3 ? ' top' : ''}`}>{p.rank}</div>
+                <div className="rnk-av" style={isMe ? { background: 'var(--gold)', color: '#000' } : {}}>
+                  {p.username[0]?.toUpperCase() ?? '?'}
                 </div>
-                <div className="rnk-sub">{p.country ?? '🌍'}</div>
+                <div className="rnk-info">
+                  <div className="rnk-name">{p.username}{isMe ? ' 👤' : ''}</div>
+                  <div className="rnk-sub">{p.country ?? '🌍'}</div>
+                </div>
+                <div className="rnk-val">{fmt(Number(p.best_score))} KC</div>
               </div>
-              <div className="rnk-val">{fmt(Number(p.best_score))} KC</div>
             </div>
           );
         })}
 
+        {/* ── Online tab ───────────────────────────────────────────────────── */}
         {!loading && tab === 'online' && online.entries.map((p, i) => {
-          const isMe   = online.me?.portfolio_id === p.portfolio_id;
+          const isMe = online.me?.portfolio_id === p.portfolio_id;
           const isOutOfRange = isMe && i === online.entries.length - 1
             && online.entries.length > 1 && p.rank !== online.entries.length;
           return (

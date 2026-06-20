@@ -38,6 +38,16 @@ function getDynamicKey(bootstrap: BootstrapData, phase: string, dayIndex: number
   return phase.toLowerCase();
 }
 
+// ─── CET time formatter ───────────────────────────────────────────────────────
+function fmtCET(iso: string): string {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour:   '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
+}
+
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 function Spark({ history, up }: { history: number[]; up: boolean }) {
   if (history.length < 2) return <svg className="spk" viewBox="0 0 100 24" preserveAspectRatio="none"><line x1="0" y1="12" x2="100" y2="12" stroke="#333" strokeWidth="1" strokeDasharray="3,2"/></svg>;
@@ -242,7 +252,9 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
                         {liveSA}–{liveSB}
                       </div>
                     ) : (
-                      m.venue && <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>
+                      <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>
+                        {live?.scheduled_at ? fmtCET(live.scheduled_at) + ' CET' : m.venue ?? ''}
+                      </div>
                     )}
                     <div className={`mbadge ${res ? 'done' : isLive ? 'live' : isDone ? 'done' : 'soon'}`}>
                       {res
@@ -329,6 +341,8 @@ function ScheduleView({ onNationClick, onMatchClick }: {
   const bootstrap = useGameStore(s => s._bootstrap);
   const teams     = useGameStore(s => s._teams);
 
+  const liveMatches  = useGameStore(s => s.liveMatches);
+
   const liveR32Pool = useMemo(
     () => buildLiveR32Pool(matchResults, teams, eliminated),
     [matchResults, teams, eliminated],
@@ -383,9 +397,14 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                         >
                           {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
                         </button>
-                      ) : m.venue ? (
-                        <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div>
-                      ) : null}
+                      ) : (() => {
+                        const lm = liveMatches.find(lm =>
+                          (lm.nation_a === m.nation_a && lm.nation_b === m.nation_b) ||
+                          (lm.nation_a === m.nation_b && lm.nation_b === m.nation_a)
+                        );
+                        const timeStr = lm?.scheduled_at ? fmtCET(lm.scheduled_at) + ' CET' : m.venue ?? null;
+                        return timeStr ? <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{timeStr}</div> : null;
+                      })()}
                       <div className={`mbadge ${isPast ? 'done' : isCur ? 'soon' : ''}`}>
                         {isPast ? 'FT' : isCur ? tsch('next') : tsch('upcomingBadge')}
                       </div>
