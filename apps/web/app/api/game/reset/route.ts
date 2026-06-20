@@ -20,16 +20,32 @@ export async function POST(req: NextRequest) {
     const { competitionId } = await req.json() as { competitionId: number };
     const deviceId = req.headers.get('X-Device-ID') ?? null;
 
-    if (!competitionId || !deviceId) {
-      return NextResponse.json({ error: 'competitionId et X-Device-ID requis' }, { status: 400 });
+    if (!competitionId) {
+      return NextResponse.json({ error: 'competitionId requis' }, { status: 400 });
     }
 
-    // ── Vérification de signature device_id (anti-usurpation) ─────────────────
-    const deviceErr = await verifyDevice(req, deviceId);
-    if (deviceErr) return deviceErr;
+    // Resolve auth first — authenticated users bypass device signature check.
+    // (iOS PWA: auth cookies shared with Safari; localStorage / device_id is not.)
+    const admin = createAdminClient();
+
+    let userId: string | null = null;
+    try {
+      const sb = await createServerClient();
+      const { data: { user } } = await sb.auth.getUser();
+      userId = user?.id ?? null;
+    } catch { /* anonymous */ }
+
+    if (!userId) {
+      if (!deviceId) {
+        return NextResponse.json({ error: 'competitionId et X-Device-ID requis' }, { status: 400 });
+      }
+      // ── Vérification de signature device_id (anti-usurpation) ───────────────
+      const deviceErr = await verifyDevice(req, deviceId);
+      if (deviceErr) return deviceErr;
+    }
 
     // ── Rate limiting (anti-spam reset) ───────────────────────────────────────
-    const rateLimitId = deviceId
+    const rateLimitId = deviceId ?? userId
       ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
     const rl = await checkRateLimit('reset', rateLimitId);
     if (rl.limited) {
@@ -43,15 +59,6 @@ export async function POST(req: NextRequest) {
         },
       );
     }
-
-    const admin = createAdminClient();
-
-    let userId: string | null = null;
-    try {
-      const sb = await createServerClient();
-      const { data: { user } } = await sb.auth.getUser();
-      userId = user?.id ?? null;
-    } catch { /* anonymous */ }
 
     const { data: portfolioId } = await adm(admin).rpc(
       'get_or_create_competition_portfolio',

@@ -41,8 +41,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'invalid_device_id' }, { status: 400 });
     }
 
-    const deviceErr = await verifyDevice(req, deviceId);
-    if (deviceErr) return deviceErr;
+    // Authenticated users are identified by their Supabase session (JWT verified
+    // server-side) — device signature is only needed for anonymous guests.
+    // This also fixes iOS PWA: Supabase auth is stored in cookies (always shared
+    // between Safari and the PWA), but device_id lives in localStorage which is
+    // isolated before iOS 16.4, causing verifyDevice to fail with a new device ID.
+    if (!userId) {
+      const deviceErr = await verifyDevice(req, deviceId);
+      if (deviceErr) return deviceErr;
+    }
 
     const rateLimitId = deviceId ?? userId ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
     const rl = await checkRateLimit('state', rateLimitId);

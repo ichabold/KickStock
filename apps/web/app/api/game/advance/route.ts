@@ -51,15 +51,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'competitionId requis' }, { status: 400 });
     }
 
-    const deviceErr = await verifyDevice(req, deviceId);
-    if (deviceErr) return deviceErr;
-
-    // UUID v4 obligatoire — rejette tout appel sans device_id valide
-    const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!deviceId || !UUID_V4.test(deviceId)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    // Resolve auth first — authenticated users bypass device signature check.
+    // (iOS PWA: auth cookies are always shared with Safari, but localStorage /
+    //  device_id is isolated before iOS 16.4.)
     let userId: string | null = null;
     try {
       const sb = await createServerClient();
@@ -67,9 +61,18 @@ export async function POST(req: NextRequest) {
       userId = user?.id ?? null;
     } catch { /* fine */ }
 
-    // Le device doit avoir un portfolio dans cette compétition, ou être authentifié.
-    // Empêche n'importe qui d'avancer la compétition sans y participer.
     if (!userId) {
+      const deviceErr = await verifyDevice(req, deviceId);
+      if (deviceErr) return deviceErr;
+
+      // UUID v4 obligatoire pour les joueurs anonymes
+      const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!deviceId || !UUID_V4.test(deviceId)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      // Le device doit avoir un portfolio dans cette compétition.
+      // Empêche n'importe qui d'avancer la compétition sans y participer.
       const { data: pfCheck } = await A(admin)
         .from('portfolios')
         .select('id')

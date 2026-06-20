@@ -32,20 +32,26 @@ export async function POST(req: NextRequest) {
     }
 
     const deviceId = req.headers.get('X-Device-ID') ?? null;
-    if (!deviceId) {
-      return NextResponse.json({ code: 'MISSING_DEVICE_ID', error: 'X-Device-ID requis' }, { status: 400 });
-    }
 
-    const deviceErr = await verifyDevice(req, deviceId);
-    if (deviceErr) return deviceErr;
-
-    // Resolve authenticated user identity (best-effort)
+    // Resolve authenticated user identity first — authenticated users bypass
+    // device signature check (Supabase JWT is the identity proof).
+    // This also fixes iOS PWA where localStorage (device_id) is isolated from
+    // Safari but auth cookies are always shared.
     let userId: string | null = null;
     try {
       const sessionedClient = await createServerClient();
       const { data: { user } } = await sessionedClient.auth.getUser();
       if (user?.id) userId = user.id;
     } catch { /* anonymous player — proceed without userId */ }
+
+    if (!deviceId && !userId) {
+      return NextResponse.json({ code: 'MISSING_DEVICE_ID', error: 'X-Device-ID requis' }, { status: 400 });
+    }
+
+    if (!userId) {
+      const deviceErr = await verifyDevice(req, deviceId);
+      if (deviceErr) return deviceErr;
+    }
 
     const rateLimitId = deviceId ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
     const rl = await checkRateLimit('trade', rateLimitId);

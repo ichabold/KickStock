@@ -24,7 +24,7 @@ interface Props {
   coachTarget?: string;
 }
 
-function Sparkline({ history, up }: { history: number[]; up: boolean }) {
+function Sparkline({ history }: { history: number[] }) {
   if (history.length < 2) return null;
   const w = 100, h = 36;
   const min = Math.min(...history);
@@ -36,17 +36,24 @@ function Sparkline({ history, up }: { history: number[]; up: boolean }) {
     return [x, y] as const;
   });
   const polyline = points.map(([x, y]) => `${x},${y}`).join(' ');
-  // Anchor the fill area at the initial-price Y level instead of the bottom edge.
-  // This makes the filled region grow toward the current price on the right side,
-  // keeping it visible whether the stock rose or fell.
+
+  // Derive trend purely from history data (first entry = initial, last = current).
+  // This avoids depending on nation.p or the prices store, which can race / differ.
+  const sparkUp = (history[history.length - 1] ?? 0) >= (history[0] ?? 0);
+  const color   = sparkUp ? 'var(--gain)' : 'var(--loss)';
+
+  // Anchor the fill at the initial-price Y level (points[0][1]) instead of the
+  // bottom edge. For a rising stock the triangle opens upward on the right;
+  // for a falling stock it opens downward on the right — both correctly show
+  // the direction of the move rather than a misleading "all starts from bottom".
   const initY = points[0][1];
   const area  = `M0,${initY} L` + points.map(([x, y]) => `${x},${y}`).join(' L') + ` L${w},${initY} Z`;
-  const color = up ? 'var(--gain)' : 'var(--loss)';
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const gradId = useMemo(() => `g${Math.random().toString(36).slice(2, 8)}`, []);
   // For declining stocks invert the gradient so opacity is highest near the
-  // current (low) price at the bottom, making the descent clearly visible.
-  const [y1, y2] = up ? ['0', '1'] : ['1', '0'];
+  // current (low) price, making the descent clearly visible.
+  const [y1, y2] = sparkUp ? ['0', '1'] : ['1', '0'];
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className={styles.spark} preserveAspectRatio="none">
@@ -74,13 +81,13 @@ export default function NationCard({
   const eliminated = useGameStore(s => s.eliminated);
   const lockedTeams = useGameStore(s => s.lockedTeams);
 
-  const price  = prices[nation.id] ?? nation.p;
-  const held   = portfolio[nation.id] ?? 0;
-  const isElim = eliminated.includes(nation.id);
+  const price   = prices[nation.id] ?? nation.p;
+  const held    = portfolio[nation.id] ?? 0;
+  const isElim  = eliminated.includes(nation.id);
   const isLocked = lockedTeams.has(nation.id);
-  // Use price before the last match (second-to-last history entry) for the ▲/▼ indicator.
-  const prevP  = history.length >= 2 ? history[history.length - 2] : nation.p;
-  const up     = price >= prevP;
+  // prevPrice: price before last match — used for the ▲/▼ last-movement indicator.
+  // Sparkline derives its own trend from history data independently.
+  const prevPrice = history.length >= 2 ? history[history.length - 2] : undefined;
 
   const cardClass = [
     styles.card,
@@ -115,6 +122,7 @@ export default function NationCard({
 
       <PriceDisplay
         nation={nation}
+        prevPrice={prevPrice}
         wrapClassName={styles.priceRow}
         priceClassName={styles.price}
         kcClassName={styles.kc}
@@ -122,7 +130,7 @@ export default function NationCard({
         changeDnClassName={`${styles.ch} ${styles.dn}`}
       />
 
-      <Sparkline history={history} up={up} />
+      <Sparkline history={history} />
 
       {isElim ? (
         <div className={styles.disabled}>{ts('eliminatedBadge')}</div>
