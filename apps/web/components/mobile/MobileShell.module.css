@@ -60,9 +60,12 @@
   flex-shrink: 0;
 }
 .statusDay { font-family: var(--font-mono); font-size: var(--fs-eyebrow); color: var(--muted); font-weight: 600; }
-.pill { font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid; }
-.pillGroup { border-color: var(--gold-dk); color: var(--gold); }
-.pillKO    { border-color: var(--loss-dk); color: var(--loss); }
+.pill { font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: 1px; padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid; background: none; cursor: pointer; font-family: inherit; }
+.pillGroup    { border-color: var(--gold-dk); color: var(--gold); }
+.pillInactive { border-color: var(--border); color: var(--dim); }
+/* KO button: yellow-filled when active, dim outline when inactive */
+.pillKOActive   { border-color: var(--gold); background: var(--gold); color: #000; }
+.pillKOInactive { border-color: var(--border); color: var(--dim); }
 
 .scroll {
   flex: 1;

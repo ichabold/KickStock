@@ -36,15 +36,22 @@ function Sparkline({ history, up }: { history: number[]; up: boolean }) {
     return [x, y] as const;
   });
   const polyline = points.map(([x, y]) => `${x},${y}`).join(' ');
-  const area = `M0,${h} L` + points.map(([x, y]) => `${x},${y}`).join(' L') + ` L${w},${h} Z`;
+  // Anchor the fill area at the initial-price Y level instead of the bottom edge.
+  // This makes the filled region grow toward the current price on the right side,
+  // keeping it visible whether the stock rose or fell.
+  const initY = points[0][1];
+  const area  = `M0,${initY} L` + points.map(([x, y]) => `${x},${y}`).join(' L') + ` L${w},${initY} Z`;
   const color = up ? 'var(--gain)' : 'var(--loss)';
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const gradId = useMemo(() => `g${Math.random().toString(36).slice(2, 8)}`, []);
+  // For declining stocks invert the gradient so opacity is highest near the
+  // current (low) price at the bottom, making the descent clearly visible.
+  const [y1, y2] = up ? ['0', '1'] : ['1', '0'];
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className={styles.spark} preserveAspectRatio="none">
       <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gradId} x1="0" y1={y1} x2="0" y2={y2}>
           <stop offset="0%"   stopColor={color} stopOpacity="0.25" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
@@ -71,7 +78,9 @@ export default function NationCard({
   const held   = portfolio[nation.id] ?? 0;
   const isElim = eliminated.includes(nation.id);
   const isLocked = lockedTeams.has(nation.id);
-  const up     = price >= nation.p;
+  // Use price before the last match (second-to-last history entry) for the ▲/▼ indicator.
+  const prevP  = history.length >= 2 ? history[history.length - 2] : nation.p;
+  const up     = price >= prevP;
 
   const cardClass = [
     styles.card,

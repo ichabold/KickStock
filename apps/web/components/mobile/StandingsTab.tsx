@@ -25,7 +25,7 @@ const koLabelKeys: Record<KoPhase, KoLabelKey> = {
   R32: 'r32', R16: 'r16', QF: 'quarterFinals', SF: 'semiFinals', Final: 'final', '3rd': 'thirdPlace',
 };
 
-export default function StandingsTab() {
+export default function StandingsTab({ activeView }: { activeView: 'groups' | 'ko' }) {
   const t = useTranslations('standings');
   const [nationId,    setNationId]    = useState<string | null>(null);
   const [matchDetail, setMatchDetail] = useState<{ result: StoredMatchResult; dayLabel: string } | null>(null);
@@ -33,17 +33,11 @@ export default function StandingsTab() {
   const prices       = useGameStore(s => s.prices);
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
-  const dayIndex     = useGameStore(s => s.dayIndex);
   const champion     = useGameStore(s => s.champion);
   const bootstrap = useGameStore(s => s._bootstrap);
   const teams     = useGameStore(s => s._teams);
 
   const gN = (id: string) => teams.find(t => t.id === id);
-
-  const currentDay = bootstrap?.days.find(d => d.day_index === dayIndex);
-  const isKO = !currentDay || currentDay.phase !== 'Groups';
-
-  const [activeView, setActiveView] = useState<'groups' | 'ko'>(() => isKO ? 'ko' : 'groups');
 
   const standings = useMemo(
     () => buildGroupStandingsUI(matchResults, prices, eliminated, teams),
@@ -73,22 +67,6 @@ export default function StandingsTab() {
   return (
     <>
       <div>
-        {/* Groups / KO toggle */}
-        <div className={styles.viewToggle}>
-          <button
-            className={`${styles.toggleBtn} ${activeView === 'groups' ? styles.toggleActive : ''}`}
-            onClick={() => setActiveView('groups')}
-          >
-            GROUPS
-          </button>
-          <button
-            className={`${styles.toggleBtn} ${styles.toggleKO} ${activeView === 'ko' ? styles.toggleKOActive : ''}`}
-            onClick={() => setActiveView('ko')}
-          >
-            KO
-          </button>
-        </div>
-
         {activeView === 'groups' ? (
           /* ── Group Standings view ── */
           <>

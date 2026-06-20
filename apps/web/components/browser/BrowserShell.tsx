@@ -64,7 +64,8 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
   const isElim   = useGameStore(s => s.eliminated.includes(nation.id));
   // price + up needed locally for Sparkline gradient colour
   const price    = useGameStore(s => s.prices[nation.id] ?? nation.initialPrice);
-  const up       = price >= nation.initialPrice;
+  const prevP    = history.length >= 2 ? history[history.length - 2] : nation.initialPrice;
+  const up       = price >= prevP;
 
   return (
     <div
@@ -629,6 +630,7 @@ function StandingsView({ onNationClick, onMatchClick }: {
 }) {
   const tst = useTranslations('standings');
   const prices       = useGameStore(s => s.prices);
+  const priceHistory = useGameStore(s => s.priceHistory);
   const eliminated   = useGameStore(s => s.eliminated);
   const matchResults = useGameStore(s => s.matchResults);
   const dayIndex     = useGameStore(s => s.dayIndex);
@@ -737,7 +739,9 @@ function StandingsView({ onNationClick, onMatchClick }: {
               </tr></thead>
               <tbody>
                 {standTeams.map((t, i) => {
-                  const ch    = pctOf(t.price, t.initP);
+                  const hist  = priceHistory[t.id] ?? [];
+                  const prevP = hist.length >= 2 ? hist[hist.length - 2] : t.initP;
+                  const ch    = pctOf(t.price, prevP);
                   const up    = ch >= 0;
                   const isQ   = i < 2 || r32Pool.includes(t.id);
                   const held  = (portfolio[t.id] ?? 0) > 0;
@@ -1003,8 +1007,9 @@ export default function BrowserShell() {
   const { cash, totalVal: totVal, pl, positions } = usePortfolioTotals();
 
   // Still needed for MatchAnimation props and the Ticker price display
-  const prices    = useGameStore(s => s.prices);
-  const portfolio = useGameStore(s => s.portfolio);
+  const prices        = useGameStore(s => s.prices);
+  const priceHistMain = useGameStore(s => s.priceHistory);
+  const portfolio     = useGameStore(s => s.portfolio);
 
   const dayIndex  = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
@@ -1102,8 +1107,11 @@ export default function BrowserShell() {
         <div className="ticker-wrap">
           <div className="ticker-t">
             {[...tickerTeams, ...tickerTeams].map((n, i) => {
-              const p = prices[n.id] ?? n.initialPrice; const up = p >= n.initialPrice;
-              const pct = ((p - n.initialPrice) / n.initialPrice * 100).toFixed(1);
+              const p = prices[n.id] ?? n.initialPrice;
+              const hst = priceHistMain[n.id] ?? [];
+              const prevPt = hst.length >= 2 ? hst[hst.length - 2] : n.initialPrice;
+              const up = p >= prevPt;
+              const pct = ((p - prevPt) / prevPt * 100).toFixed(1);
               return <span key={i} className="ti">{n.flag} {n.id} <span className={up ? 'up' : 'dn'}>{Math.round(p)} {up ? '▲+' : '▼'}{Math.abs(Number(pct))}%</span></span>;
             })}
           </div>

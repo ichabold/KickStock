@@ -87,6 +87,10 @@ export default function MobileShell() {
   const totalDays = bootstrap?.days?.length ?? 34;
   const progressPct = Math.min(100, (dayIndex / Math.max(1, totalDays)) * 100);
 
+  // Groups / KO view toggle (lifted from StandingsTab so the status bar can control it)
+  const isKOPhase = !day || day.phase !== 'Groups';
+  const [standingsView, setStandingsView] = useState<'groups' | 'ko'>(() => isKOPhase ? 'ko' : 'groups');
+
   return (
     <div className={styles.shell}>
       {/* HEADER */}
@@ -132,13 +136,22 @@ export default function MobileShell() {
               : t('tournamentEnded')
             : day.full_label}
         </span>
-        {day && (
-          <span className={`${styles.pill} ${day.is_ko ? styles.pillKO : styles.pillGroup}`}>
-            {day.phase}
-          </span>
-        )}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <button
+            className={`${styles.pill} ${styles.pillGroup} ${standingsView === 'groups' ? '' : styles.pillInactive}`}
+            onClick={() => setStandingsView('groups')}
+          >
+            Groups
+          </button>
+          <button
+            className={`${styles.pill} ${standingsView === 'ko' ? styles.pillKOActive : styles.pillKOInactive}`}
+            onClick={() => setStandingsView('ko')}
+          >
+            KO
+          </button>
+        </div>
         {isOnline && (
-          <span style={{ fontSize: 9, color: 'var(--gain)', fontWeight: 700, letterSpacing: 1, marginLeft: 4 }}>
+          <span style={{ fontSize: 9, color: 'var(--gain)', fontWeight: 700, letterSpacing: 1 }}>
             ● LIVE
           </span>
         )}
@@ -147,7 +160,7 @@ export default function MobileShell() {
       {/* CONTENT */}
       <main className={styles.scroll}>
         {tab === 'schedule'  && <ScheduleTab />}
-        {tab === 'standings' && <StandingsTab />}
+        {tab === 'standings' && <StandingsTab activeView={standingsView} />}
         {tab === 'simulate'  && (isOnline
           ? <LiveTab />
           : <SimulateTab onDone={() => setTab('schedule')} />

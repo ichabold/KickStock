@@ -17,7 +17,8 @@ interface Props {
 }
 
 export default function StandingsCard({ group, teams, matchday, onNationClick }: Props) {
-  const portfolio = useGameStore(s => s.portfolio);
+  const portfolio    = useGameStore(s => s.portfolio);
+  const priceHistory = useGameStore(s => s.priceHistory);
 
   return (
     <section className={styles.card} aria-label={`Group ${group} standings`}>
@@ -28,7 +29,9 @@ export default function StandingsCard({ group, teams, matchday, onNationClick }:
 
       <ol className={styles.list}>
         {teams.map((t, i) => {
-          const ch     = pctOf(t.price, t.initP);
+          const hist   = priceHistory[t.id] ?? [];
+          const prevP  = hist.length >= 2 ? hist[hist.length - 2] : t.initP;
+          const ch     = pctOf(t.price, prevP);
           const isQ    = i < 2;
           const held   = (portfolio[t.id] ?? 0) > 0;
           const upDown = ch >= 0 ? 'up' : 'dn';

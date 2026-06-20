@@ -300,8 +300,9 @@ export const R32_DAY_SLICES: Record<string, [number, number]> = {
 
 // ─── LIVE R32 POOL ─────────────────────────────────────────────────────────────
 // Returns 32 slots (2 per match × 16 matches) with provisional/definitive flags.
-// - winner/runner slots: show current standings, definitive once group is complete
-// - third slots: null until all groups finish (too early to assign), then definitive
+// - winner/runner: current standings, definitive once the group has all 3 matchdays played
+// - third: always provisionally assigned using current FIFA ranking of thirds
+//   (pts → GD → GF → strength); definitive only when ALL groups are complete
 
 export interface LiveR32Slot {
   teamId: string | null;
@@ -340,68 +341,70 @@ export function buildLiveR32Pool(
 
   const standings = deriveGroupStandings(matchResults, eliminated, teams);
 
-  // Third-slot picker — only resolved when all groups complete
+  // ── Build ranked list of current third-place teams (FIFA rule: pts→GD→GF→str) ──
+  // Always computed, whether or not all groups are done.
   type ThirdInfo = { id: string; group: string; pts: number; gf: number; gd: number; str: number };
-  let thirdPicker: ((candidates: string[]) => string | null) | null = null;
-
-  if (allGroupsComplete) {
-    const allThirds: ThirdInfo[] = [];
-    for (const g of groups) {
-      const thirdId = standings[g]?.[2];
-      if (!thirdId) continue;
-      const t = teams.find(t => t.id === thirdId);
-      if (!t) continue;
-      let pts = 0, gf = 0, ga = 0;
-      for (const results of Object.values(matchResults)) {
-        for (const r of results) {
-          if (r.phase && r.phase !== 'Groups') continue;
-          if (r.a !== thirdId && r.b !== thirdId) continue;
-          const isA = r.a === thirdId;
-          gf += isA ? r.scoreA : r.scoreB;
-          ga += isA ? r.scoreB : r.scoreA;
-          if ((isA && r.res === 'A') || (!isA && r.res === 'B')) pts += 3;
-          else if (r.res === 'draw') pts += 1;
-        }
+  const allCurrentThirds: ThirdInfo[] = [];
+  for (const g of groups) {
+    const thirdId = standings[g]?.[2];
+    if (!thirdId) continue;
+    const t = teams.find(t => t.id === thirdId);
+    if (!t) continue;
+    let pts = 0, gf = 0, ga = 0;
+    for (const results of Object.values(matchResults)) {
+      for (const r of results) {
+        if (r.phase && r.phase !== 'Groups') continue;
+        if (r.a !== thirdId && r.b !== thirdId) continue;
+        const isA = r.a === thirdId;
+        gf += isA ? r.scoreA : r.scoreB;
+        ga += isA ? r.scoreB : r.scoreA;
+        if ((isA && r.res === 'A') || (!isA && r.res === 'B')) pts += 3;
+        else if (r.res === 'draw') pts += 1;
       }
-      allThirds.push({ id: thirdId, group: g, pts, gf, gd: gf - ga, str: t.strength });
     }
-    allThirds.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || (b.str - a.str));
-    const best8 = allThirds.slice(0, 8);
-    const remaining = new Set(best8.map(t => t.id));
-
-    thirdPicker = (candidates: string[]): string | null => {
-      for (const g of candidates) {
-        const entry = best8.find(t => t.group === g && remaining.has(t.id));
-        if (entry) { remaining.delete(entry.id); return entry.id; }
-      }
-      const fallback = best8.find(t => remaining.has(t.id));
-      if (fallback) { remaining.delete(fallback.id); return fallback.id; }
-      return null;
-    };
+    allCurrentThirds.push({ id: thirdId, group: g, pts, gf, gd: gf - ga, str: t.strength });
   }
+  allCurrentThirds.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || (b.str - a.str));
+
+  // Take provisional top-8 thirds (or fewer if not all groups have played yet)
+  const best8 = allCurrentThirds.slice(0, 8);
+  const remaining = new Set(best8.map(t => t.id));
+
+  // Greedy picker: for a given candidates list, pick the best available provisional third
+  const thirdPicker = (candidates: string[]): string | null => {
+    for (const g of candidates) {
+      const entry = best8.find(t => t.group === g && remaining.has(t.id));
+      if (entry) { remaining.delete(entry.id); return entry.id; }
+    }
+    // fallback: any remaining best-8 third (shouldn't happen in a well-formed bracket)
+    const fallback = best8.find(t => remaining.has(t.id));
+    if (fallback) { remaining.delete(fallback.id); return fallback.id; }
+    return null;
+  };
 
   const result: LiveR32Slot[] = [];
   for (const [specA, specB] of WC2026_R32_PAIRINGS) {
     for (const spec of [specA, specB] as R32SlotSpec[]) {
       if (spec.type === 'winner') {
         result.push({
-          teamId:    standings[spec.group]?.[0] ?? null,
+          teamId:     standings[spec.group]?.[0] ?? null,
           definitive: completeGroups.has(spec.group),
-          slotType:  'winner',
-          group:     spec.group,
+          slotType:   'winner',
+          group:      spec.group,
         });
       } else if (spec.type === 'runner') {
         result.push({
-          teamId:    standings[spec.group]?.[1] ?? null,
+          teamId:     standings[spec.group]?.[1] ?? null,
           definitive: completeGroups.has(spec.group),
-          slotType:  'runner',
-          group:     spec.group,
+          slotType:   'runner',
+          group:      spec.group,
         });
       } else {
+        // Third: always pick provisionally; only definitive when all groups complete
         result.push({
-          teamId:    thirdPicker ? thirdPicker(spec.candidates) : null,
+          teamId:     thirdPicker(spec.candidates),
           definitive: allGroupsComplete,
-          slotType:  'third',
+          slotType:   'third',
           candidates: spec.candidates,
         });
       }
