@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="110" fill="#0A0A0A"/>
+
+  <!-- Gold accent bar top-left -->
+  <rect x="56" y="56" width="8" height="80" rx="4" fill="#FFDB00"/>
+  <rect x="56" y="56" width="80" height="8" rx="4" fill="#FFDB00"/>
+
+  <!-- Gold accent bar bottom-right -->
+  <rect x="448" y="376" width="8" height="80" rx="4" fill="#FFDB00"/>
+  <rect x="376" y="448" width="80" height="8" rx="4" fill="#FFDB00"/>
+
+  <!-- Letter K -->
+  <rect x="112" y="152" width="44" height="208" rx="8" fill="#FFDB00"/>
+  <!-- K upper diagonal -->
+  <polygon points="156,152 224,152 224,196 200,256 156,256" fill="#FFDB00"/>
+  <!-- K lower diagonal -->
+  <polygon points="156,256 200,256 240,360 172,360" fill="#FFDB00"/>
+
+  <!-- Letter S -->
+  <!-- Top arc of S -->
+  <path d="M 288 152 Q 288 152 368 152 Q 400 152 400 188 Q 400 224 368 232 L 304 248 Q 272 256 272 292 Q 272 328 304 336 Q 336 344 400 336 L 400 360 Q 336 368 296 360 Q 256 352 256 292 Q 256 252 288 236 L 356 220 Q 384 212 384 188 Q 384 168 368 168 L 288 168 Z" fill="#FFDB00"/>
+
+  <!-- Soccer hexagon accent (bottom right) -->
+  <g transform="translate(360, 350) scale(0.7)" opacity="0.35">
+    <polygon points="30,0 60,17 60,52 30,69 0,52 0,17" fill="none" stroke="#FFDB00" stroke-width="6"/>
+    <polygon points="30,17 48,26 48,46 30,55 12,46 12,26" fill="#FFDB00"/>
+  </g>
+</svg>

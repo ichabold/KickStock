@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <!-- Silver/chrome gradient for K front face -->
+    <linearGradient id="kFront" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#FFFFFF"/>
+      <stop offset="35%"  stop-color="#E8E8E8"/>
+      <stop offset="65%"  stop-color="#C0C0C0"/>
+      <stop offset="100%" stop-color="#D8D8D8"/>
+    </linearGradient>
+    <!-- K bevel top face -->
+    <linearGradient id="kTop" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#AAAAAA"/>
+      <stop offset="100%" stop-color="#787878"/>
+    </linearGradient>
+    <!-- K bevel right face -->
+    <linearGradient id="kRight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#888888"/>
+      <stop offset="100%" stop-color="#555555"/>
+    </linearGradient>
+    <!-- K inner facet -->
+    <linearGradient id="kFacet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#CCCCCC"/>
+      <stop offset="100%" stop-color="#999999"/>
+    </linearGradient>
+    <!-- Shield radial -->
+    <radialGradient id="shieldBg" cx="50%" cy="30%" r="70%">
+      <stop offset="0%"   stop-color="#1C1C1C"/>
+      <stop offset="100%" stop-color="#080808"/>
+    </radialGradient>
+    <!-- Drop shadow filter -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.5"/>
+    </filter>
+    <filter id="kshadow" x="-5%" y="-5%" width="115%" height="115%">
+      <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+
+  <!-- ── Yellow background ── -->
+  <rect width="512" height="512" rx="112" fill="#FFDB00"/>
+
+  <!-- ── Shield outer ── -->
+  <path d="M256,64 L444,126 L444,294 Q444,392 256,454 Q68,392 68,294 L68,126 Z"
+        fill="url(#shieldBg)" filter="url(#shadow)"/>
+
+  <!-- ── Shield inner border ── -->
+  <path d="M256,82 L428,140 L428,293 Q428,380 256,436 Q84,380 84,293 L84,140 Z"
+        fill="none" stroke="#252525" stroke-width="3"/>
+
+  <!-- ════════════════════════════════════════
+       K LETTER — faceted chrome effect
+       Layout: stem x114–180, height y158–388
+       Notch at y=272
+       Upper arm: to x278 top
+       Lower arm: to x280 bottom
+  ════════════════════════════════════════ -->
+
+  <!-- K stem — front face -->
+  <polygon points="114,158 180,158 180,388 114,388" fill="url(#kFront)" filter="url(#kshadow)"/>
+
+  <!-- K stem — right bevel (thin strip to give 3D depth) -->
+  <polygon points="180,158 192,168 192,378 180,388" fill="url(#kRight)"/>
+
+  <!-- K upper arm — front face -->
+  <polygon points="180,158 278,158 278,212 180,272" fill="url(#kFront)" filter="url(#kshadow)"/>
+
+  <!-- K upper arm — bottom face (underside bevel, darker) -->
+  <polygon points="180,272 278,212 290,222 192,282" fill="url(#kTop)"/>
+
+  <!-- K upper arm — right edge bevel -->
+  <polygon points="278,158 290,165 290,222 278,212" fill="url(#kRight)"/>
+
+  <!-- K upper arm — inner diagonal facet (crystal cut) -->
+  <polygon points="180,200 248,158 278,158 210,200" fill="url(#kFacet)" opacity="0.6"/>
+
+  <!-- K lower arm — front face -->
+  <polygon points="180,278 278,388 220,388 180,322" fill="url(#kFront)" filter="url(#kshadow)"/>
+
+  <!-- K lower arm — top face (upper surface, darker) -->
+  <polygon points="180,272 290,222 300,235 192,282" fill="url(#kTop)" opacity="0.7"/>
+
+  <!-- K lower arm — right edge bevel -->
+  <polygon points="278,388 290,382 300,235 288,240" fill="url(#kRight)"/>
+
+  <!-- K lower arm — inner diagonal facet -->
+  <polygon points="180,300 248,388 278,388 212,300" fill="url(#kFacet)" opacity="0.4"/>
+
+  <!-- ════════════════════════════════════════
+       $ SYMBOL — gold, serif style
+  ════════════════════════════════════════ -->
+
+  <!-- Vertical bar of $ (two lines, gold) -->
+  <rect x="314" y="150" width="14" height="240" rx="7" fill="#FFDB00"/>
+
+  <!-- Upper arc of S: top curve -->
+  <path d="
+    M 314,195
+    Q 314,165 338,158
+    L 374,158
+    Q 400,160 400,185
+    Q 400,210 374,218
+    L 328,230
+    Q 310,236 310,258
+    Q 310,280 330,288
+    L 380,290
+    Q 408,292 408,268
+  "
+  fill="none" stroke="#FFDB00" stroke-width="34" stroke-linecap="round"/>
+
+  <!-- Lower arc of S: bottom curve -->
+  <path d="
+    M 328,268
+    Q 308,276 308,298
+    Q 308,325 334,334
+    L 376,338
+    Q 406,340 406,362
+    Q 406,385 382,390
+    L 336,392
+    Q 312,392 310,372
+  "
+  fill="none" stroke="#FFDB00" stroke-width="34" stroke-linecap="round"/>
+
+  <!-- ════════════════════════════════════════
+       Soccer ball bottom of shield
+  ════════════════════════════════════════ -->
+  <circle cx="256" cy="416" r="20" fill="#1A1A1A" stroke="#333" stroke-width="2"/>
+  <!-- Hexagon patch on ball -->
+  <polygon points="256,405 264,410 264,422 256,427 248,422 248,410"
+           fill="#2A2A2A" stroke="#444" stroke-width="1"/>
+</svg>

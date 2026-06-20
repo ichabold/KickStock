@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="110" fill="#0A0A0A"/>
+
+  <!-- Soccer ball -->
+  <circle cx="220" cy="256" r="148" fill="#1A1A1A" stroke="#2E2E2E" stroke-width="3"/>
+
+  <!-- Ball hexagon patches (classic soccer pattern, simplified) -->
+  <!-- Center pentagon -->
+  <polygon points="220,156 260,182 247,227 193,227 180,182" fill="#333"/>
+  <polygon points="220,176 250,196 239,227 201,227 190,196" fill="#222"/>
+
+  <!-- surrounding patches -->
+  <polygon points="220,156 180,182 160,156 185,132 255,132" fill="#333" opacity="0.7"/>
+  <polygon points="260,182 280,215 262,240 247,227" fill="#333" opacity="0.7"/>
+  <polygon points="193,227 180,255 156,248 148,215 175,200" fill="#333" opacity="0.7"/>
+  <polygon points="247,227 262,240 250,268 220,274 200,258 201,227" fill="#333" opacity="0.5"/>
+
+  <!-- Stock chart arrow (gold, going up-right, punching through ball) -->
+  <!-- Chart line -->
+  <polyline
+    points="100,360 160,310 210,330 270,240 340,180 410,120"
+    fill="none"
+    stroke="#FFDB00"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.95"
+  />
+  <!-- Arrow head -->
+  <polygon points="410,120 375,130 385,155" fill="#FFDB00"/>
+
+  <!-- Green gain dot on the arrow at exit point of ball -->
+  <circle cx="340" cy="180" r="14" fill="#00FF87"/>
+
+  <!-- Small "KS" label bottom -->
+  <text x="256" y="455" font-family="'Arial Black', Arial, sans-serif" font-size="48" font-weight="900" fill="#FFDB00" text-anchor="middle" letter-spacing="6">KS</text>
+</svg>

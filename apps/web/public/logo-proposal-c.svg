@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="110" fill="#FFDB00"/>
+
+  <!-- Dark shield / crest shape -->
+  <path d="M 256 60 L 420 120 L 420 280 Q 420 390 256 460 Q 92 390 92 280 L 92 120 Z" fill="#0A0A0A"/>
+
+  <!-- Inner shield lighter border -->
+  <path d="M 256 85 L 400 138 L 400 278 Q 400 375 256 438 Q 112 375 112 278 L 112 138 Z" fill="none" stroke="#1F1F1F" stroke-width="2"/>
+
+  <!-- Letter K (white, inside shield) -->
+  <rect x="138" y="168" width="36" height="176" rx="6" fill="#FFFFFF"/>
+  <!-- K upper arm -->
+  <polygon points="174,168 230,168 230,206 208,256 174,256" fill="#FFFFFF"/>
+  <!-- K lower arm -->
+  <polygon points="174,256 208,256 244,344 182,344" fill="#FFFFFF"/>
+
+  <!-- Letter S (gold, inside shield) -->
+  <!-- Build S with paths -->
+  <path d="
+    M 258 168
+    L 352 168
+    Q 376 168 376 196
+    Q 376 222 352 230
+    L 284 246
+    Q 258 254 258 284
+    Q 258 314 284 322
+    Q 310 330 368 322
+    L 368 344
+    Q 308 354 274 344
+    Q 238 334 238 284
+    Q 238 248 264 234
+    L 334 216
+    Q 356 208 356 196
+    Q 356 180 340 180
+    L 258 180
+    Z
+  " fill="#FFDB00"/>
+
+  <!-- Soccer ball accent bottom center of shield -->
+  <g transform="translate(256, 388)">
+    <!-- small ball -->
+    <circle cx="0" cy="0" r="22" fill="#1A1A1A" stroke="#333" stroke-width="1.5"/>
+    <polygon points="0,-12 10,-5 10,5 0,12 -10,5 -10,-5" fill="#333" transform="scale(0.85)"/>
+  </g>
+
+  <!-- World Cup 2026 tiny text -->
+  <text x="256" y="480" font-family="Arial, sans-serif" font-size="13" fill="#0A0A0A" text-anchor="middle" letter-spacing="2" font-weight="700">WORLD CUP 2026</text>
+</svg>

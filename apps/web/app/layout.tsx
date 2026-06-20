@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: 'KickStock — FIFA World Cup 2026',
   description: 'Trade national teams like stocks during the FIFA World Cup 2026',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon-32.png',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export const viewport: Viewport = {
