@@ -1,12 +1,21 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useGameStore, pctOf, buildMatchesForCurrentDay } from '@/stores/gameStore';
+import { buildLiveR32Pool, R32_DAY_SLICES } from '@kickstock/game-engine';
+import type { LiveR32Slot } from '@kickstock/game-engine';
 import type { StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
+import { deriveDynamicKey } from '@/lib/bootstrap';
 import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import styles from './ScheduleTab.module.css';
+
+function formatR32SlotLabel(slot: LiveR32Slot): string {
+  if (slot.slotType === 'winner') return `1er Gr. ${slot.group}`;
+  if (slot.slotType === 'runner') return `2e Gr. ${slot.group}`;
+  return `3e (${slot.candidates?.join('/') ?? '?'})`;
+}
 
 export default function ScheduleTab() {
   const t  = useTranslations('schedule');
@@ -22,6 +31,11 @@ export default function ScheduleTab() {
   const state        = useGameStore(s => s);
   const bootstrap = useGameStore(s => s._bootstrap);
   const teams     = useGameStore(s => s._teams);
+
+  const liveR32Pool = useMemo(
+    () => buildLiveR32Pool(matchResults, teams, eliminated),
+    [matchResults, teams, eliminated],
+  );
 
   const gN = (id: string) => teams.find(t => t.id === id);
 
@@ -56,6 +70,21 @@ export default function ScheduleTab() {
               : di >= dayIndex && day.is_ko
                 ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
                 : [];
+
+          // For upcoming R32 days: build provisional/definitive pairs from live standings
+          const liveR32Pairs: Array<[LiveR32Slot, LiveR32Slot]> = [];
+          if (day.phase === 'R32' && !played && di >= dayIndex && displayMatches.length === 0) {
+            const dynKey = deriveDynamicKey('R32', di, bootstrap);
+            const slice  = R32_DAY_SLICES[dynKey];
+            if (slice) {
+              const [s, e] = slice;
+              for (let i = s; i < e; i += 2) {
+                if (liveR32Pool[i] !== undefined && liveR32Pool[i + 1] !== undefined) {
+                  liveR32Pairs.push([liveR32Pool[i], liveR32Pool[i + 1]]);
+                }
+              }
+            }
+          }
 
           return (
             <div
@@ -163,6 +192,29 @@ export default function ScheduleTab() {
                     )}
 
                     {m.venue && !res && <span className={styles.venue}>{m.venue}</span>}
+                  </div>
+                );
+              }) : liveR32Pairs.length > 0 ? liveR32Pairs.map(([slotA, slotB], mi) => {
+                const nA = slotA.teamId ? gN(slotA.teamId) : null;
+                const nB = slotB.teamId ? gN(slotB.teamId) : null;
+                return (
+                  <div key={mi} className={`${styles.match} ${isCurrent ? styles.matchCurrent : ''}`}>
+                    <span className={styles.flag}>{nA?.flag ?? ''}</span>
+                    <span
+                      className={styles.team}
+                      style={{ color: slotA.teamId ? (slotA.definitive ? undefined : 'var(--dim)') : 'var(--dim)', fontStyle: slotA.teamId ? undefined : 'italic' }}
+                    >
+                      {nA ? nA.name.toUpperCase() : formatR32SlotLabel(slotA)}
+                    </span>
+                    <span className={styles.vs}>VS</span>
+                    <span
+                      className={styles.team}
+                      style={{ color: slotB.teamId ? (slotB.definitive ? undefined : 'var(--dim)') : 'var(--dim)', fontStyle: slotB.teamId ? undefined : 'italic' }}
+                    >
+                      {nB ? nB.name.toUpperCase() : formatR32SlotLabel(slotB)}
+                    </span>
+                    <span className={styles.flag}>{nB?.flag ?? ''}</span>
+                    <div style={{ marginLeft: 'auto', color: '#2a2a2a', fontFamily: 'var(--font-mono)' }}>–</div>
                   </div>
                 );
               }) : (

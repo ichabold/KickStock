@@ -471,9 +471,8 @@ CREATE POLICY "dividends_select_own"
   ON dividends FOR SELECT
   USING (portfolio_id IN (SELECT id FROM portfolios WHERE user_id = auth.uid()));
 
-CREATE POLICY "portfolios_select_device"
-  ON portfolios FOR SELECT
-  USING (user_id = auth.uid() OR device_id IS NOT NULL);
+-- portfolios_select_device removed (migration 025): device_id IS NOT NULL
+-- exposed all guest portfolios publicly. Guest reads use SECURITY DEFINER RPCs.
 
 -- ── RPC : get_or_create_portfolio ────────────────────────────────────────────
 
@@ -591,7 +590,10 @@ BEGIN
       RETURN jsonb_build_object('error', 'Actions insuffisantes');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM game_state WHERE p_nation_id = ANY(eliminated)) THEN
-      v_fee := ROUND(v_price * p_quantity * CASE WHEN v_is_cap THEN 0.05 ELSE 0.10 END, 1);
+      v_fee := GREATEST(
+        ROUND(v_price * p_quantity * CASE WHEN v_is_cap THEN 0.10 ELSE 0.05 END, 1),
+        10
+      );
     END IF;
     v_total    := v_price * p_quantity - v_fee;
     v_new_cash := v_cash + v_total;

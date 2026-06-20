@@ -54,12 +54,32 @@ export async function POST(req: NextRequest) {
     const deviceErr = await verifyDevice(req, deviceId);
     if (deviceErr) return deviceErr;
 
+    // UUID v4 obligatoire — rejette tout appel sans device_id valide
+    const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!deviceId || !UUID_V4.test(deviceId)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     let userId: string | null = null;
     try {
       const sb = await createServerClient();
       const { data: { user } } = await sb.auth.getUser();
       userId = user?.id ?? null;
     } catch { /* fine */ }
+
+    // Le device doit avoir un portfolio dans cette compétition, ou être authentifié.
+    // Empêche n'importe qui d'avancer la compétition sans y participer.
+    if (!userId) {
+      const { data: pfCheck } = await A(admin)
+        .from('portfolios')
+        .select('id')
+        .eq('device_id', deviceId)
+        .eq('competition_id', competitionId)
+        .maybeSingle();
+      if (!pfCheck) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
 
     const rateLimitId = deviceId ?? userId ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown');
     const rl = await checkRateLimit('advance', rateLimitId);

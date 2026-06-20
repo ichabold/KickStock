@@ -1,6 +1,6 @@
 # KickStock — User Stories
 
-> Document de couverture fonctionnelle · Généré le 2 juin 2026
+> Document de couverture fonctionnelle · Mis à jour le 20 juin 2026 (généré le 2 juin 2026)
 >
 > **KickStock** est une bourse fictive de tournoi de football : les joueurs achètent et vendent des parts de sélections nationales, dont les prix évoluent en fonction des résultats réels ou simulés des matchs.
 >
@@ -75,6 +75,15 @@ Un joueur peut jouer sans créer de compte (mode invité), puis migrer vers un c
 - La migration est atomique côté serveur (RPC Supabase `SECURITY DEFINER`).
 - Après migration, la modale `WelcomeModal` confirme le succès et me permet de valider mon pseudo.
 - L'URL est nettoyée des paramètres `ks_migrated`, `ks_new_user`, `ks_pseudo`.
+
+---
+
+**US-1.5b · Incitation à créer un compte après le premier achat**
+> En tant qu'invité ayant effectué son premier achat, je veux être invité à sécuriser ma progression via un compte Google, sans que ça bloque mon jeu.
+
+- La `FirstTradeUpsellModal` s'affiche automatiquement une seule fois, juste après le premier achat d'un joueur invité.
+- Elle propose de lier un compte Google (`GoogleSignInBlock`) ou de continuer en invité.
+- Elle ne s'affiche qu'une fois (marqueur `localStorage`).
 
 ---
 
@@ -291,8 +300,10 @@ Les joueurs achètent et vendent des parts d'équipes. Chaque transaction est so
 > En tant que joueur, je veux savoir quand le marché est verrouillé autour d'un match pour planifier mes trades.
 
 - En mode live, chaque match a un `trade_lock_until` qui verrouille les trades peu avant le coup d'envoi.
+- **Depuis la migration 024**, le `trade_lock_until` est aussi calculé depuis `scheduled_at` (NS) pour les matchs pas encore commencés, pas seulement depuis `api_status` — le blocage est ainsi anticipé côté DB avant même que l'API signal `1H`.
 - L'interface affiche un compte à rebours "Marché ouvert dans X min" (LiveTab).
 - Les boutons Buy/Sell sont désactivés pendant le lock.
+- L'onglet Calendrier (Schedule tab) affiche également un badge 🔒 sur les matchs en cours ou juste terminés (voir US-6.5).
 
 ---
 
@@ -407,6 +418,16 @@ L'onglet Calendrier (Schedule) affiche l'intégralité des journées du tournoi,
 
 ---
 
+**US-6.5 · Scores en direct sur le calendrier**
+> En tant que joueur en mode live, je veux voir les scores en temps réel directement dans l'onglet Calendrier, sans devoir basculer vers l'onglet Live.
+
+- Pour les matchs en cours (statuts `1H`/`HT`/`2H`/`ET`/`BT`/`P`), le score est affiché à côté des équipes avec le badge "EN JEU 🔒".
+- Pour les matchs terminés en attente de traitement (statuts `FT`/`AET`/`PEN`), le score est affiché avec le badge "FT 🔒" si le trade lock est encore actif.
+- Les données proviennent du store (`liveMatches`), alimenté par `/api/game/live-matches` et mis à jour toutes les 60 secondes.
+- La même fonctionnalité est disponible dans la vue Home du shell desktop.
+
+---
+
 ## 8. Classements
 
 ### Contexte
@@ -510,6 +531,8 @@ En mode online, l'état de jeu est partagé sur le serveur (Supabase). Les résu
 - L'onglet Live (⚡) affiche les matchs de la journée courante.
 - Les statuts sont : "Kicks off in X min" (NS), "EN JEU Xmin" (1H/HT/2H/ET), score final (FT/AET/PEN).
 - L'écran se rafraîchit toutes les 60 secondes.
+- **Les scores en cours sont également visibles dans l'onglet Calendrier** (voir US-6.5) — pas besoin de basculer vers l'onglet Live.
+- Les données de scores sont mises à jour en DB par le cron `live-poll` (toutes les 2 min) ; `/api/game/live-matches` lit directement la DB, sans appel API-Football à chaque requête.
 
 ---
 
@@ -655,6 +678,18 @@ Le leaderboard classe les joueurs par meilleur score (valeur totale maximale att
 > En tant que joueur, je veux savoir si les scores du classement proviennent de comptes permanents ou d'invités.
 
 - Un badge "INVITÉ" est affiché sur les entrées des joueurs en mode guest.
+
+---
+
+**US-12.3 · Classement Online en temps réel**
+> En tant que joueur en mode live, je veux voir mon rang par rapport aux autres joueurs basé sur la valeur actuelle de leur portfolio (cash + positions ouvertes), pas seulement le meilleur score historique.
+
+- Le panneau de classement présente deux onglets : **Online** (valeur totale courante, triée décroissante) et **Offline** (meilleur score historique).
+- L'onglet actif correspond au mode de jeu courant.
+- La valeur totale = cash + somme(quantité × prix courant) pour chaque position.
+- Si mon rang dépasse le top N affiché, ma propre ligne est ajoutée en bas du tableau avec mon rang réel.
+- Les données sont rechargées automatiquement toutes les 30 secondes via `/api/leaderboard/online`.
+- À la connexion ou au changement de compte, les deux onglets sont rechargés pour afficher la bonne identité.
 
 ---
 
@@ -889,11 +924,12 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 **US-17.1 · Synchroniser les résultats réels automatiquement**
 > En tant qu'opérateur, je veux que les résultats des matchs réels soient traités automatiquement toutes les 30 minutes pendant les créneaux de jeu.
 
-- Le cron `GET /api/cron/sync-results` s'exécute toutes les 30 minutes.
+- Le cron `GET /api/cron/sync-results` s'exécute toutes les 30 minutes (GitHub Actions — non dans `vercel.json` depuis V25, le plan Hobby étant limité).
 - Une smart-window (`isMatchWindowActive`) évite les appels API inutiles hors créneaux.
 - Pour chaque match terminé non encore traité : apply result → dividendes → check advance phase.
 - Idempotent : un match déjà traité (`processed_at != null`) est ignoré.
 - Sécurisé par `Authorization: Bearer {CRON_SECRET}`.
+- **`sync-results` est désormais un filet de sécurité** : le cron `live-poll` (US-17.4) traite les matchs finis en temps réel toutes les 2 min ; `sync-results` assure la cohérence en cas de tick manqué.
 
 ---
 
@@ -914,29 +950,57 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 
 ---
 
+**US-17.4 · Polling de scores en direct toutes les 2 minutes**
+> En tant qu'opérateur, je veux que les scores des matchs en cours soient mis à jour en DB toutes les 2 minutes, 24h/24, afin que `/api/game/live-matches` serve des données fraîches sans appeler API-Football à chaque requête joueur.
+
+- Le cron `GET /api/cron/live-poll` s'exécute toutes les 2 minutes, sans restriction horaire (`*/2 * * * *` dans `vercel.json`).
+- **Phase 1 — Scores en cours :** `fetchLiveFixtures()` récupère les matchs avec statuts `1H/HT/2H/ET/BT/P` et met à jour `matches.score_a`, `matches.score_b`, `matches.api_status` directement en DB.
+- **Phase 2 — Matchs terminés :** `fetchFinishedFixtures()` détecte les matchs `FT/AET/PEN` et appelle `processRealMatchResult()` + `checkAndAdvancePhase()`.
+- `isMatchWindowActive()` court-circuite le cron si aucun match n'est attendu dans les ±3h → 0 appel API-Football hors créneaux.
+- Idempotent sur les matchs déjà traités (`processed_at != null` → ignoré).
+- Sécurisé par `Authorization: Bearer {CRON_SECRET}`.
+- Le paramètre `?force=1` bypasse la smart-window pour les tests admin.
+- **Correction de régression (V26) :** Depuis le passage 24/7 (V26), le cron couvre aussi les matchs se terminant entre 00h00 et 06h00 UTC (ex. matchs du soir en heure US), qui n'étaient pas couverts par l'ancienne restriction horaire.
+
+---
+
 ## Récapitulatif de couverture
 
 | Domaine | Stories | Statut estimé |
 |---------|---------|---------------|
-| Onboarding & Auth | US-1.1 → 1.6 | ✅ Implémenté |
+| Onboarding & Auth | US-1.1 → 1.6, US-1.5b | ✅ Implémenté (FirstTradeUpsellModal ajouté V25) |
 | Internationalisation (FR/EN) | US-2.1 → 2.4 | ✅ Implémenté (corrigé 2026-06-02) |
 | Compétitions & Mode de jeu | US-3.1 → 3.4 | ✅ Implémenté (cache-bust 2026-06-04) |
 | Marché — Vue | US-4.1 → 4.5 | ✅ Implémenté |
-| Marché — Trading | US-5.1 → 5.7 | ✅ Implémenté |
+| Marché — Trading | US-5.1 → 5.7 | ✅ Implémenté (trade_lock migration 023/024) |
 | Portfolio | US-6.1 → 6.6 | ✅ Implémenté |
-| Calendrier | US-7.1 → 7.4 | ✅ Implémenté |
+| Calendrier | US-7.1 → 7.4, US-6.5 | ✅ Implémenté (scores live sur Schedule tab V25) |
 | Standings | US-8.1 → 8.4 | ✅ Implémenté |
 | Mode Simulation | US-9.1 → 9.5 | ✅ Implémenté |
-| Mode Live | US-10.1 → 10.5 | ✅ Implémenté |
+| Mode Live | US-10.1 → 10.5 | ✅ Implémenté (live-poll V25, live scores schedule V25) |
 | Dividendes & Prix | US-11.1 → 11.3 | ✅ Implémenté |
 | Fiche Équipe | US-12.1 → 12.5 | ✅ Implémenté |
-| Leaderboard | US-13.1 → 13.2 | ✅ Implémenté |
+| Leaderboard | US-13.1 → 13.3 | ✅ Implémenté (online ranking V24.7) |
 | Tutorial & Coach Marks | US-14.1 → 14.2 | ✅ Implémenté |
 | UI Shell Mobile & Desktop | US-15.1 → 15.5 | ✅ Implémenté |
 | Admin — Gestion compétitions | US-16.1 → 16.11 | ✅ Implémenté (enrichi 2026-06-04) |
-| Infrastructure & Monitoring | US-17.1 → 17.3 | ✅ Implémenté |
+| Infrastructure & Monitoring | US-17.1 → 17.4 | ✅ Implémenté (live-poll 24/7 V26) |
 
-**Total : 65 user stories identifiées**
+**Total : 70 user stories identifiées (+5 nouvelles depuis juin 2026)**
+
+### Nouvelles US ajoutées (session 2026-06-20)
+
+**US-1.5b · FirstTradeUpsellModal** *(voir section 1)*
+
+**US-6.5 · Scores en direct sur le calendrier** *(voir section 7)*
+
+**US-12.3 · Classement Online en temps réel** *(voir section 13)*
+
+**US-17.4 · Cron live-poll 24/7** *(voir section 17)*
+
+**US-4.5 enrichi :** `trade_lock_until` basé sur `scheduled_at` (migration 024)
+
+---
 
 ### Nouvelles US ajoutées (session 2026-06-03/04)
 
@@ -952,7 +1016,8 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 
 | Priorité | Gap identifié |
 |----------|---------------|
-| 🟡 Moyenne | **US-17.1** — `sync-results` non automatique sur plan Hobby Vercel (max 1 cron/jour). Déclencher manuellement pendant les matchs, ou passer Pro. |
+| 🔴 Haute | **US-4.5 / FAILLE-TRADE-LOCK-1** — Fenêtre de 0 à 2 min entre le coup d'envoi réel et la prochaine mise à jour par `live-poll`. Le backend vérifie `api_status` mais celui-ci reste `NS` jusqu'au prochain tick du cron → trades possibles au coup d'envoi. Voir `TRADE_LOCK_AUDIT.md`. |
+| 🟡 Moyenne | **US-17.1** — `sync-results` retiré des crons Vercel (V25). Tourne via GitHub Actions toutes les 30 min. En cas d'indisponibilité GHA, seul `live-poll` couvre les résultats. |
 | 🟡 Moyenne | **US-16.8** — Pas de log horodaté des actions admin (dernière sync par bouton, erreurs). |
 | 🟡 Moyenne | **US-16.2** — `strength` global (table `teams`) partagé entre toutes les compétitions. Pour WC2022 test data, la force reflète le ranking actuel (2026) et non 2022. |
 | 🟢 Basse | **US-16.10** — Pas de confirmation avant modification d'un match déjà traité (`processed_at != null`). |
@@ -960,4 +1025,4 @@ Ces fonctionnalités sont réservées aux opérateurs et ne sont pas visibles de
 
 ---
 
-*Document mis à jour le 4 juin 2026 — session admin infrastructure*
+*Document mis à jour le 20 juin 2026 — session live-poll, scores en direct, classement online*

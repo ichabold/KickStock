@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useGameStore, fmt, pctOf, buildMatchesForCurrentDay } from '@/stores/gameStore';
-import { buildGroupStandingsUI } from '@kickstock/game-engine';
+import { buildGroupStandingsUI, buildLiveR32Pool } from '@kickstock/game-engine';
+import type { LiveR32Slot } from '@kickstock/game-engine';
 import TradeModal from '@/components/shared/TradeModal';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
@@ -107,6 +108,13 @@ function StockTile({ nation, onBuy, onSell, onCardClick }: {
       }
     </div>
   );
+}
+
+// ─── R32 slot label helper ────────────────────────────────────────────────────
+function formatR32SlotLabel(slot: LiveR32Slot): string {
+  if (slot.slotType === 'winner') return `1er Gr. ${slot.group}`;
+  if (slot.slotType === 'runner') return `2e Gr. ${slot.group}`;
+  return `3e (${slot.candidates?.join('/') ?? '?'})`;
 }
 
 // ─── Shared: clickable team name ───────────────────────────────────────────────
@@ -315,8 +323,15 @@ function ScheduleView({ onNationClick, onMatchClick }: {
   const tst  = useTranslations('standings');
   const dayIndex     = useGameStore(s => s.dayIndex);
   const matchResults = useGameStore(s => s.matchResults);
+  const eliminated   = useGameStore(s => s.eliminated);
   const state        = useGameStore(s => s);
   const bootstrap = useGameStore(s => s._bootstrap);
+  const teams     = useGameStore(s => s._teams);
+
+  const liveR32Pool = useMemo(
+    () => buildLiveR32Pool(matchResults, teams, eliminated),
+    [matchResults, teams, eliminated],
+  );
 
   return (
     <div className="view-sched">
@@ -403,8 +418,24 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                     ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
                     : [];
 
+                // For R32 days: build provisional/definitive pairs from live standings
+                const liveR32Pairs: Array<[LiveR32Slot, LiveR32Slot]> = [];
+                if (phase === 'R32' && !played && di >= dayIndex && bootstrap) {
+                  const dynKey = getDynamicKey(bootstrap, 'R32', di);
+                  const slice  = R32_SLICES[dynKey];
+                  if (slice && displayMatches.length === 0) {
+                    const [s, e] = slice;
+                    for (let i = s; i < e; i += 2) {
+                      if (liveR32Pool[i] !== undefined && liveR32Pool[i + 1] !== undefined) {
+                        liveR32Pairs.push([liveR32Pool[i], liveR32Pool[i + 1]]);
+                      }
+                    }
+                  }
+                }
+
+                const hasPairs = liveR32Pairs.length > 0;
                 return (
-                  <div key={di} className={`ko-match${displayMatches.length === 0 ? ' tbd' : ''}`}>
+                  <div key={di} className={`ko-match${displayMatches.length === 0 && !hasPairs ? ' tbd' : ''}`}>
                     <div className="ko-date">{day.full_label}{isCur ? ' ▶' : ''}</div>
                     {displayMatches.length > 0 ? displayMatches.map((m, mi) => {
                       const res = played?.find(r => (r.a === m.a && r.b === m.b) || (r.a === m.b && r.b === m.a));
@@ -430,7 +461,19 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                           <TeamName id={m.b} color={res ? (resA === 'B' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
                         </div>
                       );
-                    }) : (
+                    }) : hasPairs ? liveR32Pairs.map(([slotA, slotB], mi) => (
+                      <div key={mi} className="ko-teams">
+                        {slotA.teamId
+                          ? <TeamName id={slotA.teamId} color={slotA.definitive ? undefined : 'var(--dim)'} onNationClick={onNationClick}/>
+                          : <span className="tbd-t" style={{color:'var(--dim)'}}>{formatR32SlotLabel(slotA)}</span>
+                        }
+                        <span className="ko-vs">vs</span>
+                        {slotB.teamId
+                          ? <TeamName id={slotB.teamId} color={slotB.definitive ? undefined : 'var(--dim)'} onNationClick={onNationClick}/>
+                          : <span className="tbd-t" style={{color:'var(--dim)'}}>{formatR32SlotLabel(slotB)}</span>
+                        }
+                      </div>
+                    )) : (
                       <div className="ko-teams">
                         <span className="tbd-t">{tsch('tbd')}</span>
                         <span className="ko-vs">vs</span>
@@ -768,9 +811,15 @@ function BracketView({ onNationClick, onMatchClick }: {
   const tsch = useTranslations('schedule');
   const matchResults = useGameStore(s => s.matchResults);
   const dayIndex     = useGameStore(s => s.dayIndex);
-  const r32Pool      = useGameStore(s => s.r32Pool);
+  const eliminated   = useGameStore(s => s.eliminated);
   const state        = useGameStore(s => s);
-  const bootstrap = useGameStore(s => s._bootstrap);
+  const bootstrap    = useGameStore(s => s._bootstrap);
+  const teams        = useGameStore(s => s._teams);
+
+  const liveR32Pool = useMemo(
+    () => buildLiveR32Pool(matchResults, teams, eliminated),
+    [matchResults, teams, eliminated],
+  );
 
   const phases: { label: string; key: 'R32' | 'R16' | 'QF' | 'SF' | '3rd' | 'Final' }[] = [
     { label: tst('r32'),           key: 'R32'   },
@@ -801,38 +850,36 @@ function BracketView({ onNationClick, onMatchClick }: {
                     : [];
 
                 if (displayMatches.length === 0) {
-                  // R32: show actual teams (if group stage done) or seeding labels
                   const dynamicKey = bootstrap ? getDynamicKey(bootstrap, phase.key, di) : null;
                   if (phase.key === 'R32' && dynamicKey) {
                     const slice = R32_SLICES[dynamicKey];
                     if (slice) {
                       const [s, e] = slice;
-                      if (r32Pool.length >= e) {
-                        // Group stage complete — show actual qualified teams
-                        const poolPairs: Array<{a: string; b: string}> = [];
-                        for (let i = s; i < e; i += 2) {
-                          if (r32Pool[i] && r32Pool[i + 1]) poolPairs.push({ a: r32Pool[i], b: r32Pool[i + 1] });
+                      const livePairs: Array<[LiveR32Slot, LiveR32Slot]> = [];
+                      for (let i = s; i < e; i += 2) {
+                        if (liveR32Pool[i] !== undefined && liveR32Pool[i + 1] !== undefined) {
+                          livePairs.push([liveR32Pool[i], liveR32Pool[i + 1]]);
                         }
-                        return poolPairs.map((m, mi) => (
+                      }
+                      if (livePairs.length > 0) {
+                        return livePairs.map(([slotA, slotB], mi) => (
                           <div key={`${di}-${mi}`} className="bkt-m upcoming">
                             <div className="bkt-meta">{day.full_label}{isCur ? ' ▶' : ''}</div>
-                            <div className="bkt-t"><TeamName id={m.a} onNationClick={onNationClick}/></div>
-                            <div className="bkt-t"><TeamName id={m.b} onNationClick={onNationClick}/></div>
+                            <div className="bkt-t">
+                              {slotA.teamId
+                                ? <TeamName id={slotA.teamId} color={slotA.definitive ? undefined : 'var(--dim)'} onNationClick={onNationClick}/>
+                                : <span className="tbd" style={{color:'var(--dim)'}}>{formatR32SlotLabel(slotA)}</span>
+                              }
+                            </div>
+                            <div className="bkt-t">
+                              {slotB.teamId
+                                ? <TeamName id={slotB.teamId} color={slotB.definitive ? undefined : 'var(--dim)'} onNationClick={onNationClick}/>
+                                : <span className="tbd" style={{color:'var(--dim)'}}>{formatR32SlotLabel(slotB)}</span>
+                              }
+                            </div>
                           </div>
                         ));
                       }
-                      // Group stage still in progress — show seeding labels
-                      const seedPairs: [string, string][] = [];
-                      for (let i = s; i < e; i += 2) {
-                        seedPairs.push(R32_SEEDING_LABELS[i / 2] ?? ['?', '?']);
-                      }
-                      return seedPairs.map(([la, lb], mi) => (
-                        <div key={`${di}-${mi}`} className="bkt-m upcoming">
-                          <div className="bkt-meta">{day.full_label}</div>
-                          <div className="bkt-t"><span className="tbd">{la}</span></div>
-                          <div className="bkt-t"><span className="tbd">{lb}</span></div>
-                        </div>
-                      ));
                     }
                   }
                   return (

@@ -291,3 +291,122 @@ export function buildMatchesForDay(
 
 // Keep DIV_RATES re-export for any legacy callers
 export { DIV_RATES };
+
+// ─── R32 DAY SLICES ───────────────────────────────────────────────────────────
+export const R32_DAY_SLICES: Record<string, [number, number]> = {
+  r32_28: [0, 4],   r32_29: [4, 10],  r32_30: [10, 16],
+  r32_1:  [16, 22], r32_2:  [22, 26], r32_3:  [26, 32],
+};
+
+// ─── LIVE R32 POOL ─────────────────────────────────────────────────────────────
+// Returns 32 slots (2 per match × 16 matches) with provisional/definitive flags.
+// - winner/runner slots: show current standings, definitive once group is complete
+// - third slots: null until all groups finish (too early to assign), then definitive
+
+export interface LiveR32Slot {
+  teamId: string | null;
+  definitive: boolean;
+  slotType: 'winner' | 'runner' | 'third';
+  group?: string;
+  candidates?: string[];
+}
+
+export function buildLiveR32Pool(
+  matchResults: Record<number, StoredMatchResult[]>,
+  teams:        TeamMeta[],
+  eliminated:   string[],
+): LiveR32Slot[] {
+  const groups = resolveGroups(teams);
+  if (groups.length === 0) return [];
+
+  // Count group-stage matches played per team
+  const playedCount = new Map<string, number>();
+  for (const results of Object.values(matchResults)) {
+    for (const r of results) {
+      if (r.phase && r.phase !== 'Groups') continue;
+      playedCount.set(r.a, (playedCount.get(r.a) ?? 0) + 1);
+      playedCount.set(r.b, (playedCount.get(r.b) ?? 0) + 1);
+    }
+  }
+
+  const completeGroups = new Set<string>();
+  for (const g of groups) {
+    const gt = teams.filter(t => t.group === g);
+    if (gt.length >= 4 && gt.every(t => (playedCount.get(t.id) ?? 0) >= 3)) {
+      completeGroups.add(g);
+    }
+  }
+  const allGroupsComplete = completeGroups.size === groups.length;
+
+  const standings = deriveGroupStandings(matchResults, eliminated, teams);
+
+  // Third-slot picker — only resolved when all groups complete
+  type ThirdInfo = { id: string; group: string; pts: number; gf: number; gd: number; str: number };
+  let thirdPicker: ((candidates: string[]) => string | null) | null = null;
+
+  if (allGroupsComplete) {
+    const allThirds: ThirdInfo[] = [];
+    for (const g of groups) {
+      const thirdId = standings[g]?.[2];
+      if (!thirdId) continue;
+      const t = teams.find(t => t.id === thirdId);
+      if (!t) continue;
+      let pts = 0, gf = 0, ga = 0;
+      for (const results of Object.values(matchResults)) {
+        for (const r of results) {
+          if (r.phase && r.phase !== 'Groups') continue;
+          if (r.a !== thirdId && r.b !== thirdId) continue;
+          const isA = r.a === thirdId;
+          gf += isA ? r.scoreA : r.scoreB;
+          ga += isA ? r.scoreB : r.scoreA;
+          if ((isA && r.res === 'A') || (!isA && r.res === 'B')) pts += 3;
+          else if (r.res === 'draw') pts += 1;
+        }
+      }
+      allThirds.push({ id: thirdId, group: g, pts, gf, gd: gf - ga, str: t.strength });
+    }
+    allThirds.sort((a, b) => (b.pts - a.pts) || (b.gd - a.gd) || (b.gf - a.gf) || (b.str - a.str));
+    const best8 = allThirds.slice(0, 8);
+    const remaining = new Set(best8.map(t => t.id));
+
+    thirdPicker = (candidates: string[]): string | null => {
+      for (const g of candidates) {
+        const entry = best8.find(t => t.group === g && remaining.has(t.id));
+        if (entry) { remaining.delete(entry.id); return entry.id; }
+      }
+      const fallback = best8.find(t => remaining.has(t.id));
+      if (fallback) { remaining.delete(fallback.id); return fallback.id; }
+      return null;
+    };
+  }
+
+  const result: LiveR32Slot[] = [];
+  for (const [specA, specB] of WC2026_R32_PAIRINGS) {
+    for (const spec of [specA, specB] as R32SlotSpec[]) {
+      if (spec.type === 'winner') {
+        result.push({
+          teamId:    standings[spec.group]?.[0] ?? null,
+          definitive: completeGroups.has(spec.group),
+          slotType:  'winner',
+          group:     spec.group,
+        });
+      } else if (spec.type === 'runner') {
+        result.push({
+          teamId:    standings[spec.group]?.[1] ?? null,
+          definitive: completeGroups.has(spec.group),
+          slotType:  'runner',
+          group:     spec.group,
+        });
+      } else {
+        result.push({
+          teamId:    thirdPicker ? thirdPicker(spec.candidates) : null,
+          definitive: allGroupsComplete,
+          slotType:  'third',
+          candidates: spec.candidates,
+        });
+      }
+    }
+  }
+
+  return result;
+}

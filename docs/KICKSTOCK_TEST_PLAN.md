@@ -1,10 +1,18 @@
 # KICKSTOCK — CAHIER DE TESTS COMPLET
-**Version :** 3.0.0  
-**Date :** 2026-05-31  
+**Version :** 3.1.0  
+**Date :** 2026-06-20  
 **Périmètre :** Monorepo Phase 2 — `apps/web` · `packages/*` · Base de données Supabase · Crons API-Football  
 **Méthode :** Tests unitaires · Tests d'intégration · Tests de bout en bout · Audit sécurité · QA UI/UX
 
-> **Changelog v3.0 vs v2.0**
+> **Changelog v3.1 vs v3.0** *(2026-06-20)*
+> - **Cron `live-poll`** (`*/2 * * * *`, 24/7) ajouté dans `vercel.json` — met à jour les scores en DB, remplace les appels API-Football à chaque requête dans `/api/game/live-matches`. `sync-results` retiré de `vercel.json`, relégué en filet de sécurité GitHub Actions.
+> - **Scores en direct sur Schedule tab (mobile & desktop)** — `liveMatches` du store affiché dans `ScheduleTab` et BrowserShell Home, avec badge 🔒 trade lock.
+> - **Classement Online** — nouvelle route `/api/leaderboard/online`, `RankingPanel` avec deux onglets (Online / Offline), hook `useOnlineRanking`.
+> - **`FirstTradeUpsellModal`** — s'affiche une seule fois après le premier achat d'un invité.
+> - **Migration 024 `trade_lock_until` basé sur `scheduled_at`** — le blocage côté DB est anticipé avant `api_status = '1H'` (améliore la faille FAILLE-TRADE-LOCK-1, partiellement).
+> - **Faille ouverte — FAILLE-TRADE-LOCK-1 :** fenêtre de 0–2 min entre le coup d'envoi réel et le prochain tick du cron live-poll (voir TRADE_LOCK_AUDIT.md).
+>
+> **Changelog v3.0 vs v2.0** *(2026-05-31)*
 > - Le mode par défaut est désormais **`online`** (`localStorage('kickstock:mode')` absent → `'online'`). La v2.0 supposait à tort le mode offline par défaut.
 > - `onlineGameStore` entièrement implémenté : Supabase Realtime WebSocket + fallback poll 30 s, `loadBootstrap()`, `trade()` via `/api/trade`, `advanceDay()` via `/api/game/advance`.
 > - Pipeline de résultats réels : `sync-fixtures` (cron quotidien), `sync-results` (cron 30 min), `processRealMatchResult()`, `checkAndAdvancePhase()`, `isMatchWindowActive()`.
@@ -20,6 +28,14 @@
 2. [Sécurité & Isolation](#2-sécurité--isolation)
 3. [Tests Fonctionnels Métier](#3-tests-fonctionnels-métier)
 4. [Compatibilité UI/UX](#4-compatibilité-uiux)
+
+> **Routes API couvertes (v3.1) :**  
+> `/api/trade` · `/api/game/state` · `/api/game/advance` · `/api/game/live-matches`  
+> `/api/competition/bootstrap` · `/api/competition/list`  
+> `/api/auth/guest` · `/api/auth/check-pseudo` · `/api/auth/check-email` · `/api/auth/set-username` · `/api/auth/guest-status`  
+> `/api/cron/sync-fixtures` · `/api/cron/sync-results` · `/api/cron/live-poll` · `/api/cron/sync-schedule` · `/api/cron/sync-squads`  
+> `/api/leaderboard/online`  
+> `/api/admin/competitions/*`
 
 ---
 
@@ -142,10 +158,12 @@ pnpm build
 - `✓ Compiled successfully`
 - Toutes les routes API apparaissent avec le flag `(Dynamic)` :
   `/api/trade`, `/api/game/state`, `/api/game/advance`, `/api/game/live-matches`,
-  `/api/market`, `/api/competition/bootstrap`,
-  `/api/auth/guest`, `/api/auth/check-pseudo`, `/api/auth/check-email`, `/api/auth/set-username`,
-  `/api/cron/sync-fixtures`, `/api/cron/sync-results`
+  `/api/competition/bootstrap`, `/api/competition/list`,
+  `/api/auth/guest`, `/api/auth/check-pseudo`, `/api/auth/check-email`, `/api/auth/set-username`, `/api/auth/guest-status`,
+  `/api/cron/sync-fixtures`, `/api/cron/sync-results`, `/api/cron/live-poll`, `/api/cron/sync-schedule`, `/api/cron/sync-squads`,
+  `/api/leaderboard/online`
 - `export const maxDuration = 60` visible sur `/api/game/advance`, `/api/cron/sync-fixtures`, `/api/cron/sync-results`
+- `export const maxDuration = 30` visible sur `/api/cron/live-poll`
 
 ---
 
@@ -344,6 +362,46 @@ curl -s https://kickstock.app/api/cron/sync-fixtures \
 curl -s https://kickstock.app/api/cron/sync-results
 # Attendu : HTTP 401, { "error": "Unauthorized" }
 ```
+
+---
+
+#### SEC-CRON-03 — `live-poll` : rejet sans `CRON_SECRET`
+
+```bash
+# Sans Authorization
+curl -s https://kick-stock-web.vercel.app/api/cron/live-poll
+# Attendu : HTTP 401, { "error": "Unauthorized" }
+
+# Faux secret
+curl -s https://kick-stock-web.vercel.app/api/cron/live-poll \
+  -H "Authorization: Bearer mauvais-secret"
+# Attendu : HTTP 401
+```
+
+---
+
+#### SEC-CRON-04 — `live-poll` : court-circuit hors fenêtre de match
+
+```bash
+# Appel hors créneau (aucun match dans ±3h)
+curl -s https://kick-stock-web.vercel.app/api/cron/live-poll \
+  -H "Authorization: Bearer $CRON_SECRET"
+# Attendu (hors créneau) : { "skipped": true, "reason": "no active match window" }
+```
+
+**Vérifier :** 0 appel à API-Football consommé.
+
+---
+
+#### SEC-CRON-05 — `live-poll ?force=1` : bypass de la smart-window
+
+```bash
+curl -s "https://kick-stock-web.vercel.app/api/cron/live-poll?force=1" \
+  -H "Authorization: Bearer $CRON_SECRET"
+# Attendu : { "ok": true, "liveUpdated": N, "processed": M }
+```
+
+**Usage :** Tests admin uniquement — ne pas activer en prod hors créneau (appels API inutiles).
 
 ---
 
@@ -907,6 +965,70 @@ Les deux modes sont désormais alignés — BUG-TAX-ONLINE corrigé ✅.
 
 ---
 
+**ID :** FT-CRON-00 `[ONLINE]`  
+**Titre :** Architecture de la mise à jour des scores — vue d'ensemble
+
+**[V3.1 — CHANGEMENT D'ARCHITECTURE]** Depuis V25, `/api/game/live-matches` **ne fait plus d'appel à API-Football**. Les scores en cours (`1H/HT/2H/ET/BT/P`) sont maintenus dans la table `matches` par le cron `live-poll` (toutes les 2 min). La route lit uniquement la DB — données fraîches à ≤ 2 min près.
+
+| Composant | Fréquence | Rôle |
+|-----------|-----------|------|
+| `live-poll` | 2 min (24/7) | Met à jour `matches.score_a/score_b/api_status` + traite les FT |
+| `sync-results` | 30 min (GitHub Actions) | Filet de sécurité : retraite les matchs finis si live-poll a manqué un tick |
+| `sync-fixtures` | Quotidien (06h UTC) | Importe le calendrier depuis API-Football |
+| `/api/game/live-matches` | À la demande | Lit la DB, retourne les matchs du jour |
+
+---
+
+**ID :** FT-LIVE-POLL-01 `[ONLINE]`  
+**Titre :** `live-poll` — mise à jour des scores en cours
+
+**Pré-requis :** Match en cours (api_status = `1H`), `CRON_SECRET` valide.
+
+**Étapes :**
+1. Lire `matches.score_a / score_b` avant le cron.
+2. Appeler `GET /api/cron/live-poll` avec le bon header.
+3. Relire `matches.score_a / score_b` après le cron.
+
+**Résultat attendu :**
+- `liveUpdated >= 1` dans la réponse.
+- `matches.score_a` et `matches.score_b` mis à jour avec les valeurs de l'API-Football.
+- `processed_at` reste `null` (match non encore fini).
+
+---
+
+**ID :** FT-LIVE-POLL-02 `[ONLINE]`  
+**Titre :** `live-poll` — traitement d'un match terminé (FT)
+
+**Pré-requis :** Match fini (`FT`) avec `processed_at = null`.
+
+**Résultat attendu :**
+- `processed = 1` dans la réponse.
+- `processRealMatchResult()` appelé : prix mis à jour, dividendes distribués, `processed_at` défini.
+- `checkAndAdvancePhase()` appelé.
+- Prochain tick du cron : match hors fenêtre `isMatchWindowActive()` → pas retraité.
+
+---
+
+**ID :** FT-LIVE-POLL-03 `[ONLINE]`  
+**Titre :** `live-poll` — idempotence sur match déjà traité
+
+**Pré-requis :** Match avec `processed_at != null`.
+
+**Résultat attendu :** `processed = 0`. Aucun prix ni dividende modifié.
+
+---
+
+**ID :** FT-LIVE-POLL-04 `[ONLINE]`  
+**Titre :** `live-poll` — couverture 24/7 (matchs nocturnes UTC)
+
+**Contexte :** Avant V26, le cron était limité à 06h00–23h59 UTC. Les matchs kickoffant après minuit UTC (ex. 22h00 heure du Pacifique = 05h00 UTC) n'étaient pas couverts par le cron Vercel.
+
+**Procédure :** Simuler un appel à `live-poll` à 02h00 UTC (hors ancienne fenêtre).
+
+**Résultat attendu :** Le cron s'exécute normalement. `isMatchWindowActive()` détermine seul si les appels API sont nécessaires — pas de restriction horaire codée.
+
+---
+
 **ID :** FT-CRON-01 `[ONLINE]`  
 **Titre :** `sync-fixtures` — idempotence sur re-run
 
@@ -1001,12 +1123,12 @@ Les deux modes sont désormais alignés — BUG-TAX-ONLINE corrigé ✅.
 
 ---
 
-### 3.8 LiveTab (mode online)
+### 3.8 LiveTab et scores en direct (mode online)
 
 ---
 
 **ID :** FT-LIVE-01 `[ONLINE]`  
-**Titre :** Affichage des statuts de match en temps réel  
+**Titre :** Affichage des statuts de match en temps réel dans LiveTab  
 **Pré-requis :** Mode online actif. `GET /api/game/live-matches` retourne des matchs du jour.
 
 **Résultat attendu :**
@@ -1019,6 +1141,8 @@ Les deux modes sont désormais alignés — BUG-TAX-ONLINE corrigé ✅.
 | `HT` | "MI-TEMPS" |
 | `FT` / `AET` / `PEN` | Score final + indicateur prix (hausse/baisse) |
 | `PST` / `CANC` | Non affiché (filtré par `NOT IN ("PST","SUSP","CANC","ABD")`) |
+
+**[V3.1] :** `/api/game/live-matches` lit uniquement la DB (scores maintenus par `live-poll`). Aucun appel API-Football à chaque requête.
 
 ---
 
@@ -1034,7 +1158,148 @@ Les deux modes sont désormais alignés — BUG-TAX-ONLINE corrigé ✅.
 
 ---
 
-### 3.9 Persistance et réseau
+**ID :** FT-LIVE-04 `[ONLINE]`  
+**Titre :** Scores en direct dans `ScheduleTab` (mobile)  
+**Pré-requis :** Mode online, `store.liveMatches` contient un match avec `api_status = '1H'` et `score_a = 1 / score_b = 0`.
+
+**Résultat attendu :**
+- Le match apparaît dans la journée courante avec le score `1–0` affiché.
+- Badge "EN JEU 🔒" visible (couleur `--gain`).
+- Le score ne provient pas de `matchResults` (pas encore traité) mais de `liveMatches`.
+- Après traitement (`matchResults` mis à jour), le score final remplace l'affichage live.
+
+---
+
+**ID :** FT-LIVE-05 `[ONLINE]`  
+**Titre :** Scores en direct dans BrowserShell Home (desktop)  
+**Pré-requis :** Identique à FT-LIVE-04, sur viewport > 600 px.
+
+**Résultat attendu :** La colonne de la journée courante dans BrowserShell affiche le score live du match en cours avec le même badge 🔒 et la même logique de priorité (`liveMatches` > `matchResults`).
+
+---
+
+**ID :** FT-LIVE-06 `[ONLINE]`  
+**Titre :** Badge 🔒 — disparaît après expiration du `trade_lock_until`  
+**Pré-requis :** Match avec `api_status = 'FT'`, `trade_lock_until = now + 1 min`.
+
+**Résultat attendu :**
+- Badge "FT 🔒" visible immédiatement.
+- Après 1 min (expiration du lock), le badge 🔒 disparaît, seul "FT" reste.
+- L'horloge interne du composant (mise à jour toutes les 30 s dans `LiveTab`) déclenche le re-render.
+
+---
+
+**ID :** FT-LIVE-07 `[ONLINE]`  
+**Titre :** `live-matches` — couverture des matchs ayant passé minuit UTC  
+**Contexte :** Un match kickoff à 22h00 UTC-4 = 02h00 UTC du lendemain. Sans la clause OR sur `processed_at IS NULL`, le match disparaîtrait du "jour courant" UTC après minuit.
+
+**Pré-requis :** Match avec `scheduled_at` la veille UTC, `api_status = '1H'` (non traité), `now > midnight UTC`.
+
+**Résultat attendu :** Le match est retourné par `/api/game/live-matches` grâce à la clause :  
+`OR (processed_at IS NULL AND scheduled_at <= now)` — il reste visible jusqu'à traitement.
+
+---
+
+### 3.9 Classement Online
+
+---
+
+**ID :** FT-RANK-01 `[ONLINE]`  
+**Titre :** `/api/leaderboard/online` — réponse nominale
+
+```bash
+curl -s "https://kick-stock-web.vercel.app/api/leaderboard/online?limit=50&deviceId=$DEVICE_ID&competitionId=1"
+```
+
+**Résultat attendu :**
+```json
+{
+  "entries": [
+    { "rank": 1, "username": "...", "user_type": "registered", "total_value": 12500, ... }
+  ],
+  "me": { "rank": 42, "total_value": 10350, ... },
+  "total": 147
+}
+```
+
+- `total_value` = `portfolios.cash` + somme(holdings.quantity × current_price).
+- Entrées triées par `total_value` décroissant.
+- `me` non null si `deviceId` ou session correspond à un portfolio de la compétition.
+- Si `me` est dans le top 50, il apparaît dans `entries` ET dans `me`.
+
+---
+
+**ID :** FT-RANK-02 `[ONLINE]`  
+**Titre :** RankingPanel — onglet Online vs Offline
+
+**Pré-requis :** Mode online actif.
+
+**Résultat attendu :**
+- `RankingPanel` ouvre par défaut l'onglet **Online**.
+- En mode offline, l'onglet **Offline** est sélectionné par défaut.
+- Clic sur l'onglet non-actif → rafraîchissement immédiat.
+- Changement de mode de jeu (localStorage) → l'onglet actif suit automatiquement.
+
+---
+
+**ID :** FT-RANK-03 `[ONLINE]`  
+**Titre :** Rafraîchissement de l'identité au changement de compte
+
+**Pré-requis :** Joueur connecté avec un compte. Changer de compte (sign out + sign in avec un autre).
+
+**Résultat attendu :**
+- `online.refresh()` et `offline.refresh()` appelés sur l'événement `kickstock:pseudo-saved`.
+- La ligne "Me" dans le classement affiche le bon pseudo et la bonne valeur.
+- Pas de ligne "Me" fantôme de l'ancien compte.
+
+---
+
+**ID :** FT-RANK-04 `[ONLINE]`  
+**Titre :** `total_value` cohérente avec le store
+
+**Procédure :** Acheter 10 actions BRA à 200 KC. Puis vérifier `/api/leaderboard/online`.
+
+**Résultat attendu :** `me.total_value` = `store.cash + store.portfolio['BRA'] × store.prices['BRA']`. L'écart doit être < 1 KC (arrondi numérique).
+
+---
+
+### 3.10 FirstTradeUpsellModal
+
+---
+
+**ID :** FT-UPSELL-01  
+**Titre :** Modale affichée une seule fois après le premier achat invité
+
+**Pré-requis :** Joueur invité, aucun achat préalable, clé `kickstock:first-trade-upsell-shown` absente de localStorage.
+
+**Étapes :** Effectuer un premier achat (BUY).
+
+**Résultat attendu :**
+- `FirstTradeUpsellModal` s'affiche après le trade.
+- Propose "Continuer avec Google" et "Continuer en invité".
+- La clé `kickstock:first-trade-upsell-shown` est posée en localStorage.
+
+---
+
+**ID :** FT-UPSELL-02  
+**Titre :** Modale non ré-affichée lors des trades suivants
+
+**Pré-requis :** `kickstock:first-trade-upsell-shown` présent en localStorage.
+
+**Résultat attendu :** Aucune modale après le second achat.
+
+---
+
+**ID :** FT-UPSELL-03  
+**Titre :** Modale non affichée pour un compte authentifié
+
+**Pré-requis :** Joueur connecté (Supabase session active).
+
+**Résultat attendu :** Aucune modale après le premier achat.
+
+---
+
+### 3.11 Persistance et réseau
 
 ---
 
@@ -1062,6 +1327,52 @@ Les deux modes sont désormais alignés — BUG-TAX-ONLINE corrigé ✅.
 **ID :** FT-NET-04 `[OFFLINE]`  
 **Titre :** `resetGame()` — remise à zéro complète  
 **Résultat attendu :** `cash = 10 000`, `portfolio = {}`, `txLog = []`, `dayIndex = 0`, `eliminated = []`. `localStorage['ks-game-state']` contient l'état vide.
+
+---
+
+### 3.12 Trade Lock — Tests de sécurité (migration 023/024)
+
+---
+
+**ID :** FT-LOCK-01 `[ONLINE]`  
+**Titre :** Blocage côté DB pour un match en cours (`api_status = '1H'`)
+
+**Pré-requis :** Match avec `api_status = '1H'` pour BRA et FRA (mis à jour par live-poll).
+
+```bash
+curl -X POST https://kick-stock-web.vercel.app/api/trade \
+  -H "X-Device-ID: $DEVICE" -H "Content-Type: application/json" \
+  -d '{"nationId":"BRA","mode":"buy","quantity":1}'
+# Attendu : HTTP 422, { code: "TRADE_LOCKED" }
+```
+
+---
+
+**ID :** FT-LOCK-02 `[ONLINE]`  
+**Titre :** Fenêtre de 0–2 min après coup d'envoi (FAILLE-TRADE-LOCK-1 — ouverte)
+
+**Contexte :** Entre le coup d'envoi réel et le prochain tick du cron live-poll (≤ 2 min), `api_status = 'NS'` en DB → le trade passe côté backend.
+
+**Résultat attendu actuel (comportement connu) :**
+- Trade réussi si `api_status = 'NS'` et `trade_lock_until` de la migration 023 non encore défini.
+- Aucun blocage pendant cette fenêtre.
+
+**Résultat attendu après correctif :**
+- La migration 024 (`trade_lock_until` basé sur `scheduled_at`) doit bloquer le trade dès `now >= scheduled_at`.
+- Vérifier que le RPC check : `trade_lock_until IS NOT NULL AND trade_lock_until > NOW()`.
+
+> 🔴 Cette faille est documentée dans `TRADE_LOCK_AUDIT.md`. Corriger et repasser ce test après le fix.
+
+---
+
+**ID :** FT-LOCK-03 `[ONLINE]`  
+**Titre :** Déverrouillage 15 min après fin du match
+
+**Pré-requis :** Match venant de passer FT, `trade_lock_until = now + 15min`.
+
+**Résultat attendu :**
+- Trade bloqué pendant 15 min (HTTP 422 `TRADE_LOCKED` ou équivalent).
+- Après expiration : trade réussi (HTTP 200).
 
 ---
 
@@ -1314,14 +1625,15 @@ WHERE competition_id = <id> ORDER BY group_code;
 
 | ID | Titre | Sévérité | Fichier | Statut |
 |----|-------|----------|---------|--------|
-| CRITIQUE-1 | `/api/game/advance` sans authentification | 🔴 BLOQUANT | `app/api/game/advance/route.ts` | Non corrigé |
+| CRITIQUE-1 | `/api/game/advance` sans authentification | 🔴 BLOQUANT | `app/api/game/advance/route.ts` | **Non corrigé** |
 | CRITIQUE-2 | RLS `portfolios_select_device` expose tous les portfolios anonymes | 🔴 BLOQUANT | `db/FULL_SETUP.sql` | À vérifier en base |
+| FAILLE-TRADE-LOCK-1 | Fenêtre 0–2 min après coup d'envoi (api_status encore NS) | 🔴 BLOQUANT | `db/migrations/023_trade_lock_during_match.sql` | **Ouvert** — voir `TRADE_LOCK_AUDIT.md` |
 | BUG-TAX-ONLINE | Taux de taxe inversés dans l'optimistic update | 🔴 BLOQUANT | `stores/onlineGameStore.ts` | **Corrigé** ✅ |
 | HAUTE-1 | UUID v4 non validé dans `/api/trade` | 🟠 MAJEUR | `app/api/trade/route.ts` | Partiellement corrigé |
 | HAUTE-2 | Vue `leaderboard` expose `portfolios.id` | 🟠 MAJEUR | Vue SQL Supabase | À vérifier en base |
-| MOYENNE | Messages d'erreur internes côté client | 🟡 MINEUR | Les 3 routes API | Corrigé ✅ |
+| MOYENNE | Messages d'erreur internes côté client | 🟡 MINEUR | Les 3 routes API | **Corrigé** ✅ |
 | BUG-CAP-OFFLINE | Plafond 40% absent du `localGameStore` | 🟡 MINEUR | `stores/localGameStore.ts` | Non corrigé |
-| TODO-TRADE-LOCK | Vérification `trade_lock_until` dans `/api/trade` | 🟡 MINEUR | `app/api/trade/route.ts` | Non implémenté |
+| TODO-TRADE-LOCK | Vérification `trade_lock_until` dans `/api/trade` (côté route) | 🟡 MINEUR | `app/api/trade/route.ts` | Partiellement implémenté (migration 023/024 — faille ouverte) |
 
 **BUG-TAX-ONLINE — Corrigé ✅** (`stores/onlineGameStore.ts`)
 ```typescript
@@ -1348,4 +1660,22 @@ if (!UUID_V4.test(deviceId)) {
 
 ---
 
-*Document mis à jour le 2026-05-31 — Version 3.0. Maintenir à chaque évolution du schéma DB, des routes API, des stores ou des crons.*
+## ANNEXE E — Variables d'environnement v3.1
+
+> Identique à l'Annexe C, avec ajout de `ADVANCE_SECRET` (toujours non implémenté, CRITIQUE-1 ouvert).
+
+| Variable | Usage | Où |
+|----------|-------|-----|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL du projet Supabase | Client + Server |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique Supabase | Client + Server |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clé admin Supabase | Server uniquement |
+| `CRON_SECRET` | Auth crons `sync-fixtures`, `sync-results`, `live-poll` | Server uniquement |
+| `FOOTBALL_API_KEY` | Clé API-Football (utilisée par `live-poll`, `sync-fixtures`, `sync-results`) | Server uniquement |
+| `NEXT_PUBLIC_SENTRY_DSN` | DSN Sentry (optionnel) | Client + Server |
+| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile (optionnel) | Server uniquement |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Clé publique Turnstile (optionnel) | Client |
+| `ADVANCE_SECRET` | Auth `/api/game/advance` (**non implémenté** — CRITIQUE-1) | À créer |
+
+---
+
+*Document mis à jour le 2026-06-20 — Version 3.1. Changements : live-poll 24/7, scores en direct Schedule tab, classement online, FirstTradeUpsellModal, trade lock audit.*
