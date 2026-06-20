@@ -1053,7 +1053,7 @@ export default function BrowserShell() {
     <div className="ks-browser">
       {/* SIDEBAR */}
       <nav className="sb">
-        <div className="sb-logo"><span style={{fontSize:18}}>⚽</span><span className="sb-logotxt">KS</span></div>
+        <div className="sb-logo"><img src="/icon-192.png" alt="KickStock" style={{width:40,height:40,borderRadius:9,display:'block'}}/></div>
         <div className="sb-nav">
           {SIDEBAR_MAIN.map(item => (
             <button key={item.id} className={`ni${view === item.id ? ' on' : ''}`} onClick={() => setView(item.id)}>
