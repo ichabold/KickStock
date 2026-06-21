@@ -11,7 +11,7 @@ import type { BootstrapData, GameState, Match, TeamMeta } from '@kickstock/types
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 function cacheKey(competitionId?: number) {
-  return `kickstock:bootstrap:v2:${competitionId ?? 'active'}`;
+  return `kickstock:bootstrap:v3:${competitionId ?? 'active'}`;
 }
 
 interface CacheEntry { data: BootstrapData; fetchedAt: number; serverVersion?: string }

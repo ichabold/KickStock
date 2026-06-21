@@ -470,7 +470,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                   <div key={di} className={`ko-match${displayMatches.length === 0 && !hasPairs ? ' tbd' : ''}`}>
                     <div className="ko-date">
                       {day.full_label}{isCur ? ' ▶' : ''}
-                      {dayTimes.length > 0 && displayMatches.length === 0 && (
+                      {dayTimes.length > 0 && (
                         <span style={{fontSize:8, color:'var(--di)', marginLeft:4}}>
                           {dayTimes.join(' · ')} CET
                         </span>
