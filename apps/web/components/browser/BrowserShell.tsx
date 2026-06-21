@@ -385,16 +385,9 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                     >
                       <div className="mtime">
                         J·{di+1}
-                        {(() => {
-                          if (res) return null;
-                          const lm = liveMatches.find(lm =>
-                            (lm.nation_a === m.nation_a && lm.nation_b === m.nation_b) ||
-                            (lm.nation_a === m.nation_b && lm.nation_b === m.nation_a)
-                          );
-                          return lm?.scheduled_at
-                            ? <span style={{display:'block',fontSize:8,color:'var(--di)',letterSpacing:0}}>{fmtCET(lm.scheduled_at)} CET</span>
-                            : null;
-                        })()}
+                        {!res && m.scheduled_at && (
+                          <span style={{display:'block',fontSize:8,color:'var(--di)',letterSpacing:0}}>{fmtCET(m.scheduled_at)} CET</span>
+                        )}
                       </div>
                       <div className="mteams">
                         <TeamName id={m.nation_a} color={res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>

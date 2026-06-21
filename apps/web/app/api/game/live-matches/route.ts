@@ -57,8 +57,12 @@ export async function GET(req: NextRequest) {
     .eq('competition_id', comp.id)
     .not('api_status', 'in', '("PST","SUSP","CANC","ABD")')
     .or(
+      // Today's matches
       `and(scheduled_at.gte.${start.toISOString()},scheduled_at.lte.${end.toISOString()}),` +
-      `and(processed_at.is.null,scheduled_at.lte.${now.toISOString()})`
+      // Already kicked off but not yet processed (e.g. crosses midnight UTC)
+      `and(processed_at.is.null,scheduled_at.lte.${now.toISOString()}),` +
+      // All future KO fixtures (for schedule CET time display — won't trigger trade locks)
+      `and(phase.neq.Groups,processed_at.is.null,scheduled_at.gt.${now.toISOString()})`
     )
     .order('scheduled_at', { ascending: true });
 

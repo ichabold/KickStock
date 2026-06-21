@@ -33,10 +33,11 @@ export interface BootstrapDay {
 }
 
 export interface BootstrapFixture {
-  day_index: number;
-  nation_a:  string;
-  nation_b:  string;
-  venue:     string | null;
+  day_index:    number;
+  nation_a:     string;
+  nation_b:     string;
+  venue:        string | null;
+  scheduled_at: string | null;
 }
 
 /** Raw team row as returned by /api/competition/bootstrap (snake_case from DB). */

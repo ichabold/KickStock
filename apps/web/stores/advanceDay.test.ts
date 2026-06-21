@@ -64,7 +64,7 @@ function makeBootstrap(): BootstrapData {
       { day_index: 1, full_label: 'Day 1', date_label: 'Jun 2', phase: 'Groups', is_ko: false, div_key: null },
     ],
     group_fixtures: [
-      { day_index: 0, nation_a: 'AAA', nation_b: 'BBB', venue: null },
+      { day_index: 0, nation_a: 'AAA', nation_b: 'BBB', venue: null, scheduled_at: null },
     ],
     squads: {},
     generated_at: new Date().toISOString(),
