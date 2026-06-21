@@ -383,7 +383,19 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                       className={`mrow${isCur ? ' cur' : isPast ? ' past' : ''}`}
                       {...(isCur && mi === 0 ? { 'data-coach': 'schedule-match' } : {})}
                     >
-                      <div className="mtime">J·{di+1}</div>
+                      <div className="mtime">
+                        J·{di+1}
+                        {(() => {
+                          if (res) return null;
+                          const lm = liveMatches.find(lm =>
+                            (lm.nation_a === m.nation_a && lm.nation_b === m.nation_b) ||
+                            (lm.nation_a === m.nation_b && lm.nation_b === m.nation_a)
+                          );
+                          return lm?.scheduled_at
+                            ? <span style={{display:'block',fontSize:8,color:'var(--di)',letterSpacing:0}}>{fmtCET(lm.scheduled_at)} CET</span>
+                            : null;
+                        })()}
+                      </div>
                       <div className="mteams">
                         <TeamName id={m.nation_a} color={res ? (resA === 'A' ? 'var(--gold)' : resA !== 'draw' ? 'var(--mu)' : undefined) : undefined} onNationClick={onNationClick}/>
                         <span className="vs"> vs </span>
@@ -397,14 +409,7 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                         >
                           {sA}–{sB}{res.penWinner ? ' P' : res.etRes ? ' AET' : ''}
                         </button>
-                      ) : (() => {
-                        const lm = liveMatches.find(lm =>
-                          (lm.nation_a === m.nation_a && lm.nation_b === m.nation_b) ||
-                          (lm.nation_a === m.nation_b && lm.nation_b === m.nation_a)
-                        );
-                        const timeStr = lm?.scheduled_at ? fmtCET(lm.scheduled_at) + ' CET' : m.venue ?? null;
-                        return timeStr ? <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{timeStr}</div> : null;
-                      })()}
+                      ) : (m.venue ? <div className="mtime" style={{fontSize: 9, color: 'var(--di)'}}>{m.venue}</div> : null)}
                       <div className={`mbadge ${isPast ? 'done' : isCur ? 'soon' : ''}`}>
                         {isPast ? 'FT' : isCur ? tsch('next') : tsch('upcomingBadge')}
                       </div>
@@ -454,9 +459,30 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                 }
 
                 const hasPairs = liveR32Pairs.length > 0;
+
+                // CET times for this KO day derived from calendar date (works even when teams TBD)
+                const startDate = bootstrap?.competition.start_date;
+                const calDate = startDate
+                  ? new Date(new Date(startDate).getTime() + di * 86_400_000).toISOString().slice(0, 10)
+                  : null;
+                const dayTimes = calDate
+                  ? [...new Set(
+                      liveMatches
+                        .filter(lm => lm.scheduled_at?.startsWith(calDate))
+                        .map(lm => fmtCET(lm.scheduled_at!))
+                    )].sort()
+                  : [];
+
                 return (
                   <div key={di} className={`ko-match${displayMatches.length === 0 && !hasPairs ? ' tbd' : ''}`}>
-                    <div className="ko-date">{day.full_label}{isCur ? ' ▶' : ''}</div>
+                    <div className="ko-date">
+                      {day.full_label}{isCur ? ' ▶' : ''}
+                      {dayTimes.length > 0 && displayMatches.length === 0 && (
+                        <span style={{fontSize:8, color:'var(--di)', marginLeft:4}}>
+                          {dayTimes.join(' · ')} CET
+                        </span>
+                      )}
+                    </div>
                     {displayMatches.length > 0 ? displayMatches.map((m, mi) => {
                       const res = played?.find(r => (r.a === m.a && r.b === m.b) || (r.a === m.b && r.b === m.a));
                       const flipped = res && res.a === m.b;
