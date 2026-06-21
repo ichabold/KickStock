@@ -135,23 +135,38 @@ export type R32SlotSpec =
   | { type: 'runner'; group: string }
   | { type: 'third';  candidates: string[] };
 
+// Ordered in CALENDAR order (Jun 28 → Jul 3) so that the 6 engine days map
+// directly to contiguous pool slices. After all R32 is played, r16Pool is
+// rebuilt in the official bracket order via buildR16PoolFromR32Results.
+//
+// Pool index → R32 match:
+//   [0-1]  M73  [2-3]  M74  [4-5]  M75  [6-7]  M76   ← Jun 28-29
+//   [8-9]  M77 [10-11] M78 [12-13] M79 [14-15]  M80   ← Jun 30 - Jul 1
+//  [16-17] M81 [18-19] M82 [20-21] M83 [22-23]  M84   ← Jul 1-2
+//  [24-25] M85 [26-27] M86 [28-29] M87 [30-31]  M88   ← Jul 2-3
 export const WC2026_R32_PAIRINGS: [R32SlotSpec, R32SlotSpec][] = [
-  [{ type: 'winner', group: 'A' }, { type: 'third', candidates: ['C', 'E', 'F', 'H', 'I'] }],
-  [{ type: 'winner', group: 'B' }, { type: 'third', candidates: ['E', 'F', 'G', 'I', 'J'] }],
-  [{ type: 'runner', group: 'A' }, { type: 'runner', group: 'B' }],
-  [{ type: 'winner', group: 'C' }, { type: 'runner', group: 'F' }],
-  [{ type: 'winner', group: 'D' }, { type: 'third', candidates: ['B', 'E', 'F', 'I', 'J'] }],
-  [{ type: 'winner', group: 'E' }, { type: 'third', candidates: ['A', 'B', 'C', 'D', 'F'] }],
-  [{ type: 'runner', group: 'C' }, { type: 'winner', group: 'F' }],
-  [{ type: 'runner', group: 'D' }, { type: 'runner', group: 'G' }],
-  [{ type: 'runner', group: 'E' }, { type: 'runner', group: 'I' }],
-  [{ type: 'winner', group: 'G' }, { type: 'third', candidates: ['A', 'E', 'H', 'I', 'J'] }],
-  [{ type: 'winner', group: 'H' }, { type: 'runner', group: 'J' }],
-  [{ type: 'runner', group: 'K' }, { type: 'runner', group: 'L' }],
-  [{ type: 'winner', group: 'I' }, { type: 'third', candidates: ['C', 'D', 'F', 'G', 'H'] }],
-  [{ type: 'winner', group: 'J' }, { type: 'runner', group: 'H' }],
-  [{ type: 'winner', group: 'K' }, { type: 'third', candidates: ['D', 'E', 'I', 'J', 'L'] }],
-  [{ type: 'winner', group: 'L' }, { type: 'third', candidates: ['E', 'H', 'I', 'J', 'K'] }],
+  // ── Jun 28 (1 match) ──────────────────────────────────────────────────────
+  [{ type: 'runner', group: 'A' }, { type: 'runner', group: 'B' }],                              // M73
+  // ── Jun 29 (3 matches) ────────────────────────────────────────────────────
+  [{ type: 'winner', group: 'E' }, { type: 'third',  candidates: ['A', 'B', 'C', 'D', 'F'] }],  // M74
+  [{ type: 'winner', group: 'F' }, { type: 'runner', group: 'C' }],                              // M75
+  [{ type: 'winner', group: 'C' }, { type: 'runner', group: 'F' }],                              // M76
+  // ── Jun 30 (3 matches) ────────────────────────────────────────────────────
+  [{ type: 'winner', group: 'I' }, { type: 'third',  candidates: ['C', 'D', 'F', 'G', 'H'] }],  // M77
+  [{ type: 'runner', group: 'E' }, { type: 'runner', group: 'I' }],                              // M78
+  [{ type: 'winner', group: 'A' }, { type: 'third',  candidates: ['C', 'E', 'F', 'H', 'I'] }],  // M79
+  // ── Jul 1 (3 matches) ─────────────────────────────────────────────────────
+  [{ type: 'winner', group: 'L' }, { type: 'third',  candidates: ['E', 'H', 'I', 'J', 'K'] }],  // M80
+  [{ type: 'winner', group: 'D' }, { type: 'third',  candidates: ['B', 'E', 'F', 'I', 'J'] }],  // M81
+  [{ type: 'winner', group: 'G' }, { type: 'third',  candidates: ['A', 'E', 'H', 'I', 'J'] }],  // M82
+  // ── Jul 2 (3 matches) ─────────────────────────────────────────────────────
+  [{ type: 'runner', group: 'K' }, { type: 'runner', group: 'L' }],                              // M83
+  [{ type: 'winner', group: 'H' }, { type: 'runner', group: 'J' }],                              // M84
+  [{ type: 'winner', group: 'B' }, { type: 'third',  candidates: ['E', 'F', 'G', 'I', 'J'] }],  // M85
+  // ── Jul 3 (3 matches) ─────────────────────────────────────────────────────
+  [{ type: 'winner', group: 'J' }, { type: 'runner', group: 'H' }],                              // M86
+  [{ type: 'winner', group: 'K' }, { type: 'third',  candidates: ['D', 'E', 'I', 'J', 'L'] }],  // M87
+  [{ type: 'runner', group: 'D' }, { type: 'runner', group: 'G' }],                              // M88
 ];
 
 // ─── R32 POOL BUILDER ─────────────────────────────────────────────────────────
@@ -249,8 +264,9 @@ export function buildMatchesForDay(
   };
 
   const r32Slices: Record<string, [number, number]> = {
-    r32_28: [0, 4],   r32_29: [4, 10],  r32_30: [10, 16],
-    r32_1:  [16, 22], r32_2:  [22, 26], r32_3:  [26, 32],
+    r32_1: [0,  2],  r32_2: [2,  8],
+    r32_3: [8,  14], r32_4: [14, 20],
+    r32_5: [20, 26], r32_6: [26, 32],
   };
   if (r32Slices[dynamic]) {
     const [s, e] = r32Slices[dynamic];
@@ -293,10 +309,59 @@ export function buildMatchesForDay(
 export { DIV_RATES };
 
 // ─── R32 DAY SLICES ───────────────────────────────────────────────────────────
+// 6 days matching the real FIFA calendar: Jun 28(1) Jun 29(3) Jun 30(3)
+// Jul 1(3) Jul 2(3) Jul 3(3). Pool is in calendar order; after all R32 is
+// played, r16Pool is rebuilt in official bracket order via buildR16PoolFromR32Results.
 export const R32_DAY_SLICES: Record<string, [number, number]> = {
-  r32_28: [0, 4],   r32_29: [4, 10],  r32_30: [10, 16],
-  r32_1:  [16, 22], r32_2:  [22, 26], r32_3:  [26, 32],
+  r32_1: [0,  2],  r32_2: [2,  8],
+  r32_3: [8,  14], r32_4: [14, 20],
+  r32_5: [20, 26], r32_6: [26, 32],
 };
+
+// ─── R16 BRACKET ORDER ────────────────────────────────────────────────────────
+// WC2026_R32_PAIRINGS is in calendar order (indices 0-15 = M73..M88).
+// This array maps each r16Pool position to the R32 match index in WC2026_R32_PAIRINGS
+// whose winner should go there, producing the official R16 bracket:
+//   r16Pool[0,1]  = W(M74), W(M77) → M89   r16Pool[2,3]  = W(M73), W(M75) → M90
+//   r16Pool[4,5]  = W(M83), W(M84) → M93   r16Pool[6,7]  = W(M81), W(M82) → M94
+//   r16Pool[8,9]  = W(M76), W(M78) → M91   r16Pool[10,11]= W(M79), W(M80) → M92
+//   r16Pool[12,13]= W(M86), W(M88) → M95   r16Pool[14,15]= W(M85), W(M87) → M96
+// QF97=W89vsW90, QF98=W93vsW94, QF99=W91vsW92, QF100=W95vsW96 ✓
+export const WC2026_R16_BRACKET_ORDER: number[] = [
+  1, 4,   // M89: W(M74[1]) vs W(M77[4])
+  0, 2,   // M90: W(M73[0]) vs W(M75[2])
+  10, 11, // M93: W(M83[10]) vs W(M84[11])
+  8, 9,   // M94: W(M81[8])  vs W(M82[9])
+  3, 5,   // M91: W(M76[3])  vs W(M78[5])
+  6, 7,   // M92: W(M79[6])  vs W(M80[7])
+  13, 15, // M95: W(M86[13]) vs W(M88[15])
+  12, 14, // M96: W(M85[12]) vs W(M87[14])
+];
+
+// Rebuilds r16Pool in official bracket order from the r32Pool + all R32 results.
+// Call this after the last R32 engine day in the offline store.
+export function buildR16PoolFromR32Results(
+  r32Pool:      string[],
+  matchResults: Record<number, StoredMatchResult[]>,
+): string[] {
+  const r16Pool: string[] = [];
+  for (const r32Idx of WC2026_R16_BRACKET_ORDER) {
+    const teamA = r32Pool[r32Idx * 2];
+    const teamB = r32Pool[r32Idx * 2 + 1];
+    if (!teamA || !teamB) continue;
+    let winner: string | null = null;
+    outer: for (const results of Object.values(matchResults)) {
+      for (const r of results) {
+        if ((r.a === teamA && r.b === teamB) || (r.a === teamB && r.b === teamA)) {
+          winner = r.winnerId ?? null;
+          break outer;
+        }
+      }
+    }
+    if (winner) r16Pool.push(winner);
+  }
+  return r16Pool;
+}
 
 // ─── LIVE R32 POOL ─────────────────────────────────────────────────────────────
 // Returns 32 slots (2 per match × 16 matches) with provisional/definitive flags.

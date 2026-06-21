@@ -29,7 +29,7 @@ function teamToNation(t: TeamMeta): Nation {
 function getDynamicKey(bootstrap: BootstrapData, phase: string, dayIndex: number): string {
   const phaseDays = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
   const pos = phaseDays.findIndex(d => d.day_index === dayIndex);
-  if (phase === 'R32')   return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[pos]  ?? 'r32_1';
+  if (phase === 'R32')   return (['r32_1','r32_2','r32_3','r32_4','r32_5','r32_6'])[pos] ?? 'r32_1';
   if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[pos]                      ?? 'r16_1';
   if (phase === 'QF')    return pos === 0 ? 'qf_1' : 'qf_2';
   if (phase === 'SF')    return pos === 0 ? 'sf_1' : 'sf_2';
@@ -468,8 +468,13 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                             res: res!.res === 'A' ? 'B' : res!.res === 'B' ? 'A' : 'draw',
                             pA: res!.pB, pB: res!.pA, newPA: res!.newPB, newPB: res!.newPA }
                         : res;
+                      const lmKO = !res ? liveMatches.find(lm =>
+                        (lm.nation_a === m.a && lm.nation_b === m.b) ||
+                        (lm.nation_a === m.b && lm.nation_b === m.a)
+                      ) : undefined;
                       return (
                         <div key={mi} className="ko-teams">
+                          {lmKO?.scheduled_at && <div style={{fontSize:9,color:'var(--di)',gridColumn:'1/-1',marginBottom:2}}>{fmtCET(lmKO.scheduled_at)} CET</div>}
                           <TeamName id={m.a} color={res ? (resA === 'A' ? 'var(--gold)' : 'var(--mu)') : undefined} onNationClick={onNationClick}/>
                           {res && canonResult
                             ? <button className="ko-vs" style={{background:'none',border:'none',cursor:'pointer',fontFamily:'JetBrains Mono',fontWeight:700,color:'var(--gold)'}}
@@ -802,28 +807,29 @@ function StandingsView({ onNationClick, onMatchClick }: {
 // ─── BracketView constants ────────────────────────────────────────────────────
 
 const R32_SLICES: Record<string, [number, number]> = {
-  r32_28: [0, 4],   r32_29: [4, 10],  r32_30: [10, 16],
-  r32_1:  [16, 22], r32_2:  [22, 26], r32_3:  [26, 32],
+  r32_1: [0,  2],  r32_2: [2,  8],
+  r32_3: [8,  14], r32_4: [14, 20],
+  r32_5: [20, 26], r32_6: [26, 32],
 };
 
-// Seeding labels for 16 R32 matches (M1–M16), matching buildR32Pool order
+// Seeding labels in calendar order matching WC2026_R32_PAIRINGS
 const R32_SEEDING_LABELS: [string, string][] = [
-  ['1er Gr. A', '3e (C/E/F/H/I)'],
-  ['1er Gr. B', '3e (E/F/G/I/J)'],
-  ['2e Gr. A',  '2e Gr. B'],
-  ['1er Gr. C', '2e Gr. F'],
-  ['1er Gr. D', '3e (B/E/F/I/J)'],
-  ['1er Gr. E', '3e (A/B/C/D/F)'],
-  ['2e Gr. C',  '1er Gr. F'],
-  ['2e Gr. D',  '2e Gr. G'],
-  ['2e Gr. E',  '2e Gr. I'],
-  ['1er Gr. G', '3e (A/E/H/I/J)'],
-  ['1er Gr. H', '2e Gr. J'],
-  ['2e Gr. K',  '2e Gr. L'],
-  ['1er Gr. I', '3e (C/D/F/G/H)'],
-  ['1er Gr. J', '2e Gr. H'],
-  ['1er Gr. K', '3e (D/E/I/J/L)'],
-  ['1er Gr. L', '3e (E/H/I/J/K)'],
+  ['2e Gr. A',  '2e Gr. B'],         // M73 - Jun 28
+  ['1er Gr. E', '3e (A/B/C/D/F)'],  // M74 - Jun 29
+  ['1er Gr. F', '2e Gr. C'],         // M75 - Jun 29
+  ['1er Gr. C', '2e Gr. F'],         // M76 - Jun 29
+  ['1er Gr. I', '3e (C/D/F/G/H)'],  // M77 - Jun 30
+  ['2e Gr. E',  '2e Gr. I'],         // M78 - Jun 30
+  ['1er Gr. A', '3e (C/E/F/H/I)'],  // M79 - Jun 30
+  ['1er Gr. L', '3e (E/H/I/J/K)'],  // M80 - Jul 1
+  ['1er Gr. D', '3e (B/E/F/I/J)'],  // M81 - Jul 1
+  ['1er Gr. G', '3e (A/E/H/I/J)'],  // M82 - Jul 1
+  ['2e Gr. K',  '2e Gr. L'],         // M83 - Jul 2
+  ['1er Gr. H', '2e Gr. J'],         // M84 - Jul 2
+  ['1er Gr. B', '3e (E/F/G/I/J)'],  // M85 - Jul 2
+  ['1er Gr. J', '2e Gr. H'],         // M86 - Jul 3
+  ['1er Gr. K', '3e (D/E/I/J/L)'],  // M87 - Jul 3
+  ['2e Gr. D',  '2e Gr. G'],         // M88 - Jul 3
 ];
 
 // ─── BracketView ──────────────────────────────────────────────────────────────

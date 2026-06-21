@@ -21,10 +21,11 @@ const adm = (a: ReturnType<typeof createAdminClient>) => (a as any);
 // ── WC2026 KO schedule (official FIFA calendar) ───────────────────────────────
 // Dates used to compute day_index relative to competition.start_date
 // The game engine expects exactly these numbers of days per phase:
-//   R32: 6 days  (slices: r32_28[0,4], r32_29[4,10], r32_30[10,16],
-//                          r32_1[16,22], r32_2[22,26], r32_3[26,32])
+//   R32: 8 days  (slices: r32_1[0,4]..r32_8[28,32] — 2 matches per day,
+//                 ordered in bracket progression so adjacent pairs feed same R16)
 //   R16: 4 days  (slices: r16_1[0,4], r16_2[4,8], r16_3[8,12], r16_4[12,16])
-//   QF:  2 days  (slices: qf_1[0,2], qf_2[2,4] — 4 matches total)
+//   QF:  3 days  Jul 9 (M97), Jul 10 (M98), Jul 11 (M99+M100)
+//                offline: qf_1[0,4] on day 1, qf_2[4,8] on day 2, day 3 inert
 //   SF:  2 days  (slices: sf_1[0,2], sf_2[2,4])
 //   3rd: 1 day
 //   Final: 1 day
@@ -38,27 +39,28 @@ interface KoDay {
 }
 
 const WC2026_KO_DAYS: KoDay[] = [
-  // Round of 32 — June 28–July 3
+  // Round of 32 — June 28–July 3 (6 calendar days, 8 engine days split across them)
   { date: '2026-06-28', phase: 'R32',   dateLabel: 'Jun 28', fullLabel: 'R32 · Sun Jun 28', divKey: 'r32' },
   { date: '2026-06-29', phase: 'R32',   dateLabel: 'Jun 29', fullLabel: 'R32 · Mon Jun 29', divKey: 'r32' },
   { date: '2026-06-30', phase: 'R32',   dateLabel: 'Jun 30', fullLabel: 'R32 · Tue Jun 30', divKey: 'r32' },
   { date: '2026-07-01', phase: 'R32',   dateLabel: 'Jul 1',  fullLabel: 'R32 · Wed Jul 1',  divKey: 'r32' },
   { date: '2026-07-02', phase: 'R32',   dateLabel: 'Jul 2',  fullLabel: 'R32 · Thu Jul 2',  divKey: 'r32' },
   { date: '2026-07-03', phase: 'R32',   dateLabel: 'Jul 3',  fullLabel: 'R32 · Fri Jul 3',  divKey: 'r32' },
-  // Round of 16 — July 5–8
+  // Round of 16 — July 4–7
+  { date: '2026-07-04', phase: 'R16',   dateLabel: 'Jul 4',  fullLabel: 'R16 · Sat Jul 4',  divKey: 'r16' },
   { date: '2026-07-05', phase: 'R16',   dateLabel: 'Jul 5',  fullLabel: 'R16 · Sun Jul 5',  divKey: 'r16' },
   { date: '2026-07-06', phase: 'R16',   dateLabel: 'Jul 6',  fullLabel: 'R16 · Mon Jul 6',  divKey: 'r16' },
   { date: '2026-07-07', phase: 'R16',   dateLabel: 'Jul 7',  fullLabel: 'R16 · Tue Jul 7',  divKey: 'r16' },
-  { date: '2026-07-08', phase: 'R16',   dateLabel: 'Jul 8',  fullLabel: 'R16 · Wed Jul 8',  divKey: 'r16' },
-  // Quarter-finals — July 12–13
-  { date: '2026-07-12', phase: 'QF',    dateLabel: 'Jul 12', fullLabel: 'QF · Sun Jul 12',  divKey: 'qf'  },
-  { date: '2026-07-13', phase: 'QF',    dateLabel: 'Jul 13', fullLabel: 'QF · Mon Jul 13',  divKey: 'qf'  },
-  // Semi-finals — July 16–17
-  { date: '2026-07-16', phase: 'SF',    dateLabel: 'Jul 16', fullLabel: 'SF · Thu Jul 16',  divKey: 'sf'  },
-  { date: '2026-07-17', phase: 'SF',    dateLabel: 'Jul 17', fullLabel: 'SF · Fri Jul 17',  divKey: 'sf'  },
-  // 3rd place & Final — July 20–21
-  { date: '2026-07-20', phase: '3rd',   dateLabel: 'Jul 20', fullLabel: '3rd · Mon Jul 20', divKey: null  },
-  { date: '2026-07-21', phase: 'Final', dateLabel: 'Jul 21', fullLabel: 'Final · Tue Jul 21',divKey: 'final'},
+  // Quarter-finals — July 9–11 (M97 Jul 9, M98 Jul 10, M99+M100 Jul 11)
+  { date: '2026-07-09', phase: 'QF',    dateLabel: 'Jul 9',  fullLabel: 'QF · Thu Jul 9',   divKey: 'qf'  },
+  { date: '2026-07-10', phase: 'QF',    dateLabel: 'Jul 10', fullLabel: 'QF · Fri Jul 10',  divKey: 'qf'  },
+  { date: '2026-07-11', phase: 'QF',    dateLabel: 'Jul 11', fullLabel: 'QF · Sat Jul 11',  divKey: 'qf'  },
+  // Semi-finals — July 14–15
+  { date: '2026-07-14', phase: 'SF',    dateLabel: 'Jul 14', fullLabel: 'SF · Tue Jul 14',  divKey: 'sf'  },
+  { date: '2026-07-15', phase: 'SF',    dateLabel: 'Jul 15', fullLabel: 'SF · Wed Jul 15',  divKey: 'sf'  },
+  // 3rd place & Final — July 18–19
+  { date: '2026-07-18', phase: '3rd',   dateLabel: 'Jul 18', fullLabel: '3rd · Sat Jul 18', divKey: null  },
+  { date: '2026-07-19', phase: 'Final', dateLabel: 'Jul 19', fullLabel: 'Final · Sun Jul 19',divKey: 'final'},
 ];
 
 function calcDayIndex(dateStr: string, startDate: string): number {

@@ -89,7 +89,7 @@ export async function refreshBootstrap(competitionId?: number): Promise<Bootstra
 export function deriveDynamicKey(phase: string, dayIndex: number, bootstrap: BootstrapData): string {
   const koDays     = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
   const posInPhase = koDays.findIndex(d => d.day_index === dayIndex);
-  if (phase === 'R32')   return (['r32_28','r32_29','r32_30','r32_1','r32_2','r32_3'])[posInPhase] ?? 'r32_1';
+  if (phase === 'R32')   return (['r32_1','r32_2','r32_3','r32_4','r32_5','r32_6'])[posInPhase] ?? 'r32_1';
   if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[posInPhase] ?? 'r16_1';
   if (phase === 'QF')    return posInPhase === 0 ? 'qf_1' : 'qf_2';
   if (phase === 'SF')    return posInPhase === 0 ? 'sf_1' : 'sf_2';

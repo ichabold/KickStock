@@ -23,9 +23,9 @@ describe('deriveDynamicKey', () => {
       { day_index: 21, phase: 'R32', is_ko: true },
       { day_index: 22, phase: 'R32', is_ko: true },
     ]);
-    expect(deriveDynamicKey('R32', 17, bootstrap)).toBe('r32_28');
-    expect(deriveDynamicKey('R32', 18, bootstrap)).toBe('r32_29');
-    expect(deriveDynamicKey('R32', 22, bootstrap)).toBe('r32_3');
+    expect(deriveDynamicKey('R32', 17, bootstrap)).toBe('r32_1');
+    expect(deriveDynamicKey('R32', 18, bootstrap)).toBe('r32_2');
+    expect(deriveDynamicKey('R32', 22, bootstrap)).toBe('r32_6');
   });
 
   it('retourne final pour la phase Final', () => {

@@ -14,7 +14,7 @@ import { create }                     from 'zustand';
 import { persist, createJSONStorage }  from 'zustand/middleware';
 import {
   simulate, applyResult, calcTax, calcDividend,
-  genScore, genGoals, buildR32Pool, buildMatchesForDay,
+  genScore, genGoals, buildR32Pool, buildMatchesForDay, buildR16PoolFromR32Results,
   pctOf, fmt, mulberry32, seedFromString,
 } from '@kickstock/game-engine';
 import { DIV_RATES, INIT_CASH }  from '@kickstock/constants';
@@ -461,6 +461,14 @@ export const useLocalGameStore = create<LocalGameStore>()(
             const qty = newPortfolio[r.loserId] ?? 0;
             if (qty > 0 && divPerShare > 0) newCash += Math.round(divPerShare * qty * 10) / 10;
           }
+        }
+
+        // After last R32 day: rebuild r16Pool in official bracket order
+        const isLastR32Day = day.phase === 'R32' &&
+          !_bootstrap.days.some(d => d.phase === 'R32' && d.day_index > dayIndex);
+        if (isLastR32Day) {
+          const allR32Res = { ...matchResults, [dayIndex]: results } as Record<number, StoredMatchResult[]>;
+          newR16Pool = buildR16PoolFromR32Results(newR32Pool, allR32Res);
         }
 
         if (newChampion && day.phase === 'Final') {

@@ -4,7 +4,7 @@ export { calcTax } from './calcTax';
 export { calcDividend } from './calcDividends';
 export { isMarketLocked } from './isMarketLocked';
 export { initState, pctOf, fmt } from './initState';
-export { buildR32Pool, buildMatchesForDay, deriveGroupStandings, buildGroupStandingsUI, WC2026_R32_PAIRINGS, buildLiveR32Pool, R32_DAY_SLICES } from './buildKOMatches';
+export { buildR32Pool, buildMatchesForDay, deriveGroupStandings, buildGroupStandingsUI, WC2026_R32_PAIRINGS, buildLiveR32Pool, R32_DAY_SLICES, WC2026_R16_BRACKET_ORDER, buildR16PoolFromR32Results } from './buildKOMatches';
 export type { StandingRow, R32SlotSpec, LiveR32Slot } from './buildKOMatches';
 export { genScore } from './genScore';
 export { genGoals } from './genGoals';
