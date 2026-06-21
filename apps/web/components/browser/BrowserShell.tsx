@@ -48,6 +48,19 @@ function fmtCET(iso: string): string {
   }).format(new Date(iso));
 }
 
+const MONTH_MAP: Record<string, string> = {
+  Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+  Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12',
+};
+
+// Parse "Jun 28" → "2026-06-28" using competition season year
+function dateLabel2ISO(dateLabel: string, season: number): string | null {
+  const [mon, dayNum] = dateLabel.split(' ');
+  const mm = MONTH_MAP[mon];
+  if (!mm || !dayNum) return null;
+  return `${season}-${mm}-${dayNum.padStart(2, '0')}`;
+}
+
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 function Spark({ history, up }: { history: number[]; up: boolean }) {
   if (history.length < 2) return <svg className="spk" viewBox="0 0 100 24" preserveAspectRatio="none"><line x1="0" y1="12" x2="100" y2="12" stroke="#333" strokeWidth="1" strokeDasharray="3,2"/></svg>;
@@ -453,11 +466,9 @@ function ScheduleView({ onNationClick, onMatchClick }: {
 
                 const hasPairs = liveR32Pairs.length > 0;
 
-                // CET times for this KO day derived from calendar date (works even when teams TBD)
-                const startDate = bootstrap?.competition.start_date;
-                const calDate = startDate
-                  ? new Date(new Date(startDate).getTime() + di * 86_400_000).toISOString().slice(0, 10)
-                  : null;
+                // CET times for this KO day derived from bootstrap date_label
+                const season = bootstrap?.competition.season ?? 2026;
+                const calDate = day.date_label ? dateLabel2ISO(day.date_label, season) : null;
                 const dayTimes = calDate
                   ? [...new Set(
                       liveMatches
