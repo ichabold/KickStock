@@ -6,7 +6,7 @@ function makeBootstrap(days: Array<{ day_index: number; phase: string; is_ko: bo
   return {
     competition: { id: 1, name: 'Test', start_date: '2026-01-01', league_id: 1, season: 2026 },
     teams: [],
-    days: days.map(d => ({ ...d, full_label: `Day ${d.day_index}`, date_label: 'Jan 1', div_key: null })),
+    days: days.map(d => ({ ...d, full_label: `Day ${d.day_index}`, date_label: 'Jan 1', div_key: null, scheduled_times: [] })),
     group_fixtures: [],
     squads: {},
     generated_at: new Date().toISOString(),

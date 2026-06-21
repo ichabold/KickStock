@@ -60,8 +60,8 @@ function makeBootstrap(): BootstrapData {
         group_code: 'A', strength: 60, initial_price: 50,  confederation: null },
     ],
     days: [
-      { day_index: 0, full_label: 'Day 0', date_label: 'Jun 1', phase: 'Groups', is_ko: false, div_key: null },
-      { day_index: 1, full_label: 'Day 1', date_label: 'Jun 2', phase: 'Groups', is_ko: false, div_key: null },
+      { day_index: 0, full_label: 'Day 0', date_label: 'Jun 1', phase: 'Groups', is_ko: false, div_key: null, scheduled_times: [] },
+      { day_index: 1, full_label: 'Day 1', date_label: 'Jun 2', phase: 'Groups', is_ko: false, div_key: null, scheduled_times: [] },
     ],
     group_fixtures: [
       { day_index: 0, nation_a: 'AAA', nation_b: 'BBB', venue: null, scheduled_at: null },

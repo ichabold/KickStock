@@ -466,23 +466,17 @@ function ScheduleView({ onNationClick, onMatchClick }: {
 
                 const hasPairs = liveR32Pairs.length > 0;
 
-                // CET times for this KO day derived from bootstrap date_label
-                const season = bootstrap?.competition.season ?? 2026;
-                const calDate = day.date_label ? dateLabel2ISO(day.date_label, season) : null;
-                const dayTimes = calDate
-                  ? [...new Set(
-                      liveMatches
-                        .filter(lm => lm.scheduled_at?.startsWith(calDate))
-                        .map(lm => fmtCET(lm.scheduled_at!))
-                    )].sort()
-                  : [];
+                // CET times for this KO day from bootstrap (queried server-side)
+                const dayTimes = [...new Set(
+                  (day.scheduled_times ?? []).map(iso => fmtCET(iso))
+                )].sort();
 
                 return (
                   <div key={di} className={`ko-match${displayMatches.length === 0 && !hasPairs ? ' tbd' : ''}`}>
                     <div className="ko-date">
                       {day.full_label}{isCur ? ' ▶' : ''}
                       {dayTimes.length > 0 && (
-                        <span style={{fontSize:8, color:'var(--di)', marginLeft:4}}>
+                        <span style={{fontSize:8, color:'var(--di)', marginLeft:4, fontFamily:'var(--font-mono,monospace)'}}>
                           {dayTimes.join(' · ')} CET
                         </span>
                       )}

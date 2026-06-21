@@ -136,7 +136,23 @@ export async function GET(req: Request) {
     squads[row.team_id].push(row.players.name);
   }
 
-  // ── 5. Group-stage fixtures ───────────────────────────────────────────────
+  // ── 5. KO match scheduled_at times (grouped by day_index) ───────────────
+  const { data: koTimesRaw } = await adm(admin)
+    .from('matches')
+    .select('day_index, scheduled_at')
+    .eq('competition_id', comp.id)
+    .neq('phase', 'Groups')
+    .not('api_status', 'in', '("PST","SUSP","CANC","ABD")')
+    .not('scheduled_at', 'is', null)
+    .order('scheduled_at', { ascending: true });
+
+  const koTimesByDay: Record<number, string[]> = {};
+  for (const row of (koTimesRaw ?? []) as Array<{ day_index: number; scheduled_at: string }>) {
+    if (!koTimesByDay[row.day_index]) koTimesByDay[row.day_index] = [];
+    koTimesByDay[row.day_index].push(row.scheduled_at);
+  }
+
+  // ── 6. Group-stage fixtures ───────────────────────────────────────────────
   const { data: fixturesRaw } = await adm(admin)
     .from('matches')
     .select('day_index, nation_a, nation_b, venue, scheduled_at, api_status')
@@ -165,7 +181,10 @@ export async function GET(req: Request) {
         season:     comp.season,
       },
       teams,
-      days,
+      days: days.map(d => ({
+        ...d,
+        scheduled_times: koTimesByDay[d.day_index] ?? [],
+      })),
       group_fixtures: groupFixtures.map(f => ({
         day_index:    f.day_index,
         nation_a:     f.nation_a,

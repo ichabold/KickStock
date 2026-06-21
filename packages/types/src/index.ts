@@ -24,12 +24,13 @@ export interface TeamMeta {
 
 // ─── BOOTSTRAP (API → offline store seed) ────────────────────────────────────
 export interface BootstrapDay {
-  day_index:  number;
-  full_label: string;   // "Day 1 · Thu Jun 11"
-  date_label: string;   // "Jun 11"
-  phase:      string;   // "Groups"|"R32"|"R16"|"QF"|"SF"|"3rd"|"Final"
-  is_ko:      boolean;
-  div_key:    string | null;
+  day_index:       number;
+  full_label:      string;        // "Day 1 · Thu Jun 11"
+  date_label:      string;        // "Jun 11"
+  phase:           string;        // "Groups"|"R32"|"R16"|"QF"|"SF"|"3rd"|"Final"
+  is_ko:           boolean;
+  div_key:         string | null;
+  scheduled_times: string[];      // ISO strings of kickoffs that day (KO phases)
 }
 
 export interface BootstrapFixture {
