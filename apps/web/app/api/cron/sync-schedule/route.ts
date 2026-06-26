@@ -59,8 +59,8 @@ const WC2026_KO_DAYS: KoDay[] = [
   { date: '2026-07-14', phase: 'SF',    dateLabel: 'Jul 14', fullLabel: 'SF · Tue Jul 14',  divKey: 'sf'  },
   { date: '2026-07-15', phase: 'SF',    dateLabel: 'Jul 15', fullLabel: 'SF · Wed Jul 15',  divKey: 'sf'  },
   // 3rd place & Final — July 18–19
-  { date: '2026-07-18', phase: '3rd',   dateLabel: 'Jul 18', fullLabel: '3rd · Sat Jul 18', divKey: null  },
-  { date: '2026-07-19', phase: 'Final', dateLabel: 'Jul 19', fullLabel: 'Final · Sun Jul 19',divKey: 'final'},
+  { date: '2026-07-18', phase: '3rd',   dateLabel: 'Jul 18', fullLabel: '3rd · Sat Jul 18', divKey: '3rd' },
+  { date: '2026-07-19', phase: 'Final', dateLabel: 'Jul 19', fullLabel: 'Final · Sun Jul 19',divKey: null},
 ];
 
 function calcDayIndex(dateStr: string, startDate: string): number {

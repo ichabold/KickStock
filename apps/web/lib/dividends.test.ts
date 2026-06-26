@@ -7,8 +7,8 @@ describe('calcDividend — taux par phase', () => {
     ['r16',      200,  30  ],
     ['qf',       200,  40  ],
     ['sf',       200,  60  ],
-    ['final',    200,  80  ],
-    ['champion', 200,  120 ],
+    ['3rd',      200,  50  ],
+    ['champion', 200,  100 ],
     ['unknown',  200,  0   ],
   ];
 

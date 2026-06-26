@@ -42,7 +42,7 @@ export function DayDeleteButton({
 // ── Add form ──────────────────────────────────────────────────────────────────
 
 const PHASES   = ['Groups', 'R32', 'R16', 'QF', 'SF', '3rd', 'Final'] as const;
-const DIV_KEYS = ['', 'r32', 'r16', 'qf', 'sf', 'final', 'champion'] as const;
+const DIV_KEYS = ['', 'r32', 'r16', 'qf', 'sf', '3rd', 'champion'] as const;
 
 export function DayAddForm({ competitionId }: { competitionId: number }) {
   const router = useRouter();
@@ -64,7 +64,7 @@ export function DayAddForm({ competitionId }: { competitionId: number }) {
   const isKO = form.phase !== 'Groups';
 
   const suggestedDivKey: Record<string, string> = {
-    R32: 'r32', R16: 'r16', QF: 'qf', SF: 'sf', Final: 'final', '3rd': '',
+    R32: 'r32', R16: 'r16', QF: 'qf', SF: 'sf', Final: '', '3rd': '3rd',
   };
 
   async function submit(e: React.FormEvent) {

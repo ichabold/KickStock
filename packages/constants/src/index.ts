@@ -23,7 +23,7 @@ export const TOKENS = {
 export const MOBILE_BREAKPOINT = 600; // px
 
 export const DIV_RATES: Record<string, number> = {
-  r32: 0.10, r16: 0.15, qf: 0.20, sf: 0.30, final: 0.40, champion: 0.60,
+  r32: 0.10, r16: 0.15, qf: 0.20, sf: 0.30, '3rd': 0.25, champion: 0.50,
 };
 
 export const INIT_CASH = 10_000;

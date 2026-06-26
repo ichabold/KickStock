@@ -250,10 +250,10 @@ export async function POST(req: NextRequest) {
         flash[m.a] = newPA > pA ? 'fu' : 'fd';
         flash[m.b] = newPB > pB ? 'fu' : 'fd';
         if (elimId && !eliminated.includes(elimId)) {
-          eliminated.push(elimId); newPrices[elimId] = 1; flash[elimId] = 'fd';
+          eliminated.push(elimId); flash[elimId] = 'fd';
         }
         if (day.phase === '3rd' && loserId && !eliminated.includes(loserId)) {
-          eliminated.push(loserId); newPrices[loserId] = 1; flash[loserId] = 'fd';
+          eliminated.push(loserId); flash[loserId] = 'fd';
         }
 
         return {
@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
         if (day.phase === 'Final') {
           champion = r.winnerId;
           if (r.loserId && !eliminated.includes(r.loserId)) {
-            eliminated.push(r.loserId); newPrices[r.loserId] = 1;
+            eliminated.push(r.loserId);
           }
         }
       }
@@ -305,11 +305,8 @@ export async function POST(req: NextRequest) {
             competitionId, allGroupResults, eliminated, nextPhase,
           );
 
-          // Teams newly eliminated → price to 1
           for (const id of newEliminated) {
-            if (!eliminated.includes(id)) {
-              newPrices[id] = 1; flash[id] = 'fd';
-            }
+            if (!eliminated.includes(id)) flash[id] = 'fd';
           }
 
           eliminated.splice(0, eliminated.length, ...newEliminated);
@@ -354,6 +351,7 @@ export async function POST(req: NextRequest) {
           p_competition_id: competitionId,
           p_team_id: r.elimId,
           p_day_index: gs.current_day_index,
+          p_price: newPrices[r.elimId] ?? 1,
         });
       }
 
@@ -369,23 +367,12 @@ export async function POST(req: NextRequest) {
             p_day_index: gs.current_day_index,
           });
         }
-        if (day.phase === 'Final') {
-          for (const r of results) {
-            if (!r.loserId) continue;
-            await A(admin).rpc('distribute_competition_dividends', {
-              p_competition_id: competitionId,
-              p_team_id: r.loserId, p_round: 'final',
-              p_rate: rate, p_price: newPrices[r.loserId] ?? r.newPB,
-              p_day_index: gs.current_day_index,
-            });
-          }
-        }
       }
       if (champion && day.phase === 'Final') {
         await A(admin).rpc('distribute_competition_dividends', {
           p_competition_id: competitionId,
           p_team_id: champion, p_round: 'champion',
-          p_rate: DIV_RATES['champion'] ?? 0.60,
+          p_rate: DIV_RATES['champion'] ?? 0.50,
           p_price: newPrices[champion] ?? 1,
           p_day_index: gs.current_day_index,
         });

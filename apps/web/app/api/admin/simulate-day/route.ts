@@ -238,6 +238,7 @@ export async function POST(req: NextRequest) {
           p_competition_id: competitionId,
           p_team_id: elimId,
           p_day_index: gs.current_day_index,
+          p_price: elimId === match.nation_a ? newPA : newPB,
         });
       }
 

@@ -102,8 +102,8 @@ export const PHASE_TO_DIV: Record<string, string | null> = {
   R16:    'r16',
   QF:     'qf',
   SF:     'sf',
-  '3rd':  null,
-  Final:  'final',
+  '3rd':  '3rd',
+  Final:  null,
 };
 
 // ── Derivation functions ──────────────────────────────────────────────────────

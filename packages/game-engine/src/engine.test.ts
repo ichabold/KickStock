@@ -51,8 +51,8 @@ describe('calcDividend', () => {
     expect(calcDividend(200, 'r32')).toBe(20);
   });
 
-  it('Champion: 60% of current price', () => {
-    expect(calcDividend(500, 'champion')).toBe(300);
+  it('Champion: 50% of current price', () => {
+    expect(calcDividend(500, 'champion')).toBe(250);
   });
 
   it('Unknown key: 0', () => {

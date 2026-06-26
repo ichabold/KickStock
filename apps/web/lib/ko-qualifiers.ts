@@ -148,13 +148,14 @@ export async function updateR32Bracket(
   const admin = createAdminClient();
 
   // ── 1. Load teams with group assignments ──────────────────────────────────
-  interface CTRow { team_id: string; group_code: string | null; teams: { strength: number } | null }
+  interface CTRow { team_id: string; group_code: string | null; current_price: number | null; teams: { strength: number } | null }
   const { data: ctRaw } = await adm(admin)
     .from('competition_teams')
-    .select('team_id, group_code, teams(strength)')
+    .select('team_id, group_code, current_price, teams(strength)')
     .eq('competition_id', competitionId);
 
   const ctTeams = (ctRaw ?? []) as CTRow[];
+  const priceOf = new Map(ctTeams.map(t => [t.team_id, t.current_price ?? 1]));
 
   const groupOf = new Map<string, string>();
   for (const t of ctTeams) {
@@ -229,6 +230,7 @@ export async function updateR32Bracket(
         p_competition_id: competitionId,
         p_team_id:        fourth.id,
         p_day_index:      dayIndex,
+        p_price:          priceOf.get(fourth.id) ?? 1,
       });
     }
   }
@@ -274,6 +276,7 @@ export async function updateR32Bracket(
           p_competition_id: competitionId,
           p_team_id:        t.id,
           p_day_index:      dayIndex,
+          p_price:          priceOf.get(t.id) ?? 1,
         });
       }
     }

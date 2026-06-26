@@ -17,7 +17,7 @@ const adm = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
 // ── KO match/day creation helpers ─────────────────────────────────────────────
 
 const DIV_KEY_MAP: Record<string, string | null> = {
-  R32: 'r32', R16: 'r16', QF: 'qf', SF: 'sf', Final: 'final', '3rd': null,
+  R32: 'r32', R16: 'r16', QF: 'qf', SF: 'sf', Final: null, '3rd': '3rd',
 };
 
 // Matches per day for each KO phase (mirrors WC2026 schedule)
@@ -279,12 +279,22 @@ export async function checkAndAdvancePhase(
 
       // Liquidate non-qualifiers
       const qualSet = new Set(qualifiers);
-      for (const id of eliminated) {
-        if (!qualSet.has(id)) {
+      const nonQualifiers = eliminated.filter(id => !qualSet.has(id));
+      if (nonQualifiers.length > 0) {
+        const { data: priceRowsRaw } = await adm(admin)
+          .from('competition_teams')
+          .select('team_id, current_price')
+          .eq('competition_id', competitionId)
+          .in('team_id', nonQualifiers);
+
+        const priceRows = (priceRowsRaw ?? []) as Array<{ team_id: string; current_price: number | null }>;
+
+        for (const id of nonQualifiers) {
           await adm(admin).rpc('liquidate_competition_eliminated', {
             p_competition_id: competitionId,
             p_team_id:        id,
             p_day_index:      dayIndex,
+            p_price:          priceRows.find(p => p.team_id === id)?.current_price ?? 1,
           });
         }
       }

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
 const VALID_PHASES   = ['Groups', 'R32', 'R16', 'QF', 'SF', '3rd', 'Final'] as const;
-const VALID_DIV_KEYS = [null, 'r32', 'r16', 'qf', 'sf', 'final', 'champion'] as const;
+const VALID_DIV_KEYS = [null, 'r32', 'r16', 'qf', 'sf', '3rd', 'champion'] as const;
 
 export async function POST(
   req: NextRequest,

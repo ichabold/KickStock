@@ -136,10 +136,12 @@ export async function processRealMatchResult(
   // ── 8. KO: liquidate loser ────────────────────────────────────────────────
   if (match.phase !== 'Groups' && match.phase !== 'SF' && match.phase !== '3rd') {
     if (loserId) {
+      const loserPrice = loserId === match.nation_a ? newPA : newPB;
       await adm(admin).rpc('liquidate_competition_eliminated', {
         p_competition_id: match.competition_id,
         p_team_id:        loserId,
         p_day_index:      match.day_index,
+        p_price:          loserPrice,
       });
     }
   }
@@ -169,7 +171,7 @@ export async function processRealMatchResult(
   if (day?.div_key) {
     const rate = DIV_RATES[day.div_key] ?? 0;
 
-    // Gagnant (tous rounds KO)
+    // Gagnant (tous rounds KO, y compris 3rd)
     if (winnerId && rate > 0) {
       await adm(admin).rpc('distribute_competition_dividends', {
         p_competition_id: match.competition_id,
@@ -180,23 +182,11 @@ export async function processRealMatchResult(
         p_day_index:      match.day_index,
       });
     }
-
-    // [G2 FIX] Perdant de la finale → reçoit aussi le taux du round Final (40%)
-    if (match.phase === 'Final' && loserId && rate > 0) {
-      await adm(admin).rpc('distribute_competition_dividends', {
-        p_competition_id: match.competition_id,
-        p_team_id:        loserId,
-        p_round:          day.div_key,
-        p_rate:           rate,
-        p_price:          newPB,
-        p_day_index:      match.day_index,
-      });
-    }
   }
 
-  // [G1 FIX] Champion → dividende bonus 60% en plus du dividende Final
+  // Champion → dividende bonus 50%
   if (match.phase === 'Final' && winnerId) {
-    const champRate = DIV_RATES['champion'] ?? 0.60;
+    const champRate = DIV_RATES['champion'] ?? 0.50;
     if (champRate > 0) {
       await adm(admin).rpc('distribute_competition_dividends', {
         p_competition_id: match.competition_id,

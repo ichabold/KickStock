@@ -396,13 +396,12 @@ export const useLocalGameStore = create<LocalGameStore>()(
 
           if (elimId && !newElim.includes(elimId)) {
             newElim.push(elimId);
-            newPrices[elimId] = 1;
-            flash[elimId]     = 'fd';
+            flash[elimId] = 'fd';
             const qty = newPortfolio[elimId] ?? 0;
-            if (qty > 0) { newCash += qty * 1; newPortfolio = { ...newPortfolio }; delete newPortfolio[elimId]; }
+            if (qty > 0) { newCash += qty * newPrices[elimId]; newPortfolio = { ...newPortfolio }; delete newPortfolio[elimId]; }
           }
           if (day.phase === '3rd' && loserId && !newElim.includes(loserId)) {
-            newElim.push(loserId); newPrices[loserId] = 1; flash[loserId] = 'fd';
+            newElim.push(loserId); flash[loserId] = 'fd';
           }
 
           return {
@@ -429,7 +428,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
           const qualified = new Set(newR32Pool.filter(Boolean));
           for (const t of _teams) {
             if (!qualified.has(t.id) && !newElim.includes(t.id)) {
-              newElim.push(t.id); newPrices[t.id] = 1; flash[t.id] = 'fd';
+              newElim.push(t.id); flash[t.id] = 'fd';
             }
           }
         }
@@ -456,11 +455,6 @@ export const useLocalGameStore = create<LocalGameStore>()(
               }
             }
           }
-          if (day.phase === 'Final' && r.loserId && day.div_key) {
-            const divPerShare = calcDividend(newPrices[r.loserId] ?? r.newPB, day.div_key);
-            const qty = newPortfolio[r.loserId] ?? 0;
-            if (qty > 0 && divPerShare > 0) newCash += Math.round(divPerShare * qty * 10) / 10;
-          }
         }
 
         // After last R32 day: rebuild r16Pool in official bracket order
@@ -472,7 +466,7 @@ export const useLocalGameStore = create<LocalGameStore>()(
         }
 
         if (newChampion && day.phase === 'Final') {
-          const champRate  = DIV_RATES['champion'] ?? 0.60;
+          const champRate  = DIV_RATES['champion'] ?? 0.50;
           const qty        = newPortfolio[newChampion] ?? 0;
           if (qty > 0) newCash += Math.round((newPrices[newChampion] ?? 1) * champRate * qty * 10) / 10;
         }
