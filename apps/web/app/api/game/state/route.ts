@@ -11,6 +11,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { captureApiException } from '@/lib/sentryCapture';
 import { checkRateLimit }      from '@/lib/rateLimitRedis';
 import { verifyDevice }        from '@/lib/verifyDevice';
+import { buildR16PoolFromR32Results } from '@kickstock/game-engine';
 import type { StoredMatchResult } from '@kickstock/types';
 
 export const dynamic = 'force-dynamic';
@@ -196,7 +197,18 @@ export async function GET(req: NextRequest) {
       champion:    gs.champion_id ?? null,
       eliminated:  gs.eliminated  ?? [],
       r32Pool:     gs.r32_pool    ?? [],
-      r16Pool:     gs.r16_pool    ?? [],
+      // Rebuild r16Pool in official bracket order (WC2026) when R32 is complete.
+      // The incremental push in check-advance-phase wrote winners in calendar order;
+      // this corrects it so upcoming R16/QF/SF display shows the right pairings.
+      r16Pool: (() => {
+        const KO_PHASES = ['R16', 'QF', 'SF', 'Final', '3rd'];
+        const r32Pool = gs.r32_pool ?? [];
+        if (KO_PHASES.includes(gs.current_phase) && r32Pool.length >= 32) {
+          const rebuilt = buildR16PoolFromR32Results(r32Pool, matchResults);
+          if (rebuilt.length > 0) return rebuilt;
+        }
+        return gs.r16_pool ?? [];
+      })(),
       qfPool:      gs.qf_pool     ?? [],
       sfPool:      gs.sf_pool     ?? [],
       finalPool:   gs.final_pool  ?? [],
