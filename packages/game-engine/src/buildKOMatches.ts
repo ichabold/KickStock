@@ -340,16 +340,33 @@ export const WC2026_R16_BRACKET_ORDER: number[] = [
   14, 15, // M96: W(M87[14]) vs W(M88[15])
 ];
 
-// Rebuilds r16Pool in official bracket order from the r32Pool + all R32 results.
-// Call this after the last R32 engine day in the offline store.
-export function buildR16PoolFromR32Results(
-  r32Pool:      string[],
+// ─── QF BRACKET ORDER ─────────────────────────────────────────────────────────
+// r16Pool pairs consecutive entries: match 0=[0,1]=M89, match 1=[2,3]=M90, …
+// Official QF bracket (cross-bracket pairings, not sequential):
+//   QF97 = W(M89) vs W(M90)   → r16 match indices 0,1  (Jul 11)
+//   QF98 = W(M93) vs W(M94)   → r16 match indices 4,5  (Jul 11)
+//   QF99 = W(M91) vs W(M92)   → r16 match indices 2,3  (Jul 12)
+//   QF100= W(M95) vs W(M96)   → r16 match indices 6,7  (Jul 12)
+// SF101=W97vsW98, SF102=W99vsW100
+export const WC2026_QF_BRACKET_ORDER: number[] = [
+  0, 1, // QF97: W(M89) vs W(M90)
+  4, 5, // QF98: W(M93) vs W(M94)
+  2, 3, // QF99: W(M91) vs W(M92)
+  6, 7, // QF100: W(M95) vs W(M96)
+];
+
+// Generic helper: rebuild a KO pool in bracket order from a source pool + results.
+// sourcePool[matchIdx*2] vs sourcePool[matchIdx*2+1] is match matchIdx.
+// bracketOrder lists the match indices in the desired output order.
+function buildPoolFromBracketOrder(
+  sourcePool:   string[],
   matchResults: Record<number, StoredMatchResult[]>,
+  bracketOrder: number[],
 ): string[] {
-  const r16Pool: string[] = [];
-  for (const r32Idx of WC2026_R16_BRACKET_ORDER) {
-    const teamA = r32Pool[r32Idx * 2];
-    const teamB = r32Pool[r32Idx * 2 + 1];
+  const pool: string[] = [];
+  for (const matchIdx of bracketOrder) {
+    const teamA = sourcePool[matchIdx * 2];
+    const teamB = sourcePool[matchIdx * 2 + 1];
     if (!teamA || !teamB) continue;
     let winner: string | null = null;
     outer: for (const results of Object.values(matchResults)) {
@@ -360,9 +377,25 @@ export function buildR16PoolFromR32Results(
         }
       }
     }
-    if (winner) r16Pool.push(winner);
+    if (winner) pool.push(winner);
   }
-  return r16Pool;
+  return pool;
+}
+
+// Rebuilds r16Pool in official bracket order from the r32Pool + all R32 results.
+export function buildR16PoolFromR32Results(
+  r32Pool:      string[],
+  matchResults: Record<number, StoredMatchResult[]>,
+): string[] {
+  return buildPoolFromBracketOrder(r32Pool, matchResults, WC2026_R16_BRACKET_ORDER);
+}
+
+// Rebuilds qfPool in official bracket order from the r16Pool + all R16 results.
+export function buildQFPoolFromR16Results(
+  r16Pool:      string[],
+  matchResults: Record<number, StoredMatchResult[]>,
+): string[] {
+  return buildPoolFromBracketOrder(r16Pool, matchResults, WC2026_QF_BRACKET_ORDER);
 }
 
 // ─── LIVE R32 POOL ─────────────────────────────────────────────────────────────

@@ -13,7 +13,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { captureApiException }        from '@/lib/sentryCapture';
 import { checkRateLimit }            from '@/lib/rateLimitRedis';
 import { verifyDevice }              from '@/lib/verifyDevice';
-import { simulate, applyResult, genScore, genGoals, buildR16PoolFromR32Results } from '@kickstock/game-engine';
+import { simulate, applyResult, genScore, genGoals, buildR16PoolFromR32Results, buildQFPoolFromR16Results } from '@kickstock/game-engine';
 import { DIV_RATES }                 from '@kickstock/constants';
 import { buildKOQualifiers }         from '@/lib/ko-qualifiers';
 import type { StoredMatchResult, GameState } from '@kickstock/types';
@@ -297,6 +297,22 @@ export async function POST(req: NextRequest) {
         if ((remainingR32 ?? 1) === 0 && r32Pool.length === 32) {
           const allR32Res = { ...matchResults, [gs.current_day_index]: results };
           r16Pool = buildR16PoolFromR32Results(r32Pool, allR32Res as Record<number, StoredMatchResult[]>);
+        }
+      }
+
+      // ── 8c. Last R16 day → rebuild qfPool in official bracket order ─────────
+      if (day.phase === 'R16') {
+        const { count: remainingR16 } = await A(admin)
+          .from('matches')
+          .select('id', { count: 'exact', head: true })
+          .eq('competition_id', competitionId)
+          .eq('phase', 'R16')
+          .is('played_at', null)
+          .not('api_status', 'in', '("PST","SUSP","CANC","ABD")');
+
+        if ((remainingR16 ?? 1) === 0 && r16Pool.length === 16) {
+          const allR16Res = { ...matchResults, [gs.current_day_index]: results };
+          qfPool = buildQFPoolFromR16Results(r16Pool, allR16Res as Record<number, StoredMatchResult[]>);
         }
       }
 

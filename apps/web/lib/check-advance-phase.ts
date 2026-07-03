@@ -9,7 +9,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildKOQualifiers, updateR32Bracket } from '@/lib/ko-qualifiers';
-import { buildR16PoolFromR32Results } from '@kickstock/game-engine';
+import { buildR16PoolFromR32Results, buildQFPoolFromR16Results } from '@kickstock/game-engine';
 import type { StoredMatchResult } from '@kickstock/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -261,7 +261,7 @@ export async function checkAndAdvancePhase(
       if (gs.current_phase === 'R32' && r32Pool.length >= 32) {
         r16Pool = buildR16PoolFromR32Results(r32Pool, phaseResults);
       } else if (gs.current_phase === 'R16' && r16Pool.length >= 16) {
-        qfPool = buildPoolFromResults(r16Pool, phaseResults);
+        qfPool = buildQFPoolFromR16Results(r16Pool, phaseResults);
       } else if (gs.current_phase === 'QF' && qfPool.length >= 8) {
         sfPool = buildPoolFromResults(qfPool, phaseResults);
       }
