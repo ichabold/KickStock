@@ -9,10 +9,37 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildKOQualifiers, updateR32Bracket } from '@/lib/ko-qualifiers';
+import { buildR16PoolFromR32Results } from '@kickstock/game-engine';
 import type { StoredMatchResult } from '@kickstock/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adm = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
+
+// Rebuilds the next-phase pool in the correct bracket order from a source pool
+// and the match results of the completed phase. Each consecutive pair in
+// sourcePool was a match; the winner of each pair goes into the next pool.
+function buildPoolFromResults(
+  sourcePool:   string[],
+  matchResults: Record<number, StoredMatchResult[]>,
+): string[] {
+  const nextPool: string[] = [];
+  for (let i = 0; i + 1 < sourcePool.length; i += 2) {
+    const teamA = sourcePool[i];
+    const teamB = sourcePool[i + 1];
+    if (!teamA || !teamB) continue;
+    let winner: string | null = null;
+    outer: for (const results of Object.values(matchResults)) {
+      for (const r of results) {
+        if ((r.a === teamA && r.b === teamB) || (r.a === teamB && r.b === teamA)) {
+          winner = r.winnerId ?? null;
+          break outer;
+        }
+      }
+    }
+    if (winner) nextPool.push(winner);
+  }
+  return nextPool;
+}
 
 // ── KO match/day creation helpers ─────────────────────────────────────────────
 
@@ -200,6 +227,44 @@ export async function checkAndAdvancePhase(
     // KO loser → eliminated (except SF loser who goes to 3rd place match)
     if (r.loserId && p !== 'Groups' && p !== 'SF' && p !== '3rd' && !eliminated.includes(r.loserId)) {
       eliminated.push(r.loserId);
+    }
+  }
+
+  // ── 4b. After a KO phase completes, rebuild pools in official bracket order ──
+  // The incremental push above adds winners in calendar/processing order, but
+  // buildMatchesForDay expects pools in bracket order. We rebuild each pool once
+  // all matches of that phase are processed so upcoming match display is correct.
+  if (gs.current_phase === 'R32' || gs.current_phase === 'R16' || gs.current_phase === 'QF') {
+    const { count: remainingPhase } = await adm(admin)
+      .from('matches')
+      .select('id', { count: 'exact', head: true })
+      .eq('competition_id', competitionId)
+      .eq('phase', gs.current_phase)
+      .is('processed_at', null)
+      .not('api_status', 'in', '("PST","SUSP","CANC","ABD")');
+
+    if ((remainingPhase ?? 1) === 0) {
+      const { data: phaseRaw } = await adm(admin)
+        .from('matches')
+        .select('day_index, result_data')
+        .eq('competition_id', competitionId)
+        .eq('phase', gs.current_phase)
+        .not('processed_at', 'is', null);
+
+      const phaseResults: Record<number, StoredMatchResult[]> = {};
+      for (const m of (phaseRaw ?? []) as Array<{ day_index: number; result_data: StoredMatchResult }>) {
+        if (!m.result_data) continue;
+        if (!phaseResults[m.day_index]) phaseResults[m.day_index] = [];
+        phaseResults[m.day_index].push(m.result_data);
+      }
+
+      if (gs.current_phase === 'R32' && r32Pool.length >= 32) {
+        r16Pool = buildR16PoolFromR32Results(r32Pool, phaseResults);
+      } else if (gs.current_phase === 'R16' && r16Pool.length >= 16) {
+        qfPool = buildPoolFromResults(r16Pool, phaseResults);
+      } else if (gs.current_phase === 'QF' && qfPool.length >= 8) {
+        sfPool = buildPoolFromResults(qfPool, phaseResults);
+      }
     }
   }
 
