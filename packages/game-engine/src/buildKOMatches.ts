@@ -274,7 +274,7 @@ export function buildMatchesForDay(
   }
 
   const r16Slices: Record<string, [number, number]> = {
-    r16_1: [0, 4], r16_2: [4, 8], r16_3: [8, 12], r16_4: [12, 16],
+    r16_1: [0, 4], r16_2: [4, 8], r16_3: [8, 12], r16_4: [12, 14], r16_5: [14, 16],
   };
   if (r16Slices[dynamic]) {
     const [s, e] = r16Slices[dynamic];
@@ -320,22 +320,24 @@ export const R32_DAY_SLICES: Record<string, [number, number]> = {
 
 // ─── R16 BRACKET ORDER ────────────────────────────────────────────────────────
 // WC2026_R32_PAIRINGS is in calendar order (indices 0-15 = M73..M88).
-// This array maps each r16Pool position to the R32 match index in WC2026_R32_PAIRINGS
-// whose winner should go there, producing the official R16 bracket:
-//   r16Pool[0,1]  = W(M74), W(M77) → M89   r16Pool[2,3]  = W(M73), W(M75) → M90
-//   r16Pool[4,5]  = W(M83), W(M84) → M93   r16Pool[6,7]  = W(M81), W(M82) → M94
-//   r16Pool[8,9]  = W(M76), W(M78) → M91   r16Pool[10,11]= W(M79), W(M80) → M92
-//   r16Pool[12,13]= W(M86), W(M88) → M95   r16Pool[14,15]= W(M85), W(M87) → M96
-// QF97=W89vsW90, QF98=W93vsW94, QF99=W91vsW92, QF100=W95vsW96 ✓
+// Official R16 bracket pairs consecutive R32 matches sequentially:
+//   M89 = W(M73) vs W(M74)   M90 = W(M75) vs W(M76)
+//   M91 = W(M77) vs W(M78)   M92 = W(M79) vs W(M80)
+//   M93 = W(M81) vs W(M82)   M94 = W(M83) vs W(M84)
+//   M95 = W(M85) vs W(M86)   M96 = W(M87) vs W(M88)
+// r16Pool schedule (5 days: Jul 4-8, 2+2+2+1+1 matches):
+//   r16_1 [0,4]:  M89, M90   r16_2 [4,8]:   M91, M92
+//   r16_3 [8,12]: M93, M94   r16_4 [12,14]: M95   r16_5 [14,16]: M96
+// QF97=W89vsW90, QF98=W91vsW92, QF99=W93vsW94, QF100=W95vsW96
 export const WC2026_R16_BRACKET_ORDER: number[] = [
-  1, 4,   // M89: W(M74[1]) vs W(M77[4])
-  0, 2,   // M90: W(M73[0]) vs W(M75[2])
-  10, 11, // M93: W(M83[10]) vs W(M84[11])
-  8, 9,   // M94: W(M81[8])  vs W(M82[9])
-  3, 5,   // M91: W(M76[3])  vs W(M78[5])
-  6, 7,   // M92: W(M79[6])  vs W(M80[7])
-  13, 15, // M95: W(M86[13]) vs W(M88[15])
-  12, 14, // M96: W(M85[12]) vs W(M87[14])
+  0, 1,   // M89: W(M73[0]) vs W(M74[1])
+  2, 3,   // M90: W(M75[2]) vs W(M76[3])
+  4, 5,   // M91: W(M77[4]) vs W(M78[5])
+  6, 7,   // M92: W(M79[6]) vs W(M80[7])
+  8, 9,   // M93: W(M81[8]) vs W(M82[9])
+  10, 11, // M94: W(M83[10]) vs W(M84[11])
+  12, 13, // M95: W(M85[12]) vs W(M86[13])
+  14, 15, // M96: W(M87[14]) vs W(M88[15])
 ];
 
 // Rebuilds r16Pool in official bracket order from the r32Pool + all R32 results.
