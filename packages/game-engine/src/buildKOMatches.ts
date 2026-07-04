@@ -320,24 +320,27 @@ export const R32_DAY_SLICES: Record<string, [number, number]> = {
 
 // ─── R16 BRACKET ORDER ────────────────────────────────────────────────────────
 // WC2026_R32_PAIRINGS is in calendar order (indices 0-15 = M73..M88).
-// Official R16 bracket pairs consecutive R32 matches sequentially:
-//   M89 = W(M73) vs W(M74)   M90 = W(M75) vs W(M76)
-//   M91 = W(M77) vs W(M78)   M92 = W(M79) vs W(M80)
-//   M93 = W(M81) vs W(M82)   M94 = W(M83) vs W(M84)
-//   M95 = W(M85) vs W(M86)   M96 = W(M87) vs W(M88)
+// Official R16 bracket does NOT pair consecutive R32 matches — it follows the
+// real FIFA bracket tree (verified against the actual 2026 draw: Canada beat
+// South Africa in M73 and plays Morocco — winner of M75 — in the R16, not the
+// winner of M74):
+//   M89 = W(M73) vs W(M75)   M90 = W(M74) vs W(M77)
+//   M91 = W(M76) vs W(M78)   M92 = W(M79) vs W(M80)
+//   M93 = W(M83) vs W(M84)   M94 = W(M81) vs W(M82)
+//   M95 = W(M86) vs W(M88)   M96 = W(M85) vs W(M87)
 // r16Pool schedule (5 days: Jul 4-8, 2+2+2+1+1 matches):
 //   r16_1 [0,4]:  M89, M90   r16_2 [4,8]:   M91, M92
 //   r16_3 [8,12]: M93, M94   r16_4 [12,14]: M95   r16_5 [14,16]: M96
-// QF97=W89vsW90, QF98=W91vsW92, QF99=W93vsW94, QF100=W95vsW96
+// QF97=W89vsW90, QF98=W93vsW94, QF99=W91vsW92, QF100=W95vsW96
 export const WC2026_R16_BRACKET_ORDER: number[] = [
-  0, 1,   // M89: W(M73[0]) vs W(M74[1])
-  2, 3,   // M90: W(M75[2]) vs W(M76[3])
-  4, 5,   // M91: W(M77[4]) vs W(M78[5])
+  0, 2,   // M89: W(M73[0]) vs W(M75[2])
+  1, 4,   // M90: W(M74[1]) vs W(M77[4])
+  3, 5,   // M91: W(M76[3]) vs W(M78[5])
   6, 7,   // M92: W(M79[6]) vs W(M80[7])
-  8, 9,   // M93: W(M81[8]) vs W(M82[9])
-  10, 11, // M94: W(M83[10]) vs W(M84[11])
-  12, 13, // M95: W(M85[12]) vs W(M86[13])
-  14, 15, // M96: W(M87[14]) vs W(M88[15])
+  10, 11, // M93: W(M83[10]) vs W(M84[11])
+  8, 9,   // M94: W(M81[8]) vs W(M82[9])
+  13, 15, // M95: W(M86[13]) vs W(M88[15])
+  12, 14, // M96: W(M85[12]) vs W(M87[14])
 ];
 
 // ─── QF BRACKET ORDER ─────────────────────────────────────────────────────────

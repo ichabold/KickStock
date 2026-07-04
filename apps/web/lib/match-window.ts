@@ -20,10 +20,24 @@ import { createAdminClient } from '@/lib/supabase/admin';
  *   - Matches starting in the next 30 min (T-3h buffer with margin)
  *   - Matches in progress (up to 90 + 30 extra time + penalty = ~2h10)
  *   - Matches just ended (T+30min post-match grace for the next cron tick)
+ *
+ * `includeStuckRetry` (default true) additionally retries matches stuck
+ * unprocessed long after their window closed (e.g. a failed API call).
+ * [QUOTA FIX] live-poll runs every 2 min, 24/7 — if it inherits this
+ * fallback, a single permanently-stuck match (API outage, bad fixture id,
+ * etc.) keeps the window "active" forever and burns the whole daily
+ * API-Football quota retrying it every 2 minutes. Only the 30-min
+ * sync-results cron (≤48 calls/day) should use the stuck-match fallback;
+ * live-poll passes `includeStuckRetry: false` and relies on sync-results
+ * as the safety net for genuinely stuck matches.
  */
-export async function isMatchWindowActive(competitionIds: number[]): Promise<boolean> {
+export async function isMatchWindowActive(
+  competitionIds: number[],
+  opts: { includeStuckRetry?: boolean } = {},
+): Promise<boolean> {
   if (competitionIds.length === 0) return false;
 
+  const { includeStuckRetry = true } = opts;
   const admin = createAdminClient();
   const now   = new Date();
   const start = new Date(+now - 3 * 3_600_000).toISOString();  // T-3h
@@ -48,6 +62,7 @@ export async function isMatchWindowActive(competitionIds: number[]): Promise<boo
   }
 
   if ((count ?? 0) > 0) return true;
+  if (!includeStuckRetry) return false;
 
   // Fallback: any unprocessed match scheduled before the T-3h window.
   // This covers two cases:

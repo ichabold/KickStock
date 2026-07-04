@@ -75,8 +75,11 @@ export async function GET(req: Request) {
 
   // ── Smart window check — skip if no match expected now ─────────────────────
   // `force=1` bypasses the window (manual/admin trigger).
+  // includeStuckRetry: false — this cron runs every 2 min, 24/7; retrying
+  // permanently-stuck matches here would burn the daily API-Football quota.
+  // sync-results (30 min cadence) is the safety net for those.
   const force  = new URL(req.url).searchParams.get('force') === '1';
-  const active = force || await isMatchWindowActive(compIds);
+  const active = force || await isMatchWindowActive(compIds, { includeStuckRetry: false });
   if (!active) {
     return Response.json({
       skipped: true,
