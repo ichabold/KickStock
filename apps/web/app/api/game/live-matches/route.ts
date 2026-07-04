@@ -47,9 +47,12 @@ export async function GET(req: NextRequest) {
   // crossing midnight UTC). Without this, a match still live at 00:xx UTC
   // would silently drop out of "today" and both its trade lock (computed
   // client-side from this endpoint) and its live score would disappear.
-  const now   = new Date();
-  const start = new Date(now); start.setUTCHours(0, 0, 0, 0);
-  const end   = new Date(now); end.setUTCHours(23, 59, 59, 999);
+  const now     = new Date();
+  const start   = new Date(now); start.setUTCHours(0, 0, 0, 0);
+  const end     = new Date(now); end.setUTCHours(23, 59, 59, 999);
+  // Stuck-match lookback: unprocessed matches from up to 5h ago still included
+  // so they're retried by the live-poll, but not so old they show as live indefinitely.
+  const lookback = new Date(+now - 5 * 3_600_000).toISOString();
 
   const { data: matchesRaw } = await adm(admin)
     .from('matches')
@@ -59,8 +62,8 @@ export async function GET(req: NextRequest) {
     .or(
       // Today's matches
       `and(scheduled_at.gte.${start.toISOString()},scheduled_at.lte.${end.toISOString()}),` +
-      // Already kicked off but not yet processed (e.g. crosses midnight UTC)
-      `and(processed_at.is.null,scheduled_at.lte.${now.toISOString()}),` +
+      // Kicked off but not yet processed, within the 5h lookback window
+      `and(processed_at.is.null,scheduled_at.gte.${lookback},scheduled_at.lte.${now.toISOString()}),` +
       // All future KO fixtures (for schedule CET time display — won't trigger trade locks)
       `and(phase.neq.Groups,processed_at.is.null,scheduled_at.gt.${now.toISOString()})`
     )

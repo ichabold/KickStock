@@ -30,7 +30,10 @@ export async function isMatchWindowActive(competitionIds: number[]): Promise<boo
   const end   = new Date(+now + 3 * 3_600_000).toISOString();  // T+3h
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count, error } = await (admin as any)
+  const A = (admin as any);
+
+  // Primary check: unprocessed match within the ±3h window
+  const { count, error } = await A
     .from('matches')
     .select('id', { count: 'exact', head: true })
     .in('competition_id', competitionIds)
@@ -41,9 +44,26 @@ export async function isMatchWindowActive(competitionIds: number[]): Promise<boo
 
   if (error) {
     console.error('[match-window] isMatchWindowActive error:', error);
-    // Fail open: if we can't check, assume there might be matches
-    return true;
+    return true; // fail open
   }
 
-  return (count ?? 0) > 0;
+  if ((count ?? 0) > 0) return true;
+
+  // Fallback: stuck matches — started (non-NS) but not processed, outside the window.
+  // This covers the case where processRealMatchResult failed and the match has
+  // since exited the ±3h window; without this they'd never be retried.
+  const { count: stuckCount, error: stuckErr } = await A
+    .from('matches')
+    .select('id', { count: 'exact', head: true })
+    .in('competition_id', competitionIds)
+    .is('processed_at', null)
+    .not('api_status', 'in', '("NS","PST","SUSP","CANC","ABD","TBD")')
+    .lt('scheduled_at', start);  // past the window
+
+  if (stuckErr) {
+    console.error('[match-window] stuck-match check error:', stuckErr);
+    return false;
+  }
+
+  return (stuckCount ?? 0) > 0;
 }

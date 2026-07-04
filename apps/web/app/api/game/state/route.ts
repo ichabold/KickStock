@@ -208,11 +208,13 @@ export async function GET(req: NextRequest) {
         let qfPool  = gs.qf_pool  ?? [];
         if (KO_PHASES.includes(phase) && r32Pool.length >= 32) {
           const rebuilt = buildR16PoolFromR32Results(r32Pool, matchResults);
-          if (rebuilt.length > 0) r16Pool = rebuilt;
+          // Only replace if complete (16 winners). Partial rebuild means some R32
+          // matches are still unprocessed — fall back to DB pool in that case.
+          if (rebuilt.length === 16) r16Pool = rebuilt;
         }
         if (QF_PHASES.includes(phase) && r16Pool.length >= 16) {
           const rebuilt = buildQFPoolFromR16Results(r16Pool, matchResults);
-          if (rebuilt.length > 0) qfPool = rebuilt;
+          if (rebuilt.length === 8) qfPool = rebuilt;
         }
         return { r16Pool, qfPool };
       })(),
