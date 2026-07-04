@@ -49,16 +49,19 @@ export async function isMatchWindowActive(competitionIds: number[]): Promise<boo
 
   if ((count ?? 0) > 0) return true;
 
-  // Fallback: stuck matches — started (non-NS) but not processed, outside the window.
-  // This covers the case where processRealMatchResult failed and the match has
-  // since exited the ±3h window; without this they'd never be retried.
+  // Fallback: any unprocessed match scheduled before the T-3h window.
+  // This covers two cases:
+  //  a) Match started (1H/2H etc.) but processRealMatchResult failed and the
+  //     match has since left the ±3h window — would never be retried otherwise.
+  //  b) Match never kicked off in our DB (api_status = 'NS') but its
+  //     scheduled_at is now in the past — likely FT in API-Football already.
   const { count: stuckCount, error: stuckErr } = await A
     .from('matches')
     .select('id', { count: 'exact', head: true })
     .in('competition_id', competitionIds)
     .is('processed_at', null)
-    .not('api_status', 'in', '("NS","PST","SUSP","CANC","ABD","TBD")')
-    .lt('scheduled_at', start);  // past the window
+    .not('api_status', 'in', '("PST","SUSP","CANC","ABD","TBD")')
+    .lt('scheduled_at', start);  // scheduled before T-3h
 
   if (stuckErr) {
     console.error('[match-window] stuck-match check error:', stuckErr);
