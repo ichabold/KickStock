@@ -171,41 +171,84 @@ function parseFixtures(body: unknown): ApiFixture[] {
   return data.response;
 }
 
+// ── Free-tier workaround ───────────────────────────────────────────────────────
+//
+// [FREE-TIER SEASON BLOCK] Any /fixtures query that includes `season=2026`
+// (with or without a `league` filter) is rejected on the Free plan:
+//   { "errors": { "season": "Free plans do not have access to this season,
+//     try from 2022 to 2024." } }
+// This broke fetchAllFixtures and fetchFinishedFixtures outright the moment
+// the Pro subscription lapsed — sync-fixtures stopped discovering newly
+// confirmed KO fixtures, and live-poll/sync-results stopped detecting
+// finished matches, even with quota available. Discovered when the France
+// vs Paraguay R16 fixture never appeared in the DB at all.
+//
+// Workaround: query by `date` alone (no `league`/`season` param — not
+// rejected) and filter the result client-side by `league.id`. Confirmed
+// working: `/fixtures?date=2026-07-04` returns all fixtures worldwide for
+// that date, World Cup included.
+
+function isoDate(offsetDays: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+async function fetchFixturesByDate(date: string): Promise<ApiFixture[]> {
+  const res = await apiFetch('/fixtures', { date });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+  return parseFixtures(await res.json());
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
  * All fixtures for a competition.
  * Used by sync-fixtures cron (daily).
  * Cache: 1 hour (the schedule doesn't change mid-day).
+ *
+ * Queries by date (yesterday through +10 days) instead of league+season —
+ * see "Free-tier workaround" above. The lookahead window is enough to catch
+ * newly-confirmed KO fixtures without re-fetching the whole (already-synced)
+ * tournament history.
  */
 export async function fetchAllFixtures(
   leagueId: number,
   season:   number,
 ): Promise<ApiFixture[]> {
-  const today    = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today    = isoDate(0);
   const cacheKey = `api:fixtures:${leagueId}:${season}:${today}`;
 
   return fetchWithCache(cacheKey, 3600, async () => {
-    const res  = await apiFetch('/fixtures', {
-      league: String(leagueId),
-      season: String(season),
-    });
-    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
-    return parseFixtures(await res.json());
+    const byId = new Map<number, ApiFixture>();
+    for (let offset = -1; offset <= 10; offset++) {
+      const date = isoDate(offset);
+      try {
+        const fixtures = await fetchFixturesByDate(date);
+        for (const f of fixtures) {
+          if (f.league.id === leagueId) byId.set(f.fixture.id, f);
+        }
+      } catch (err) {
+        console.error(`[football-api] fetchAllFixtures: date ${date} failed`, err);
+      }
+    }
+    return [...byId.values()];
   }, Array.isArray);
 }
 
 /**
  * Finished fixtures (FT/AET/PEN) for the given league IDs.
- * Used by live-poll (every 2 min during active match windows) and
- * sync-results (every 30 min, safety net).
+ * Used by live-poll (every 20 min, 16h-3h UTC) and sync-results (30 min,
+ * safety net).
  *
- * Cache: 2-minute bucket — aligned with live-poll's cadence, so a fixture
- * that turns FT is detected (and processed_at/trade_lock_until set) within
- * ~2 min instead of being masked by a stale cached "not yet FT" response
- * for up to 30 min. API-Football quota has ample headroom for this (Pro
- * plan, 7500 req/day) even with one extra call per league every 2 min
- * during active windows.
+ * Queries by date instead of league+season — see "Free-tier workaround"
+ * above. Only queries "yesterday" in addition to "today" during 0h-2h UTC,
+ * when a match that kicked off yesterday (UTC date) could still be running
+ * — outside that window everything relevant already has today's date.
+ *
+ * Cache: 2-minute bucket — a fixture that turns FT is detected (and
+ * processed_at/trade_lock_until set) within ~2 min instead of being masked
+ * by a stale cached "not yet FT" response.
  */
 export async function fetchFinishedFixtures(
   leagueIds: number[],
@@ -216,19 +259,22 @@ export async function fetchFinishedFixtures(
   const cacheKey = `api:finished:${hash}:${bucket}`;
 
   return fetchWithCache(cacheKey, 120, async () => {
-    const allFixtures: ApiFixture[] = [];
+    const leagueSet     = new Set(leagueIds);
+    const needsYesterday = new Date().getUTCHours() < 3;
+    const dates = needsYesterday ? [isoDate(-1), isoDate(0)] : [isoDate(0)];
 
-    for (const leagueId of leagueIds) {
-      const res = await apiFetch('/fixtures', {
-        league: String(leagueId),
-        season: String(season),
-        status: 'FT-AET-PEN',
-      });
-      if (!res.ok) {
-        console.error(`[football-api] fetchFinishedFixtures failed for league ${leagueId}: ${res.status}`);
-        continue;
+    const allFixtures: ApiFixture[] = [];
+    for (const date of dates) {
+      try {
+        const fixtures = await fetchFixturesByDate(date);
+        for (const f of fixtures) {
+          if (leagueSet.has(f.league.id) && ['FT', 'AET', 'PEN'].includes(f.fixture.status.short)) {
+            allFixtures.push(f);
+          }
+        }
+      } catch (err) {
+        console.error(`[football-api] fetchFinishedFixtures: date ${date} failed`, err);
       }
-      allFixtures.push(...parseFixtures(await res.json()));
     }
 
     return allFixtures;
