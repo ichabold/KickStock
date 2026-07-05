@@ -1,16 +1,18 @@
 /**
  * GET /api/cron/live-poll
  *
- * Cron (every 2 min, 24/7) — smart live-score polling.
+ * Cron — smart live-score polling, intended to run every 20 min, 16h-3h UTC
+ * (vercel.json). API-Football reverted to the Free tier (100 req/day), so
+ * this can no longer run 24/7 at high frequency without exhausting quota.
  *
- * [GAP FIX] Previously restricted to 06:00-23:59 UTC, which missed World Cup
- * fixtures kicked off in the 00:00-06:00 UTC window (late-evening US kickoffs,
- * e.g. 22:00/22:45 local Pacific = 05:00/05:45 UTC). Those matches relied
- * solely on the `sync-results` GitHub Actions cron (every 30 min), which can be
- * delayed by hours on scheduled triggers — leaving live scores/locks stale
- * for the whole match. Now runs every 2 min around the clock; the
- * isMatchWindowActive() short-circuit below keeps the no-op cost at ~0 calls
- * outside match windows.
+ * [VERCEL CRON BUG] Vercel's own scheduler has been observed still invoking
+ * this route every ~2 minutes around the clock despite vercel.json being
+ * correctly deployed to production (confirmed: Cron Jobs settings page and
+ * runtime logs both show the old 2-minute cadence even after redeploys and
+ * toggling the Cron Jobs feature off/on). Since we don't control that, this
+ * route now enforces its own UTC-hour guard below as a hard backstop — it
+ * exits with zero DB/API cost whenever invoked outside 16h-23h or 0h-2h UTC,
+ * regardless of how often Vercel actually calls it.
  *
  * Short-circuit: reuses isMatchWindowActive() (same guard as sync-results).
  * If no unprocessed match is scheduled within ±3h of now, exits immediately
@@ -47,6 +49,10 @@ export const maxDuration = 30;
 // In-progress statuses we mirror into matches.score_a/score_b/api_status.
 const LIVE_STATUSES = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P']);
 
+// Mirrors the intended vercel.json schedule (16h-23h + 0h-2h UTC). Backstop
+// against Vercel invoking this route outside that window — see file header.
+const SCHEDULED_HOURS_UTC = new Set([16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2]);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adm = (admin: ReturnType<typeof createAdminClient>) => (admin as any);
 
@@ -54,6 +60,17 @@ export async function GET(req: Request) {
   // ── Auth check ──────────────────────────────────────────────────────────────
   if (req.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // ── UTC-hour backstop — see file header ─────────────────────────────────────
+  // `force=1` bypasses this (manual/admin trigger), same as the match-window check below.
+  const force = new URL(req.url).searchParams.get('force') === '1';
+  if (!force && !SCHEDULED_HOURS_UTC.has(new Date().getUTCHours())) {
+    return Response.json({
+      skipped: true,
+      reason:  'outside scheduled hours (16h-23h, 0h-2h UTC)',
+      checked: new Date().toISOString(),
+    });
   }
 
   const admin = createAdminClient();
@@ -74,11 +91,10 @@ export async function GET(req: Request) {
   const season    = comps[0].season;
 
   // ── Smart window check — skip if no match expected now ─────────────────────
-  // `force=1` bypasses the window (manual/admin trigger).
-  // includeStuckRetry: false — this cron runs every 2 min, 24/7; retrying
-  // permanently-stuck matches here would burn the daily API-Football quota.
-  // sync-results (30 min cadence) is the safety net for those.
-  const force  = new URL(req.url).searchParams.get('force') === '1';
+  // `force=1` (parsed above) bypasses the window (manual/admin trigger).
+  // includeStuckRetry: false — this cron runs frequently within its scheduled
+  // hours; retrying permanently-stuck matches here would burn the daily
+  // API-Football quota. sync-results (30 min cadence) is the safety net for those.
   const active = force || await isMatchWindowActive(compIds, { includeStuckRetry: false });
   if (!active) {
     return Response.json({
