@@ -168,6 +168,12 @@ export async function processRealMatchResult(
   const day = dayRaw as DayRow | null;
   const { DIV_RATES } = await import('@kickstock/constants');
 
+  // [BUG FIX] Dividend price must be the WINNER's new price, not always
+  // newPA — newPA is nation_a's price, which is the loser's when nation_b
+  // won. Found via a real underpayment: FRA won as nation_b (PAR vs FRA),
+  // so holders were paid at PAR's crashed price instead of FRA's boosted one.
+  const winnerPrice = winnerId === match.nation_a ? newPA : newPB;
+
   if (day?.div_key) {
     const rate = DIV_RATES[day.div_key] ?? 0;
 
@@ -178,7 +184,7 @@ export async function processRealMatchResult(
         p_team_id:        winnerId,
         p_round:          day.div_key,
         p_rate:           rate,
-        p_price:          newPA,
+        p_price:          winnerPrice,
         p_day_index:      match.day_index,
       });
     }
@@ -193,7 +199,7 @@ export async function processRealMatchResult(
         p_team_id:        winnerId,
         p_round:          'champion',
         p_rate:           champRate,
-        p_price:          newPA,
+        p_price:          winnerPrice,
         p_day_index:      match.day_index,
       });
     }
