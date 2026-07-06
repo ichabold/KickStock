@@ -58,7 +58,19 @@ export async function GET(req: Request) {
 
   // Version-only request — cheap cache-bust check (no DB joins needed)
   if (versionOnly) {
-    return NextResponse.json({ version: comp.last_sync_at ?? comp.id });
+    // [CACHE FIX] Previously keyed only on last_sync_at, which only moves
+    // when sync-fixtures runs. The client's 24h localStorage bootstrap cache
+    // never invalidated when competition_game_state changed through any
+    // other path (phase/day advance, dividends, manual corrections) — a
+    // player's cached schedule could show stale KO pairings/days for up to
+    // 24h after a real update. Also fold in game_state.updated_at.
+    const { data: gsVersion } = await adm(admin)
+      .from('competition_game_state')
+      .select('updated_at')
+      .eq('competition_id', comp.id)
+      .maybeSingle();
+    const version = [comp.last_sync_at, gsVersion?.updated_at].filter(Boolean).join(':') || String(comp.id);
+    return NextResponse.json({ version });
   }
 
   // ── 2. Teams with group + pricing ─────────────────────────────────────────
