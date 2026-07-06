@@ -76,12 +76,16 @@ export async function GET(req: Request) {
       const fixtures = await fetchAllFixtures(comp.league_id, comp.season);
       console.log(`[sync-fixtures] ${comp.name}: ${fixtures.length} fixtures`);
 
-      // Derive start_date from fixtures (most reliable — avoids DB/REST discrepancies).
-      // The start_date stored in DB may lag behind due to connection pooler caching.
-      const derivedStartDate = fixtures.length > 0
-        ? fixtures.map(f => f.fixture.date.slice(0, 10)).sort()[0]
-        : comp.start_date;
-      const effectiveComp = { ...comp, start_date: derivedStartDate };
+      // [BUG FIX] Used to derive start_date as the earliest fetched fixture's
+      // date, which was reliable back when fetchAllFixtures returned the
+      // WHOLE season (so the earliest date was genuinely the tournament's
+      // day 1). Since fetchAllFixtures now queries a rolling window
+      // (yesterday..+10 days — the Free-tier season block forced a
+      // date-based fetch, see football-api.ts), that earliest date is just
+      // "yesterday", which collapsed calcDayIndex() to ~0 for every KO
+      // fixture synced this way (e.g. Brazil-Norway, Mexico-England both
+      // landed with day_index=0). Trust the stored value instead.
+      const effectiveComp = comp;
 
       let upserted = 0;
       let skipped  = 0;
