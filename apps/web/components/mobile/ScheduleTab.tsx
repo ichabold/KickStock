@@ -74,13 +74,21 @@ export default function ScheduleTab({ activeView = 'groups' }: { activeView?: 'g
             .filter(f => f.day_index === di)
             .map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }));
 
+          // [BUG FIX] KO days can mix played and not-yet-played matches on the
+          // same day_index (e.g. R16 day 26: USA-Belgium already played,
+          // Argentina-Egypt / Switzerland-Colombia still upcoming). Picking
+          // only `played` OR only the pool-based build hid whichever side
+          // wasn't in that branch. buildMatchesForCurrentDay's pool slicing
+          // already excludes eliminated teams, so it naturally omits pairs
+          // that already have a result — concatenating both is safe and
+          // duplicate-free.
+          const playedMatches = played ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue })) : [];
+          const upcomingMatches = day.is_ko && di >= dayIndex
+            ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+            : [];
           const displayMatches = !day.is_ko && groupFixtures.length > 0
             ? groupFixtures
-            : played
-              ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue }))
-              : di >= dayIndex && day.is_ko
-                ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-                : [];
+            : [...playedMatches, ...upcomingMatches];
 
           // For upcoming R32 days: build provisional/definitive pairs from live standings
           const liveR32Pairs: Array<[LiveR32Slot, LiveR32Slot]> = [];
