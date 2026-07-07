@@ -26,13 +26,21 @@ function teamToNation(t: TeamMeta): Nation {
   return { id: t.id, name: t.name, flag: t.flag, p: t.initialPrice, conf: t.confederation ?? '', str: t.strength, group: t.group };
 }
 
+// [BUG FIX] Was missing 'r16_5' entirely and collapsed any QF/SF day beyond
+// the first into a single slot, repeating that slot's match on every extra
+// day (e.g. QF days 3-5 all showing the same pairing). Days beyond the known
+// slots now get a key that matches no slice, rendering empty/TBD instead.
+const KO_PHASE_SLOTS: Record<string, string[]> = {
+  R32: ['r32_1', 'r32_2', 'r32_3', 'r32_4', 'r32_5', 'r32_6'],
+  R16: ['r16_1', 'r16_2', 'r16_3', 'r16_4', 'r16_5'],
+  QF:  ['qf_1', 'qf_2'],
+  SF:  ['sf_1', 'sf_2'],
+};
+
 function getDynamicKey(bootstrap: BootstrapData, phase: string, dayIndex: number): string {
   const phaseDays = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
   const pos = phaseDays.findIndex(d => d.day_index === dayIndex);
-  if (phase === 'R32')   return (['r32_1','r32_2','r32_3','r32_4','r32_5','r32_6'])[pos] ?? 'r32_1';
-  if (phase === 'R16')   return (['r16_1','r16_2','r16_3','r16_4'])[pos]                      ?? 'r16_1';
-  if (phase === 'QF')    return pos === 0 ? 'qf_1' : 'qf_2';
-  if (phase === 'SF')    return pos === 0 ? 'sf_1' : 'sf_2';
+  if (KO_PHASE_SLOTS[phase]) return KO_PHASE_SLOTS[phase][pos] ?? `${phase.toLowerCase()}_none_${pos}`;
   if (phase === '3rd')   return '3rd';
   if (phase === 'Final') return 'final';
   return phase.toLowerCase();
@@ -443,11 +451,17 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                 const di = day.day_index;
                 const played  = matchResults[di];
                 const isCur   = di === dayIndex;
-                const displayMatches = played
-                  ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue }))
-                  : di >= dayIndex
-                    ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-                    : [];
+                // [BUG FIX] KO days can mix played and not-yet-played matches
+                // on the same day_index — pick `played` OR the pool-based
+                // build hid whichever side wasn't chosen. buildMatchesForCurrentDay
+                // already excludes eliminated teams, so a just-played pair
+                // (one team always eliminated) is naturally absent from its
+                // output — concatenating both is safe and duplicate-free.
+                const playedMatches = played ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue })) : [];
+                const upcomingMatches = di >= dayIndex
+                  ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+                  : [];
+                const displayMatches = [...playedMatches, ...upcomingMatches];
 
                 // For R32 days: build provisional/definitive pairs from live standings
                 const liveR32Pairs: Array<[LiveR32Slot, LiveR32Slot]> = [];
@@ -897,11 +911,12 @@ function BracketView({ onNationClick, onMatchClick }: {
                 const di = day.day_index;
                 const played = matchResults[di];
                 const isCur  = di === dayIndex;
-                const displayMatches = played
-                  ? played.map(r => ({ a: r.a, b: r.b }))
-                  : di >= dayIndex
-                    ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-                    : [];
+                // [BUG FIX] see identical fix above — mixed played/upcoming days.
+                const playedMatches = played ? played.map(r => ({ a: r.a, b: r.b })) : [];
+                const upcomingMatches = di >= dayIndex
+                  ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+                  : [];
+                const displayMatches = [...playedMatches, ...upcomingMatches];
 
                 if (displayMatches.length === 0) {
                   const dynamicKey = bootstrap ? getDynamicKey(bootstrap, phase.key, di) : null;
