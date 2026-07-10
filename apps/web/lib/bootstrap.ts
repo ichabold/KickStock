@@ -10,8 +10,16 @@ import type { BootstrapData, GameState, Match, TeamMeta } from '@kickstock/types
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
+// Bump this whenever the BootstrapData *shape* changes (new/renamed field,
+// changed semantics) — e.g. v4 added `ko_fixtures`. The server-side version
+// check (competitions.last_sync_at + game_state.updated_at) only busts the
+// cache on data changes; it can't detect that a code deploy changed what the
+// response contains, since the underlying DB rows didn't change. Bumping
+// this forces every client to refetch once, regardless of cached "version".
+const CACHE_SCHEMA_VERSION = 'v4';
+
 function cacheKey(competitionId?: number) {
-  return `kickstock:bootstrap:v3:${competitionId ?? 'active'}`;
+  return `kickstock:bootstrap:${CACHE_SCHEMA_VERSION}:${competitionId ?? 'active'}`;
 }
 
 interface CacheEntry { data: BootstrapData; fetchedAt: number; serverVersion?: string }
