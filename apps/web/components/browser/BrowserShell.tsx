@@ -458,9 +458,19 @@ function ScheduleView({ onNationClick, onMatchClick }: {
                 // (one team always eliminated) is naturally absent from its
                 // output — concatenating both is safe and duplicate-free.
                 const playedMatches = played ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue })) : [];
-                const upcomingMatches = di >= dayIndex
-                  ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-                  : [];
+                // [BUG FIX] Prefer a real confirmed fixture (bootstrap.ko_fixtures)
+                // over the pool-slice guess once sync-fixtures resolves it — the
+                // static "N matches per day" slicing doesn't match the real
+                // calendar once dates are confirmed (see ScheduleTab.tsx for
+                // the full explanation).
+                const koFixturesForDay = (bootstrap?.ko_fixtures ?? []).filter(f => f.day_index === di);
+                const upcomingMatches = koFixturesForDay.length > 0
+                  ? koFixturesForDay
+                      .filter(f => !played?.some(r => (r.a === f.nation_a && r.b === f.nation_b) || (r.a === f.nation_b && r.b === f.nation_a)))
+                      .map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }))
+                  : di >= dayIndex
+                    ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+                    : [];
                 const displayMatches = [...playedMatches, ...upcomingMatches];
 
                 // For R32 days: build provisional/definitive pairs from live standings
@@ -911,11 +921,18 @@ function BracketView({ onNationClick, onMatchClick }: {
                 const di = day.day_index;
                 const played = matchResults[di];
                 const isCur  = di === dayIndex;
-                // [BUG FIX] see identical fix above — mixed played/upcoming days.
+                // [BUG FIX] see identical fixes above — mixed played/upcoming
+                // days, and preferring a real confirmed fixture over the
+                // pool-slice guess once sync-fixtures resolves it.
                 const playedMatches = played ? played.map(r => ({ a: r.a, b: r.b })) : [];
-                const upcomingMatches = di >= dayIndex
-                  ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-                  : [];
+                const koFixturesForDay = (bootstrap?.ko_fixtures ?? []).filter(f => f.day_index === di);
+                const upcomingMatches = koFixturesForDay.length > 0
+                  ? koFixturesForDay
+                      .filter(f => !played?.some(r => (r.a === f.nation_a && r.b === f.nation_b) || (r.a === f.nation_b && r.b === f.nation_a)))
+                      .map(f => ({ a: f.nation_a, b: f.nation_b }))
+                  : di >= dayIndex
+                    ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+                    : [];
                 const displayMatches = [...playedMatches, ...upcomingMatches];
 
                 if (displayMatches.length === 0) {

@@ -12,11 +12,14 @@
  *   competition: { id, name, start_date, league_id, season },
  *   teams:        [{ id, name, flag_emoji, group_code, strength, initial_price }],
  *   days:         [{ day_index, full_label, phase, is_ko, div_key }],
- *   group_fixtures: [{ day_index, nation_a, nation_b, venue }]
+ *   group_fixtures: [{ day_index, nation_a, nation_b, venue }],
+ *   ko_fixtures:    [{ day_index, phase, nation_a, nation_b, venue, scheduled_at }]
  * }
  *
- * KO fixtures are NOT included (unknown until group stage ends).
- * The offline store resolves KO matches at simulation time using buildKOMatches.
+ * ko_fixtures only includes KO matches sync-fixtures has confirmed with real
+ * team names (not "Winner Group A" placeholders) — i.e. once the previous
+ * round's results are known. Until then, the client falls back to guessing
+ * pairings from pool slicing (buildKOMatches) — see stores/*GameStore.ts.
  */
 
 import { NextResponse }        from 'next/server';
@@ -148,18 +151,38 @@ export async function GET(req: Request) {
     squads[row.team_id].push(row.players.name);
   }
 
-  // ── 5. KO match scheduled_at times (grouped by day_index) ───────────────
-  const { data: koTimesRaw } = await adm(admin)
+  // ── 5. Real KO fixtures (once confirmed by sync-fixtures — team names
+  //       resolved, not "Winner Group A" placeholders) ────────────────────
+  // [BUG FIX] The client used to guess KO-day pairings purely from pool
+  // slicing (buildMatchesForCurrentDay), assuming a fixed "N matches per
+  // day" grouping baked into WC2026_R32_PAIRINGS/qfSlices/sfSlices. Once
+  // real fixtures are confirmed, that static grouping routinely doesn't
+  // match the actual calendar (e.g. QF spread 1/1/1 across three real days,
+  // not the assumed 2/2) — a real, already-scheduled match like a QF
+  // fixture could render on the wrong day or not at all. Exposing real KO
+  // fixtures the same way group_fixtures already works lets the client
+  // prefer real data over the pool-slice guess whenever it's available.
+  const { data: koFixturesRaw } = await adm(admin)
     .from('matches')
-    .select('day_index, scheduled_at')
+    .select('day_index, phase, nation_a, nation_b, venue, scheduled_at, api_status')
     .eq('competition_id', comp.id)
     .neq('phase', 'Groups')
     .not('api_status', 'in', '("PST","SUSP","CANC","ABD")')
     .not('scheduled_at', 'is', null)
     .order('scheduled_at', { ascending: true });
 
+  const koFixtures = (koFixturesRaw ?? []) as Array<{
+    day_index:    number;
+    phase:        string;
+    nation_a:     string;
+    nation_b:     string;
+    venue:        string | null;
+    scheduled_at: string;
+    api_status:   string;
+  }>;
+
   const koTimesByDay: Record<number, string[]> = {};
-  for (const row of (koTimesRaw ?? []) as Array<{ day_index: number; scheduled_at: string }>) {
+  for (const row of koFixtures) {
     if (!koTimesByDay[row.day_index]) koTimesByDay[row.day_index] = [];
     koTimesByDay[row.day_index].push(row.scheduled_at);
   }
@@ -203,6 +226,14 @@ export async function GET(req: Request) {
         nation_b:     f.nation_b,
         venue:        f.venue,
         scheduled_at: f.scheduled_at ?? null,
+      })),
+      ko_fixtures: koFixtures.map(f => ({
+        day_index:    f.day_index,
+        phase:        f.phase,
+        nation_a:     f.nation_a,
+        nation_b:     f.nation_b,
+        venue:        f.venue,
+        scheduled_at: f.scheduled_at,
       })),
       squads,
       generated_at: new Date().toISOString(),

@@ -83,9 +83,22 @@ export default function ScheduleTab({ activeView = 'groups' }: { activeView?: 'g
           // that already have a result — concatenating both is safe and
           // duplicate-free.
           const playedMatches = played ? played.map(r => ({ a: r.a, b: r.b, venue: r.venue })) : [];
-          const upcomingMatches = day.is_ko && di >= dayIndex
-            ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
-            : [];
+          // [BUG FIX] Once sync-fixtures confirms a KO fixture's real teams,
+          // prefer it over the pool-slice guess — the static "N matches per
+          // day" grouping (buildKOMatches slices) routinely doesn't match
+          // the real calendar once dates are confirmed (e.g. QF spread
+          // 1/1/1 across 3 real days, not the assumed 2/2), so a confirmed
+          // match like Spain-Belgium could render on the wrong day or not
+          // at all. Falls back to the pool guess only for days with no
+          // confirmed fixture yet.
+          const koFixturesForDay = (bootstrap.ko_fixtures ?? []).filter(f => f.day_index === di);
+          const upcomingMatches = !day.is_ko ? [] : koFixturesForDay.length > 0
+            ? koFixturesForDay
+                .filter(f => !played?.some(r => (r.a === f.nation_a && r.b === f.nation_b) || (r.a === f.nation_b && r.b === f.nation_a)))
+                .map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }))
+            : di >= dayIndex
+              ? buildMatchesForCurrentDay({ ...state, dayIndex: di } as typeof state)
+              : [];
           const displayMatches = !day.is_ko && groupFixtures.length > 0
             ? groupFixtures
             : [...playedMatches, ...upcomingMatches];

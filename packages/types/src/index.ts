@@ -41,6 +41,12 @@ export interface BootstrapFixture {
   scheduled_at: string | null;
 }
 
+/** A KO fixture once sync-fixtures has confirmed real team names (not
+ *  "Winner Group A" placeholders). See BootstrapData.ko_fixtures. */
+export interface KOBootstrapFixture extends BootstrapFixture {
+  phase: string;
+}
+
 /** Raw team row as returned by /api/competition/bootstrap (snake_case from DB). */
 export interface BootstrapTeam {
   id:            string;
@@ -64,6 +70,9 @@ export interface BootstrapData {
   teams:          BootstrapTeam[];
   days:           BootstrapDay[];
   group_fixtures: BootstrapFixture[];
+  /** Real KO fixtures once confirmed (see /api/competition/bootstrap doc comment).
+   *  Absent/empty until sync-fixtures resolves that day's placeholder team names. */
+  ko_fixtures:    KOBootstrapFixture[];
   /** teamId → array of outfield player names (Defenders, Midfielders, Attackers).
    *  Used by genGoals() to show real player names instead of team names.
    *  Empty object if squad data hasn't been synced yet. */
