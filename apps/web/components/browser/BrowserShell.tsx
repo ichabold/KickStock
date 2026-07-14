@@ -186,8 +186,21 @@ function HomeView({ onTrade, onNationClick, onMatchClick }: {
   const prevDay   = bootstrap?.days.find(d => d.day_index === dayIndex - 1) ?? null;
   const prevResults  = matchResults[dayIndex - 1] ?? [];
 
-  const todayMatches = useMemo(() => curDay ? buildMatchesForCurrentDay(state) : [], [curDay, state]);
   const todayResults = matchResults[dayIndex] ?? [];
+  // [BUG FIX] Same root cause as ScheduleView/BracketView: buildMatchesForCurrentDay
+  // guesses today's pairing from static pool slices, which routinely doesn't
+  // match the real calendar once fixtures are confirmed — the home screen
+  // (matches list + tradeable-teams tiles) went empty even when a real match
+  // like Spain-Belgium or France-Spain was scheduled today. Prefer the real
+  // confirmed fixture (bootstrap.ko_fixtures) when available.
+  const todayMatches = useMemo(() => {
+    if (!curDay) return [];
+    const koFixturesToday = (bootstrap?.ko_fixtures ?? []).filter(f => f.day_index === dayIndex);
+    if (koFixturesToday.length > 0) {
+      return koFixturesToday.map(f => ({ a: f.nation_a, b: f.nation_b, venue: f.venue ?? undefined }));
+    }
+    return buildMatchesForCurrentDay(state);
+  }, [curDay, state, bootstrap, dayIndex]);
   const todayNations = useMemo(() => {
     const ids = new Set<string>();
     todayMatches.forEach(m => { ids.add(m.a); ids.add(m.b); });
