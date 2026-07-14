@@ -21,6 +21,7 @@ import FirstTradeUpsellModal from '@/components/shared/FirstTradeUpsellModal';
 import { useValidateMechanics } from '@/hooks/useValidateMechanics';
 import { useAuth } from '@/hooks/useAuth';
 import type { Nation, TradeMode, StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
+import { isPhantomKODay } from '@/lib/bootstrap';
 
 function teamToNation(t: TeamMeta): Nation {
   return { id: t.id, name: t.name, flag: t.flag, p: t.initialPrice, conf: t.confederation ?? '', str: t.strength, group: t.group };
@@ -455,7 +456,12 @@ function ScheduleView({ onNationClick, onMatchClick }: {
       <div className="sched-r">
         <div className="day-hdr">{tsch('koPhase')}</div>
         {(['R32','R16','QF','SF','3rd','Final'] as const).map(phase => {
-          const phaseDays = bootstrap?.days.filter(d => d.phase === phase) ?? [];
+          // Drop scaffolded placeholder days beyond the phase's real slot
+          // count (e.g. 4 SF days for 2 real matches) — they'll never get a
+          // match and used to render an empty "TBD" block.
+          const phaseDays = bootstrap
+            ? bootstrap.days.filter(d => d.phase === phase && !isPhantomKODay(d.phase, d.day_index, bootstrap))
+            : [];
           if (!phaseDays.length) return null;
           const phaseLabels: Record<string, string> = {
             R32: tst('r32'), R16: tst('r16'), QF: tst('quarterFinals'),
@@ -928,7 +934,11 @@ function BracketView({ onNationClick, onMatchClick }: {
   return (
     <div className="bkt-wrap">
       {phases.map(phase => {
-        const days = bootstrap?.days.filter(d => d.phase === phase.key) ?? [];
+        // Drop scaffolded placeholder days beyond the phase's real slot
+        // count (e.g. 4 SF days for 2 real matches) — see identical fix above.
+        const days = bootstrap
+          ? bootstrap.days.filter(d => d.phase === phase.key && !isPhantomKODay(d.phase, d.day_index, bootstrap))
+          : [];
         const isFinal = phase.key === 'Final';
         return (
           <div className="bkt-stage" key={phase.key}>

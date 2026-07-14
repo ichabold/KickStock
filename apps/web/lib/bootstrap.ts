@@ -123,6 +123,27 @@ export function deriveDynamicKey(phase: string, dayIndex: number, bootstrap: Boo
   return phase.toLowerCase();
 }
 
+/**
+ * True for a KO day beyond the phase's real slot count (see KO_PHASE_SLOTS)
+ * with no confirmed real fixture for it yet — a scaffolded placeholder day
+ * that will never have a match (competition_days routinely has more day
+ * rows per phase than real matches, e.g. 4 SF days for 2 real SF matches,
+ * 2 "3rd"/"Final" days for 1 real match each). Callers should skip
+ * rendering these entirely rather than show an empty "TBD" block.
+ */
+export function isPhantomKODay(
+  phase:     string,
+  dayIndex:  number,
+  bootstrap: BootstrapData,
+): boolean {
+  if (!KO_PHASE_SLOTS[phase]) return false;
+  const hasRealFixture = (bootstrap.ko_fixtures ?? []).some(f => f.day_index === dayIndex);
+  if (hasRealFixture) return false;
+  const koDays     = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
+  const posInPhase = koDays.findIndex(d => d.day_index === dayIndex);
+  return posInPhase >= KO_PHASE_SLOTS[phase].length;
+}
+
 export function buildMatchesForCurrentDayFromBootstrap(
   state:     GameState,
   bootstrap: BootstrapData | null,

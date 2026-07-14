@@ -6,7 +6,7 @@ import { useGameStore, pctOf, buildMatchesForCurrentDay } from '@/stores/gameSto
 import { buildLiveR32Pool, R32_DAY_SLICES } from '@kickstock/game-engine';
 import type { LiveR32Slot } from '@kickstock/game-engine';
 import type { StoredMatchResult, BootstrapData, TeamMeta } from '@kickstock/types';
-import { deriveDynamicKey } from '@/lib/bootstrap';
+import { deriveDynamicKey, isPhantomKODay } from '@/lib/bootstrap';
 import MatchDetailOverlay from '@/components/shared/MatchDetailOverlay';
 import NationDetailOverlay from '@/components/shared/NationDetailOverlay';
 import styles from './ScheduleTab.module.css';
@@ -51,9 +51,14 @@ export default function ScheduleTab({ activeView = 'groups' }: { activeView?: 'g
   }
 
   // Filter days by the active view: groups = non-KO days; ko = KO days.
-  const visibleDays = bootstrap.days.filter(d =>
-    activeView === 'groups' ? !d.is_ko : d.is_ko
-  );
+  // Also drops "phantom" KO days — scaffolded placeholder rows beyond a
+  // phase's real slot count (e.g. 4 SF days for 2 real SF matches, 2 "3rd"/
+  // "Final" days for 1 real match each) that will never get a match. These
+  // used to render an empty "TBD" block cluttering the schedule.
+  const visibleDays = bootstrap.days.filter(d => {
+    if (activeView === 'groups') return !d.is_ko;
+    return d.is_ko && !isPhantomKODay(d.phase, d.day_index, bootstrap);
+  });
 
   // Scroll target:
   //  – groups view → last played day (dayIndex - 1) so the user sees yesterday's results
