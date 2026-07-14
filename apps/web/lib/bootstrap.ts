@@ -101,19 +101,25 @@ export async function refreshBootstrap(competitionId?: number): Promise<Bootstra
 // known slots repeated an earlier match on every extra day (e.g. QF days
 // 3-5 all showing the same qf_2 pairing). Days beyond the known slots now
 // get a key that matches no slice, rendering empty/TBD instead.
+// [BUG FIX] '3rd' and 'Final' used to return a constant key regardless of
+// position, so every placeholder day beyond the first for those phases
+// (competition_days scaffolds 2 of each: e.g. day 37 AND day 39 both "3rd")
+// showed the same single real match duplicated — reported as 2 third-place
+// matches and 2 finals in the schedule. Single-element arrays here give them
+// the same "only position 0 gets the real slot" treatment as the other phases.
 const KO_PHASE_SLOTS: Record<string, string[]> = {
-  R32: ['r32_1', 'r32_2', 'r32_3', 'r32_4', 'r32_5', 'r32_6'],
-  R16: ['r16_1', 'r16_2', 'r16_3', 'r16_4', 'r16_5'],
-  QF:  ['qf_1', 'qf_2'],
-  SF:  ['sf_1', 'sf_2'],
+  R32:   ['r32_1', 'r32_2', 'r32_3', 'r32_4', 'r32_5', 'r32_6'],
+  R16:   ['r16_1', 'r16_2', 'r16_3', 'r16_4', 'r16_5'],
+  QF:    ['qf_1', 'qf_2'],
+  SF:    ['sf_1', 'sf_2'],
+  '3rd': ['3rd'],
+  Final: ['final'],
 };
 
 export function deriveDynamicKey(phase: string, dayIndex: number, bootstrap: BootstrapData): string {
   const koDays     = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
   const posInPhase = koDays.findIndex(d => d.day_index === dayIndex);
   if (KO_PHASE_SLOTS[phase]) return KO_PHASE_SLOTS[phase][posInPhase] ?? `${phase.toLowerCase()}_none_${posInPhase}`;
-  if (phase === '3rd')   return '3rd';
-  if (phase === 'Final') return 'final';
   return phase.toLowerCase();
 }
 

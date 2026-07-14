@@ -30,19 +30,23 @@ function teamToNation(t: TeamMeta): Nation {
 // the first into a single slot, repeating that slot's match on every extra
 // day (e.g. QF days 3-5 all showing the same pairing). Days beyond the known
 // slots now get a key that matches no slice, rendering empty/TBD instead.
+// '3rd'/Final used to return a constant key regardless of position, so both
+// scaffolded placeholder days for those phases (e.g. day 37 and day 39, both
+// "3rd") showed the same duplicated match — single-element arrays give them
+// the same "only position 0" treatment.
 const KO_PHASE_SLOTS: Record<string, string[]> = {
-  R32: ['r32_1', 'r32_2', 'r32_3', 'r32_4', 'r32_5', 'r32_6'],
-  R16: ['r16_1', 'r16_2', 'r16_3', 'r16_4', 'r16_5'],
-  QF:  ['qf_1', 'qf_2'],
-  SF:  ['sf_1', 'sf_2'],
+  R32:   ['r32_1', 'r32_2', 'r32_3', 'r32_4', 'r32_5', 'r32_6'],
+  R16:   ['r16_1', 'r16_2', 'r16_3', 'r16_4', 'r16_5'],
+  QF:    ['qf_1', 'qf_2'],
+  SF:    ['sf_1', 'sf_2'],
+  '3rd': ['3rd'],
+  Final: ['final'],
 };
 
 function getDynamicKey(bootstrap: BootstrapData, phase: string, dayIndex: number): string {
   const phaseDays = bootstrap.days.filter(d => d.phase === phase).sort((a, b) => a.day_index - b.day_index);
   const pos = phaseDays.findIndex(d => d.day_index === dayIndex);
   if (KO_PHASE_SLOTS[phase]) return KO_PHASE_SLOTS[phase][pos] ?? `${phase.toLowerCase()}_none_${pos}`;
-  if (phase === '3rd')   return '3rd';
-  if (phase === 'Final') return 'final';
   return phase.toLowerCase();
 }
 
